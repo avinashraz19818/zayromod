@@ -134,6 +134,15 @@ function injectParams(htmlContent, params) {
     );
   }
 
+  // ── FIREBASE PLACEHOLDER FIX ──
+  // Several uploaded designs contain Sketchware's unresolved secret marker.
+  // Without a real web API key their original condition listener never starts,
+  // so panel states/minimum-deposit changes cannot arrive from Firebase.
+  html = html.replace(
+    /@secret:GOOGLE_API_KEY/g,
+    'AIzaSyDja5Gx4v4sMbx4BM2_od9_bLkdxdEY4do'
+  );
+
   // ── FIREBASE LIVE LINKS ──
   // URLs are intentionally NOT stored in the APK or localStorage. The app
   // waits for <firebasePath>/config and always uses those Firebase values.
@@ -157,6 +166,7 @@ function injectParams(htmlContent, params) {
     databaseURL:'https://zayrodev-195f3-default-rtdb.firebaseio.com'
   };
   function valid(u){return typeof u==='string' && /^https?:\\/\\//i.test(u);}
+  var firstFirebaseLinkLoad=true;
   function applyLinks(data){
     if(!data||typeof data!=='object')return;
     var previousRegister=REGISTER_URL;
@@ -170,9 +180,15 @@ function injectParams(htmlContent, params) {
     if(typeof gameFrame!=='undefined'&&gameFrame){
       try{
         var current=gameFrame.src||'';
-        if(!current||current==='about:blank'||current===previousRegister)gameFrame.src=REGISTER_URL;
+        // Assigning an empty src in a file:// WebView resolves to
+        // file:///android_asset/, not about:blank. Always navigate once when
+        // Firebase supplies the first valid link so LOCKED need not be tapped.
+        if(firstFirebaseLinkLoad||!current||current==='about:blank'||current===previousRegister){
+          gameFrame.src=REGISTER_URL;
+        }
       }catch(e){}
     }
+    firstFirebaseLinkLoad=false;
   }
   var attempts=0,connected=false;
   function connect(){
