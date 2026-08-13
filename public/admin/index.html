@@ -545,11 +545,10 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
         <div class="form-group"><label>Name</label><input type="text" id="dName" placeholder="e.g. Fire Mod"></div>
         <div class="form-group"><label>Design Category</label>
           <select id="dCategory">
-            <option value="zayro">Zayro — Common / All Games</option>
-            <option value="dhani">Dhani</option>
-            <option value="java">Java</option>
+            <option value="zayro">Zayro Java — All Non-Dhani Games</option>
+            <option value="dhani">Dhani Java — DhaniWin Games</option>
           </select>
-          <div class="hint">Choose only where this design belongs. No separate type or variant is needed.</div>
+          <div class="hint">DhaniWin design ho to Dhani Java select karein, baaki sabke liye Zayro Java.</div>
         </div>
         <div class="form-group"><label>Price (coins)</label><input type="number" id="dPrice" value="10" min="0"></div>
         <div class="form-group"><label>Original Price</label><input type="number" id="dOrigPrice" value="0" min="0"></div>
@@ -605,7 +604,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
       <div id="usersList" style="color:var(--dim)">Loading…</div>
     </div>
     <!-- User Orders Modal -->
-    <div id="userOrdersModal" class="emodal" onclick="if(event.target===this) closeUserOrdersModal()">
+    <div id="userOrdersModal" class="emodal">
       <div class="esheet" role="dialog" aria-modal="true" style="max-width:900px">
         <div class="ehead">
           <h3>User Orders - <span id="userOrdersUsername"></span></h3>
@@ -637,6 +636,60 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
         </div>
       </div>
     </div>
+
+    <!-- Per-APK Firebase Manager -->
+    <div id="firebaseManagerModal" class="emodal" style="z-index:100002">
+      <div class="esheet" role="dialog" aria-modal="true" style="max-width:980px">
+        <div class="ehead">
+          <h3>Firebase APK Manager — <span id="fbManagerTitle"></span></h3>
+          <button class="close" onclick="closeFirebaseManager()" aria-label="Close">✕</button>
+        </div>
+        <div class="ebody">
+          <input type="hidden" id="fbOrderId">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+            <span class="badge badge-blue" id="fbPathBadge">Path: —</span>
+            <span class="badge badge-ok" id="fbLiveBadge">Firebase Live</span>
+          </div>
+          <div class="form-group" id="fbVariantWrap" style="display:none">
+            <label>APK Version</label>
+            <select id="fbVariant" onchange="loadFirebaseManager()">
+              <option value="real">Real APK</option>
+              <option value="fake">Fake APK</option>
+            </select>
+          </div>
+
+          <div class="esec">
+            <div class="esec-hd"><div class="num">1</div><h4>Manage Link</h4></div>
+            <div class="grid2">
+              <div><label class="label">Change Type</label><select id="fbLinkType" onchange="syncAdminFirebaseLinkMode()"><option value="domain">Domain Change</option><option value="invite">Invitation Code / Full URL</option></select></div>
+              <div><label class="label" id="fbLinkLabel">New Domain URL</label><input id="fbNewUrl" class="input" type="url" placeholder="https://newsite.com"></div>
+            </div>
+            <div class="hint" id="fbLinkHelp" style="margin:8px 0 12px">Invitation code and register path stay unchanged.</div>
+            <button class="btn btn-primary" id="fbLinkSaveBtn" onclick="saveAdminFirebaseLink()"><svg><use href="#i-check"/></svg> Update Firebase Link</button>
+          </div>
+
+          <div class="esec">
+            <div class="esec-hd"><div class="num">2</div><h4>Conditions & Minimum Deposit</h4></div>
+            <div class="grid3">
+              <div><label class="label">Minimum Deposit</label><input id="fbMinDeposit" class="input" type="number" min="0"></div>
+              <div><label class="label">Deposit Monitor</label><select id="fbDepositCondition"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+              <div><label class="label">Login/Register Monitor</label><select id="fbRegisterCondition"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+            </div>
+            <button class="btn btn-ok" id="fbConfigSaveBtn" onclick="saveAdminFirebaseConfig()"><svg><use href="#i-check"/></svg> Save Firebase Config</button>
+          </div>
+
+          <div class="esec">
+            <div class="esec-hd"><div class="num">3</div><h4>Monitored / Allowed Users</h4></div>
+            <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:14px">
+              <div style="flex:1;min-width:210px"><label class="label">Phone / User Key</label><input id="fbNewUserKey" class="input" type="text" inputmode="numeric" placeholder="e.g. 9876543210"></div>
+              <button class="btn btn-ok" id="fbAddUserBtn" onclick="addAdminFirebaseUser()"><svg><use href="#i-plus"/></svg> Add User</button>
+            </div>
+            <div id="fbUsersList" class="tbl-wrap"><div style="padding:16px;color:var(--dim)">Loading Firebase users…</div></div>
+          </div>
+        </div>
+        <div class="efoot"><button class="btn btn-outline" onclick="closeFirebaseManager()">Close</button></div>
+      </div>
+    </div>
   </div>
 
   <!-- SETTINGS -->
@@ -651,9 +704,10 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
         <div class="form-group"><label>Fake Site Addon <small>(coins)</small></label><input type="number" id="sFakePrice" value="5"></div>
       </div>
       <div class="grid2">
-        <div class="form-group"><label>Domain Change Price <small>(coins)</small></label><input type="number" id="sDomainPrice" value="10"></div>
-        <div class="form-group"><label>Site Name</label><input type="text" id="sSiteName" value="Zayro Mod Builder"></div>
+        <div class="form-group"><label>Domain Change Price <small>(coins)</small></label><input type="number" id="sDomainPrice" value="10" min="0"></div>
+        <div class="form-group"><label>Invitation Code Change Price <small>(coins)</small></label><input type="number" id="sInvitePrice" value="10" min="0"></div>
       </div>
+      <div class="form-group"><label>Site Name</label><input type="text" id="sSiteName" value="Zayro Mod Builder"></div>
     </div>
     <div class="card" style="max-width:640px">
       <div class="card-hd"><span class="accent"></span><h3>Telegram Alerts</h3></div>
@@ -696,7 +750,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
 <div id="toast"></div>
 
 <!-- ═══ Premium Edit Design Modal ═══ -->
-<div id="editDesignModal" class="emodal" onclick="if(event.target===this) closeEditDesign()">
+<div id="editDesignModal" class="emodal">
   <div class="esheet" role="dialog" aria-modal="true">
     <div class="ehead">
       <h3>Edit Design</h3>
@@ -733,11 +787,10 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
         <div style="margin-top:12px">
           <label class="label">Design Category</label>
           <select id="eCategory" class="input">
-            <option value="zayro">Zayro — Common / All Games</option>
-            <option value="dhani">Dhani</option>
-            <option value="java">Java</option>
+            <option value="zayro">Zayro Java — All Non-Dhani Games</option>
+            <option value="dhani">Dhani Java — DhaniWin Games</option>
           </select>
-          <div style="font-size:10.5px;color:var(--dim);margin-top:6px">Dhani designs appear as Dhani, Java designs as Java, and common designs as Zayro.</div>
+          <div style="font-size:10.5px;color:var(--dim);margin-top:6px">DhaniWin design ke liye Dhani Java; baaki har design ke liye Zayro Java.</div>
         </div>
       </div>
 
@@ -893,16 +946,15 @@ async function loadDashboard() {
 let _editDesigns = [];
 function designCategory(design) {
   const category = String(design?.category || '').toLowerCase();
-  if (category === 'dhani' || category === 'java' || category === 'zayro') return category;
+  if (category === 'dhani') return 'dhani';
   const legacyType = String(design?.java_type || '').toLowerCase();
   if (legacyType === 'dhani' || legacyType === 'premium' || /dhani/i.test(design?.name || '')) return 'dhani';
   return 'zayro';
 }
 function categoryBadge(design) {
   const category = designCategory(design);
-  if (category === 'dhani') return '<span class="badge" style="background:rgba(94,200,255,.14);color:var(--cyan);border:1px solid rgba(94,200,255,.3)">Dhani</span>';
-  if (category === 'java') return '<span class="badge" style="background:rgba(255,77,109,.12);color:var(--danger);border:1px solid rgba(255,77,109,.32)">Java</span>';
-  return '<span class="badge badge-blue">Zayro</span>';
+  if (category === 'dhani') return '<span class="badge" style="background:rgba(94,200,255,.14);color:var(--cyan);border:1px solid rgba(94,200,255,.3)">Dhani Java</span>';
+  return '<span class="badge badge-blue">Zayro Java</span>';
 }
 async function loadDesigns() {
   const designs = await api('/api/admin/designs');
@@ -1289,7 +1341,7 @@ async function loadUsers() {
   if (!users.length) { c.innerHTML = '<div style="color:var(--dim);padding:16px 4px">No users yet.</div>'; return; }
   c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Username</th><th>Email</th><th>Password</th><th>Coins</th><th>Joined</th><th>Manage Coins</th><th>Actions</th></tr></thead><tbody>` +
     users.map(u => `<tr>
-      <td>${u.id}</td><td><b>${u.username}</b></td><td>${u.email}</td>
+      <td>${u.id}</td><td><button class="btn btn-sm btn-outline" onclick="openUserOrders(${u.id},'${u.username.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-users"/></svg> ${u.username}</button></td><td>${u.email}</td>
       <td><code style="background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--cyan)">${u.plain_password || '(hashed)'}</code></td>
       <td><span class="coin-chip">${u.coins}</span></td>
       <td><small>${new Date(u.created_at).toLocaleDateString()}</small></td>
@@ -1300,9 +1352,10 @@ async function loadUsers() {
           <button class="btn btn-sm btn-danger" onclick="subUserCoins(${u.id})" title="Subtract coins" style="font-size:16px;line-height:1;padding:6px 10px">−</button>
         </div>
       </td>
-      <td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-primary" onclick="openUserOrders(${u.id},'${u.username.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-package"/></svg> Manage APKs</button>
         <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id},'${u.username.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-x"/></svg> Delete</button>
-      </td>
+      </div></td>
     </tr>`).join('') + `</tbody></table></div>`;
 }
 
@@ -1339,7 +1392,10 @@ async function deleteUser(userId, username) {
   loadDashboard();
 }
 
-// ── User Orders Modal ──
+// ── User Orders Modal / Firebase APK Manager ──
+let _firebaseManagerState = null;
+const adminEsc = value => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+
 async function openUserOrders(userId, username) {
   _currentUserOrdersUserId = userId;
   _selectedUserOrdersIds.clear();
@@ -1402,11 +1458,134 @@ async function loadUserOrders(userId) {
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           ${o.apk_file ? `<a href="/api/orders/${o.id}/download" class="btn btn-sm btn-primary" target="_blank" title="Download APK"><svg><use href="#i-download"/></svg></a>` : ''}
           ${o.fake_apk_file ? `<a href="/api/orders/${o.id}/download-fake" class="btn btn-sm btn-gold" target="_blank" title="Download Fake APK"><svg><use href="#i-download"/></svg> Fake</a>` : ''}
+          <button class="btn btn-sm btn-ok" onclick="openFirebaseManager(${o.id})" title="Manage Firebase"><svg><use href="#i-settings"/></svg> Firebase</button>
           <button class="btn btn-sm btn-danger" onclick="deleteOrder(${o.id})" title="Delete Order"><svg><use href="#i-x"/></svg></button>
         </div>
       </td>
     </tr>
   `).join('');
+}
+
+async function openFirebaseManager(orderId) {
+  document.getElementById('fbOrderId').value = orderId;
+  document.getElementById('fbVariant').value = 'real';
+  document.getElementById('fbNewUrl').value = '';
+  document.getElementById('fbNewUserKey').value = '';
+  const modal = document.getElementById('firebaseManagerModal');
+  modal.classList.add('show');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  await loadFirebaseManager();
+}
+
+function closeFirebaseManager() {
+  const modal = document.getElementById('firebaseManagerModal');
+  modal.classList.remove('show');
+  modal.style.display = 'none';
+  _firebaseManagerState = null;
+  // The parent User Orders modal remains open underneath.
+  document.body.style.overflow = document.getElementById('userOrdersModal').classList.contains('show') ? 'hidden' : '';
+}
+
+async function loadFirebaseManager() {
+  const orderId = document.getElementById('fbOrderId').value;
+  const variant = document.getElementById('fbVariant').value || 'real';
+  const usersBox = document.getElementById('fbUsersList');
+  usersBox.innerHTML = '<div style="padding:16px;color:var(--dim)"><span class="spinner"></span> Loading Firebase…</div>';
+  const data = await api(`/api/admin/orders/${orderId}/firebase?variant=${encodeURIComponent(variant)}`);
+  if (data.error) { usersBox.innerHTML = `<div style="padding:16px;color:var(--danger)">${adminEsc(data.error)}</div>`; return toast(data.error, true); }
+  _firebaseManagerState = data;
+  document.getElementById('fbManagerTitle').textContent = `${data.order.app_name} (#${data.order.id})`;
+  document.getElementById('fbPathBadge').textContent = `Path: ${data.firebase_path}/config`;
+  document.getElementById('fbLiveBadge').textContent = data.order.live_link_enabled ? 'Firebase Live' : 'Legacy APK — upgrade required';
+  document.getElementById('fbLiveBadge').className = `badge ${data.order.live_link_enabled ? 'badge-ok' : 'badge-pending'}`;
+  document.getElementById('fbVariantWrap').style.display = data.order.has_fake ? 'block' : 'none';
+  document.getElementById('fbMinDeposit').value = data.config.minDeposit ?? 0;
+  document.getElementById('fbDepositCondition').value = String(data.config.depositCondition !== false);
+  document.getElementById('fbRegisterCondition').value = String(data.config.registerCondition !== false);
+  document.getElementById('fbLinkType').value = 'domain';
+  document.getElementById('fbNewUrl').value = '';
+  syncAdminFirebaseLinkMode();
+  renderFirebaseUsers(data.users || []);
+}
+
+function syncAdminFirebaseLinkMode() {
+  const isDomain = document.getElementById('fbLinkType').value === 'domain';
+  document.getElementById('fbLinkLabel').textContent = isDomain ? 'New Domain URL' : 'New Register URL';
+  document.getElementById('fbNewUrl').placeholder = isDomain ? 'https://newsite.com' : 'https://newsite.com/#/register?invitationCode=NEW';
+  document.getElementById('fbLinkHelp').textContent = isDomain
+    ? 'Only domain changes; current register path and invitation code stay unchanged.'
+    : 'The complete register URL, including invitation code, will be replaced.';
+}
+
+function renderFirebaseUsers(users) {
+  const box = document.getElementById('fbUsersList');
+  if (!users.length) {
+    box.innerHTML = '<div style="padding:18px;text-align:center;color:var(--dim)">No users stored under this APK Firebase path.</div>';
+    return;
+  }
+  box.innerHTML = `<table><thead><tr><th>#</th><th>Phone / User Key</th><th>Firebase Value</th><th>Action</th></tr></thead><tbody>${users.map((user,index)=>{
+    const value = typeof user.value === 'object' ? JSON.stringify(user.value) : String(user.value);
+    return `<tr><td>${index+1}</td><td><code>${adminEsc(user.key)}</code></td><td><small>${adminEsc(value)}</small></td><td><button class="btn btn-sm btn-danger" onclick="removeAdminFirebaseUser('${encodeURIComponent(user.key)}')"><svg><use href="#i-x"/></svg> Remove</button></td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+async function saveAdminFirebaseLink() {
+  const btn = document.getElementById('fbLinkSaveBtn');
+  const newUrl = document.getElementById('fbNewUrl').value.trim();
+  if (!newUrl) return toast('Enter the new URL', true);
+  setLoading(btn, true, 'Updating…');
+  const data = await api(`/api/admin/orders/${document.getElementById('fbOrderId').value}/firebase/link`, 'PATCH', {
+    variant: document.getElementById('fbVariant').value,
+    change_type: document.getElementById('fbLinkType').value,
+    new_register_url: newUrl
+  });
+  setLoading(btn, false);
+  if (data.error) return toast(data.error, true);
+  toast('✓ Firebase link updated!');
+  await loadFirebaseManager();
+}
+
+async function saveAdminFirebaseConfig() {
+  const btn = document.getElementById('fbConfigSaveBtn');
+  setLoading(btn, true, 'Saving…');
+  const data = await api(`/api/admin/orders/${document.getElementById('fbOrderId').value}/firebase/config`, 'PATCH', {
+    variant: document.getElementById('fbVariant').value,
+    min_deposit: document.getElementById('fbMinDeposit').value,
+    deposit_condition: document.getElementById('fbDepositCondition').value,
+    register_condition: document.getElementById('fbRegisterCondition').value
+  });
+  setLoading(btn, false);
+  if (data.error) return toast(data.error, true);
+  toast('✓ Firebase conditions saved!');
+  await loadFirebaseManager();
+}
+
+async function addAdminFirebaseUser() {
+  const btn = document.getElementById('fbAddUserBtn');
+  const key = document.getElementById('fbNewUserKey').value.trim();
+  if (!key) return toast('Enter phone/user key', true);
+  setLoading(btn, true, 'Adding…');
+  const data = await api(`/api/admin/orders/${document.getElementById('fbOrderId').value}/firebase/users`, 'POST', {
+    variant: document.getElementById('fbVariant').value,
+    user_key: key
+  });
+  setLoading(btn, false);
+  if (data.error) return toast(data.error, true);
+  document.getElementById('fbNewUserKey').value = '';
+  toast('✓ Firebase user added!');
+  await loadFirebaseManager();
+}
+
+async function removeAdminFirebaseUser(encodedKey) {
+  const key = decodeURIComponent(encodedKey);
+  if (!confirm(`Remove "${key}" from this APK Firebase users?`)) return;
+  const orderId = document.getElementById('fbOrderId').value;
+  const variant = document.getElementById('fbVariant').value;
+  const data = await api(`/api/admin/orders/${orderId}/firebase/users/${encodeURIComponent(key)}?variant=${encodeURIComponent(variant)}`, 'DELETE');
+  if (data.error) return toast(data.error, true);
+  toast('Firebase user removed.');
+  await loadFirebaseManager();
 }
 
 function toggleSelectAllUserOrders(checkbox) {
@@ -1463,6 +1642,7 @@ async function loadSettings() {
   document.getElementById('sCoinRate').value = s.coin_rate || '1';
   document.getElementById('sFakePrice').value = s.addon_fake_price || '5';
   document.getElementById('sDomainPrice').value = s.domain_change_price || '10';
+  document.getElementById('sInvitePrice').value = s.invite_code_change_price || '10';
   document.getElementById('sSiteName').value = s.site_name || '';
   document.getElementById('sTgToken').value = s.telegram_bot_token || '';
   document.getElementById('sTgAdminId').value = s.telegram_admin_id || '';
@@ -1480,6 +1660,7 @@ async function saveSettings() {
   fd.append('coin_rate', document.getElementById('sCoinRate').value);
   fd.append('addon_fake_price', document.getElementById('sFakePrice').value);
   fd.append('domain_change_price', document.getElementById('sDomainPrice').value);
+  fd.append('invite_code_change_price', document.getElementById('sInvitePrice').value);
   fd.append('site_name', document.getElementById('sSiteName').value);
   fd.append('telegram_bot_token', document.getElementById('sTgToken').value);
   fd.append('telegram_admin_id', document.getElementById('sTgAdminId').value);
@@ -1646,10 +1827,8 @@ function labelTables(root){
 new MutationObserver(()=>labelTables()).observe(document.documentElement,{childList:true,subtree:true});
 document.addEventListener('DOMContentLoaded',()=>labelTables());
 
-// ESC key closes modal
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeEditDesign();
-});
+// Admin modals intentionally ignore backdrop taps and Escape; only their
+// visible Close/Cancel buttons can dismiss them, preventing lost form data.
 </script>
 
 <!-- Login Overlay -->
