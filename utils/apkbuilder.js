@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync, fork } = require('child_process');
 const sharp = require('sharp');
 const { encryptHtmlToBin } = require('./encrypt');
 const { extractDomain, buildUrls, injectParams } = require('./htmlprocessor');
@@ -29,8 +29,11 @@ async function resizeIcon(inputBuffer) {
   return result;
 }
 
-// ── Main APK build function ──
-async function buildApk(order, design, buildId, logCallback) {
+// ── APK build implementation ──
+// This implementation intentionally runs inside apkbuilder-worker.js. It uses
+// synchronous filesystem/Gradle commands, which are safe in the isolated
+// worker process and can no longer freeze the web server or Telegram polling.
+async function buildApkInWorker(order, design, buildId, logCallback) {
   const log = (msg) => { logCallback && logCallback(msg); };
   const buildDir = path.join(BUILDS_DIR, buildId);
   fs.mkdirSync(buildDir, { recursive: true });
@@ -95,8 +98,8 @@ async function buildApk(order, design, buildId, logCallback) {
     // ── Copy template project ──
     log('Extracting base APK...');
     const projectDir = path.join(buildDir, 'project');
-    execSync(`cp -r "${TEMPLATE_PROJECT}" "${projectDir}"`, { stdio: 'pipe' });
-    execSync(`chmod +x "${projectDir}/gradlew"`,            { stdio: 'pipe' });
+    execFileSync('cp', ['-r', TEMPLATE_PROJECT, projectDir], { stdio: 'pipe' });
+    fs.chmodSync(path.join(projectDir, 'gradlew'), 0o755);
     fs.writeFileSync(path.join(projectDir, 'local.properties'), `sdk.dir=${ANDROID_HOME}\n`);
 
     // ── Patch strings.xml — app name ──
@@ -149,7 +152,7 @@ async function buildApk(order, design, buildId, logCallback) {
       ANDROID_SDK_ROOT: ANDROID_HOME,
       PATH: `${process.env.PATH}:${ANDROID_HOME}/build-tools/34.0.0:${ANDROID_HOME}/platform-tools`
     };
-    execSync('./gradlew assembleRelease --no-daemon', {
+    execFileSync('./gradlew', ['assembleRelease', '--no-daemon'], {
       stdio: 'pipe', cwd: projectDir, env: buildEnv, timeout: 360000
     });
 
@@ -166,11 +169,15 @@ async function buildApk(order, design, buildId, logCallback) {
 
     if (fs.existsSync(keystorePath)) {
       const alignedApk = path.join(buildDir, `${buildId}_aligned.apk`);
-      execSync(`zipalign -f 4 "${builtApk}" "${alignedApk}"`, { stdio: 'pipe' });
-      execSync(
-        `apksigner sign --ks "${keystorePath}" --ks-pass pass:zayro@123 --key-pass pass:zayro@123 --out "${signedApk}" "${alignedApk}"`,
-        { stdio: 'pipe' }
-      );
+      execFileSync('zipalign', ['-f', '4', builtApk, alignedApk], { stdio: 'pipe' });
+      execFileSync('apksigner', [
+        'sign',
+        '--ks', keystorePath,
+        '--ks-pass', 'pass:zayro@123',
+        '--key-pass', 'pass:zayro@123',
+        '--out', signedApk,
+        alignedApk
+      ], { stdio: 'pipe' });
       fs.unlinkSync(alignedApk);
       log('APK signed successfully.');
     } else {
@@ -179,7 +186,7 @@ async function buildApk(order, design, buildId, logCallback) {
     }
 
     // ── Cleanup ──
-    execSync(`rm -rf "${projectDir}"`, { stdio: 'pipe' });
+    fs.rmSync(projectDir, { recursive: true, force: true });
     if (fs.existsSync(zayrobin))   fs.unlinkSync(zayrobin);
     if (fs.existsSync(loadingbin)) fs.unlinkSync(loadingbin);
 
@@ -192,4 +199,104 @@ async function buildApk(order, design, buildId, logCallback) {
   }
 }
 
-module.exports = { buildApk, makePackageName };
+// ── Parent-process build queue ──
+// Gradle is CPU/RAM intensive, so builds stay serialized as before. The key
+// difference is that the blocking work now happens in a child process while
+// the main Node.js event loop remains free to answer Telegram updates and HTTP.
+const BUILD_WORKER_PATH = path.join(__dirname, 'apkbuilder-worker.js');
+const BUILD_WORKER_TIMEOUT_MS = Math.max(
+  60_000,
+  parseInt(process.env.APK_BUILD_TIMEOUT_MS || '600000', 10) || 600_000
+);
+const pendingBuilds = [];
+let buildRunning = false;
+
+function appendOutput(current, chunk) {
+  const MAX_OUTPUT = 16 * 1024;
+  const combined = current + chunk.toString();
+  return combined.length > MAX_OUTPUT ? combined.slice(-MAX_OUTPUT) : combined;
+}
+
+function runBuildWorker(order, design, buildId, logCallback) {
+  return new Promise((resolve, reject) => {
+    const child = fork(BUILD_WORKER_PATH, [], {
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      env: { ...process.env, APK_BUILDER_WORKER: '1' }
+    });
+
+    let settled = false;
+    let output = '';
+
+    child.stdout?.on('data', chunk => { output = appendOutput(output, chunk); });
+    child.stderr?.on('data', chunk => { output = appendOutput(output, chunk); });
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      child.kill('SIGTERM');
+      const forceKillTimer = setTimeout(() => child.kill('SIGKILL'), 5_000);
+      forceKillTimer.unref?.();
+      finish(new Error(`APK build timed out after ${Math.round(BUILD_WORKER_TIMEOUT_MS / 60000)} minutes`));
+    }, BUILD_WORKER_TIMEOUT_MS);
+    timeout.unref?.();
+
+    function finish(error, result) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (error) reject(error);
+      else resolve(result);
+    }
+
+    child.on('message', message => {
+      if (!message || typeof message !== 'object') return;
+      if (message.type === 'log') {
+        try { logCallback?.(message.message); }
+        catch (error) { console.error('Build log callback error:', error.message); }
+        return;
+      }
+      if (message.type === 'result') {
+        finish(null, message.result);
+      } else if (message.type === 'error') {
+        finish(new Error(message.error || 'Unknown APK build worker error'));
+      }
+    });
+
+    child.once('error', error => finish(error));
+    child.once('exit', (code, signal) => {
+      if (settled) return;
+      const detail = output.trim();
+      const reason = signal ? `signal ${signal}` : `code ${code}`;
+      finish(new Error(`APK build worker exited with ${reason}${detail ? `: ${detail}` : ''}`));
+    });
+
+    child.send({ type: 'build', order, design, buildId }, error => {
+      if (error) finish(error);
+    });
+  });
+}
+
+function processBuildQueue() {
+  if (buildRunning || pendingBuilds.length === 0) return;
+  buildRunning = true;
+  const job = pendingBuilds.shift();
+
+  runBuildWorker(job.order, job.design, job.buildId, job.logCallback)
+    .then(job.resolve, job.reject)
+    .finally(() => {
+      buildRunning = false;
+      // Let the completed order enqueue its fake APK before the next normal
+      // build starts, so real/fake pairs stay together.
+      setImmediate(processBuildQueue);
+    });
+}
+
+function buildApk(order, design, buildId, logCallback) {
+  return new Promise((resolve, reject) => {
+    const job = { order, design, buildId, logCallback, resolve, reject };
+    if (order?.is_fake) pendingBuilds.unshift(job);
+    else pendingBuilds.push(job);
+    processBuildQueue();
+  });
+}
+
+module.exports = { buildApk, buildApkInWorker, makePackageName };

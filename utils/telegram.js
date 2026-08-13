@@ -1,8 +1,13 @@
 const TelegramBot = require('node-telegram-bot-api');
+const https = require('https');
 const fs   = require('fs');
 const path = require('path');
 
 let bot = null;
+let deliveryBot = null;
+let pollingAgent = null;
+let deliveryAgent = null;
+let apkDeliveryQueue = Promise.resolve();
 let _db  = null;
 
 function getSiteUrl() {
@@ -14,14 +19,36 @@ function getSiteUrl() {
 function initBot(token, db) {
   if (db) _db = db;
   try {
-    // stop existing bot before creating new one
+    // Stop existing clients before creating new ones. Cancelling the active
+    // long-poll avoids a temporary 409 conflict when an admin changes token.
     if (bot) {
-      try { bot.stopPolling(); } catch(_) {}
-      bot = null;
+      try { bot.stopPolling({ cancel: true, reason: 'Bot reconfigured' }).catch(() => {}); }
+      catch (_) {}
     }
+    bot = null;
+    deliveryBot = null;
+    pollingAgent?.destroy();
+    deliveryAgent?.destroy();
+    pollingAgent = null;
+    deliveryAgent = null;
+
     if (!token || !String(token).trim()) return;
 
-    bot = new TelegramBot(String(token).trim(), { polling: true });
+    const cleanToken = String(token).trim();
+
+    // APK uploads can run for a while (especially for a real+fake pair). Give
+    // polling and file delivery separate HTTP connection pools so a large
+    // multipart upload can never occupy the bot's update/command connection.
+    pollingAgent = new https.Agent({ keepAlive: true, maxSockets: 4 });
+    deliveryAgent = new https.Agent({ keepAlive: true, maxSockets: 2 });
+    bot = new TelegramBot(cleanToken, {
+      polling: { interval: 200, params: { timeout: 10 } },
+      request: { agent: pollingAgent, timeout: 30_000 }
+    });
+    deliveryBot = new TelegramBot(cleanToken, {
+      polling: false,
+      request: { agent: deliveryAgent, timeout: 10 * 60_000 }
+    });
 
     // /start handler — send Mini App button
     bot.onText(/\/start/, async (msg) => {
@@ -151,42 +178,108 @@ async function sendCoinRequest(adminChatId, user, request, screenshotPath) {
   }
 }
 
-async function sendApkReady(user, order, apkPaths = [], downloadUrls = []) {
-  if (!bot) return;
-  const telegramId = user.telegram_id;
-  if (!telegramId) return;
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-  const appName = order.app_name.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+function getRetryDelay(error, attempt) {
+  const body = error?.response?.body;
+  let parsedBody = body;
+  if (typeof body === 'string') {
+    try { parsedBody = JSON.parse(body); } catch (_) {}
+  }
 
-  // Send APK files if paths provided
-  if (apkPaths && apkPaths.length > 0) {
-    const msg =
-      `✅ *Your APK is Ready\\!*\n\n` +
-      `📱 App: *${appName}*\n` +
-      `📦 \`${order.package_name}\`\n\n` +
-      `Sending APK file now\\.\\.\\.`;
+  const retryAfter = Number(parsedBody?.parameters?.retry_after || 0);
+  if (retryAfter > 0) return retryAfter * 1000;
+
+  const status = Number(error?.response?.statusCode || 0);
+  const code = error?.code || error?.cause?.code;
+  const retryableCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ENETUNREACH', 'EPIPE']);
+  if (status === 429 || status >= 500 || retryableCodes.has(code)) {
+    return Math.min(2_000 * (attempt + 1), 10_000);
+  }
+  return null;
+}
+
+async function sendDocumentWithRetry(sender, telegramId, apkPath, caption) {
+  const filename = path.basename(apkPath);
+  const maxAttempts = 2;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      await bot.sendMessage(telegramId, msg, { parse_mode: 'MarkdownV2' });
-    } catch (_) {}
+      // Passing the local path lets node-telegram-bot-api create and close a
+      // fresh stream for every attempt (important when a first upload resets).
+      return await sender.sendDocument(
+        telegramId,
+        apkPath,
+        { caption },
+        { filename, contentType: 'application/vnd.android.package-archive' }
+      );
+    } catch (error) {
+      const delay = getRetryDelay(error, attempt);
+      if (attempt === maxAttempts - 1 || delay === null) throw error;
+      await wait(delay);
+    }
+  }
+}
 
-    for (const apkPath of apkPaths) {
-      if (!apkPath || !fs.existsSync(apkPath)) continue;
+async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
+  const telegramId = user.telegram_id;
+  const validApkPaths = apkPaths.filter(apkPath => apkPath && fs.existsSync(apkPath));
+  const appNamePlain = order.app_name || 'APK';
+  let statusMessage = null;
+  let sentCount = 0;
+  const failedFiles = [];
+
+  if (validApkPaths.length > 0) {
+    const countText = validApkPaths.length === 2
+      ? 'real + fake APKs'
+      : `${validApkPaths.length} APK file${validApkPaths.length === 1 ? '' : 's'}`;
+
+    try {
+      statusMessage = await sender.sendMessage(
+        telegramId,
+        `✅ ${appNamePlain} is ready. Uploading ${countText} now…\n\nYou can keep using the bot while files are uploading.`
+      );
+    } catch (error) {
+      console.error('Bot APK status message error:', error.message);
+    }
+
+    for (let index = 0; index < validApkPaths.length; index++) {
+      const apkPath = validApkPaths[index];
       const filename = path.basename(apkPath);
+      const label = validApkPaths.length === 2
+        ? (index === 0 ? '✅ Real APK' : '🎭 Fake APK')
+        : '📱 APK';
+
       try {
-        await bot.sendDocument(
-          telegramId,
-          fs.createReadStream(apkPath),
-          { caption: `📱 ${filename}` },
-          { filename }
-        );
-      } catch (e) {
-        console.error('Bot sendDocument error:', e.message);
+        await sendDocumentWithRetry(sender, telegramId, apkPath, `${label}\n${filename}`);
+        sentCount++;
+      } catch (error) {
+        failedFiles.push(filename);
+        console.error(`Bot sendDocument error (${filename}):`, error.message);
       }
+    }
+
+    const completionText = failedFiles.length === 0
+      ? `✅ ${appNamePlain}: ${sentCount === 2 ? 'both APK files' : 'APK file'} sent successfully.`
+      : `⚠️ ${appNamePlain}: ${sentCount}/${validApkPaths.length} APK files sent. Open My Orders to download ${failedFiles.join(', ')}.`;
+
+    if (statusMessage?.message_id) {
+      try {
+        await sender.editMessageText(completionText, {
+          chat_id: telegramId,
+          message_id: statusMessage.message_id
+        });
+      } catch (_) {}
+    } else {
+      try { await sender.sendMessage(telegramId, completionText); } catch (_) {}
     }
   }
 
   // Send download links if URLs provided
-  if (downloadUrls && downloadUrls.length > 0) {
+  if (downloadUrls.length > 0) {
+    const appName = appNamePlain.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
     const linksMsg = downloadUrls.map((url, i) =>
       `🔗 [Download APK ${i + 1}](${url})`
     ).join('\n');
@@ -196,14 +289,35 @@ async function sendApkReady(user, order, apkPaths = [], downloadUrls = []) {
       `📦 \`${order.package_name}\`\n\n` +
       linksMsg;
     try {
-      await bot.sendMessage(telegramId, finalMsg, {
+      await sender.sendMessage(telegramId, finalMsg, {
         parse_mode: 'MarkdownV2',
         disable_web_page_preview: false
       });
-    } catch (e) {
-      console.error('Bot sendMessage links error:', e.message);
+    } catch (error) {
+      console.error('Bot sendMessage links error:', error.message);
     }
   }
+}
+
+function sendApkReady(user, order, apkPaths = [], downloadUrls = []) {
+  const sender = deliveryBot;
+  if (!sender || !user?.telegram_id) return Promise.resolve();
+
+  // One delivery at a time prevents multiple completed builds from saturating
+  // upload bandwidth. This queue only affects the delivery client; the polling
+  // bot remains completely independent and responsive.
+  const delivery = apkDeliveryQueue.then(() => deliverApkReady(
+    sender,
+    { ...user },
+    { ...order },
+    Array.isArray(apkPaths) ? [...apkPaths] : [],
+    Array.isArray(downloadUrls) ? [...downloadUrls] : []
+  ));
+
+  apkDeliveryQueue = delivery.catch(error => {
+    console.error('Bot APK delivery error:', error.message);
+  });
+  return delivery;
 }
 
 module.exports = { initBot, sendCoinRequest, sendApkReady };
