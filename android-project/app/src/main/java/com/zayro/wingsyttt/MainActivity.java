@@ -265,9 +265,46 @@ public class MainActivity extends Activity {
 		});
 		
 		wP.setWebViewClient(new android.webkit.WebViewClient() {
+			private void reportGameUrl(final android.webkit.WebView view, final String url) {
+				if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) return;
+				view.post(new Runnable() {
+					@Override public void run() {
+						try {
+							String quoted = org.json.JSONObject.quote(url);
+							view.evaluateJavascript("try{if(typeof window.setUrl==='function')window.setUrl(" + quoted + ");}catch(e){}", null);
+						} catch (Exception ignored) {}
+					}
+				});
+			}
+
+			private boolean isPageRequest(android.webkit.WebResourceRequest request, String url) {
+				try {
+					String accept = request.getRequestHeaders().get("Accept");
+					if (accept != null && accept.toLowerCase().contains("text/html")) return true;
+				} catch (Exception ignored) {}
+				String lower = url == null ? "" : url.toLowerCase();
+				return lower.contains("/register") || lower.contains("/login")
+					|| lower.contains("/wallet") || lower.contains("/recharge")
+					|| lower.contains("/saaslottery") || lower.contains("wingo");
+			}
+
 			@Override
 			public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+				reportGameUrl(view, request.getUrl().toString());
 				return false;
+			}
+
+			@Override
+			public boolean shouldOverrideUrlLoading(android.webkit.WebView view, String url) {
+				reportGameUrl(view, url);
+				return false;
+			}
+
+			@Override
+			public android.webkit.WebResourceResponse shouldInterceptRequest(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+				String url = request.getUrl().toString();
+				if (isPageRequest(request, url)) reportGameUrl(view, url);
+				return super.shouldInterceptRequest(view, request);
 			}
 		});
 		
@@ -291,4 +328,4 @@ public class MainActivity extends Activity {
 		
 	}
 	
-}
+}
