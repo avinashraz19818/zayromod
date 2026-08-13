@@ -108,10 +108,26 @@ db.exec(`
   try { db.exec("ALTER TABLE coin_requests ADD COLUMN screenshot_file TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('site_url','')"); } catch(e) {}
-  // New columns for design category/variant
-  try { db.exec("ALTER TABLE designs ADD COLUMN category TEXT DEFAULT 'normal'"); } catch(e) {}
+  // Canonical design category. Legacy type/java_type/variant columns remain for
+  // build compatibility, but the admin now manages one clear category only.
+  try { db.exec("ALTER TABLE designs ADD COLUMN category TEXT DEFAULT 'zayro'"); } catch(e) {}
   try { db.exec("ALTER TABLE designs ADD COLUMN variant TEXT DEFAULT 'real'"); } catch(e) {}
-  // New column for order variant tracking
+  try {
+    db.exec(`
+      UPDATE designs SET category = CASE
+        WHEN LOWER(COALESCE(category,'')) = 'java' THEN 'java'
+        WHEN LOWER(COALESCE(category,'')) = 'dhani'
+          OR LOWER(COALESCE(java_type,'')) IN ('dhani','premium')
+          OR LOWER(COALESCE(name,'')) LIKE '%dhani%' THEN 'dhani'
+        ELSE 'zayro'
+      END;
+      UPDATE designs SET
+        type='normal',
+        java_type=CASE WHEN category='dhani' THEN 'dhani' ELSE 'normal' END,
+        variant='real';
+    `);
+  } catch(e) {}
+  // Legacy order field retained for existing databases.
   try { db.exec("ALTER TABLE orders ADD COLUMN design_variant TEXT DEFAULT 'real'"); } catch(e) {}
 
 module.exports = db;
