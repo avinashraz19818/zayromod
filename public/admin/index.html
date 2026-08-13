@@ -543,15 +543,13 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
       <div class="card-hd"><span class="accent"></span><h3>Add New Design</h3></div>
       <div class="grid2">
         <div class="form-group"><label>Name</label><input type="text" id="dName" placeholder="e.g. Fire Mod"></div>
-        <div class="form-group"><label>Type</label><input type="text" id="dType" value="normal" placeholder="normal / premium"></div>
-        <div class="form-group"><label>Java Type</label>
-          <select id="dJavaType"><option value="normal">Normal</option><option value="premium">Premium</option><option value="dhani">Dhani</option></select>
-        </div>
-        <div class="form-group"><label>Category</label>
-          <select id="dCategory"><option value="normal">Normal</option><option value="dhani">Dhani</option><option value="java">Java</option></select>
-        </div>
-        <div class="form-group"><label>Variant</label>
-          <select id="dVariant"><option value="real">Real</option><option value="mock">Mock/Test</option></select>
+        <div class="form-group"><label>Design Category</label>
+          <select id="dCategory">
+            <option value="zayro">Zayro — Common / All Games</option>
+            <option value="dhani">Dhani</option>
+            <option value="java">Java</option>
+          </select>
+          <div class="hint">Choose only where this design belongs. No separate type or variant is needed.</div>
         </div>
         <div class="form-group"><label>Price (coins)</label><input type="number" id="dPrice" value="10" min="0"></div>
         <div class="form-group"><label>Original Price</label><input type="number" id="dOrigPrice" value="0" min="0"></div>
@@ -622,7 +620,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
                   <th style="width:40px"><input type="checkbox" id="selectAllUserOrders" onchange="toggleSelectAllUserOrders(this)"></th>
                   <th>Order ID</th>
                   <th>Design</th>
-                  <th>Variant</th>
+                  <th>Category</th>
                   <th>Status</th>
                   <th>Coins</th>
                   <th>Date</th>
@@ -732,39 +730,14 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
           <label class="label">Description</label>
           <textarea id="eDesc" class="input" placeholder="Short description shown to users"></textarea>
         </div>
-        <div class="grid2" style="margin-top:12px">
-          <div>
-            <label class="label">Type</label>
-            <select id="eType" class="input">
-              <option value="normal">Normal</option>
-              <option value="premium">Premium</option>
-            </select>
-          </div>
-          <div>
-            <label class="label">Java Type</label>
-            <select id="eJavaType" class="input">
-              <option value="normal">Normal</option>
-              <option value="premium">Premium</option>
-              <option value="dhani">Dhani</option>
-            </select>
-          </div>
-        </div>
-        <div class="grid2" style="margin-top:12px">
-          <div>
-            <label class="label">Category</label>
-            <select id="eCategory" class="input">
-              <option value="normal">Normal</option>
-              <option value="dhani">Dhani</option>
-              <option value="java">Java</option>
-            </select>
-          </div>
-          <div>
-            <label class="label">Variant</label>
-            <select id="eVariant" class="input">
-              <option value="real">Real</option>
-              <option value="mock">Mock/Test</option>
-            </select>
-          </div>
+        <div style="margin-top:12px">
+          <label class="label">Design Category</label>
+          <select id="eCategory" class="input">
+            <option value="zayro">Zayro — Common / All Games</option>
+            <option value="dhani">Dhani</option>
+            <option value="java">Java</option>
+          </select>
+          <div style="font-size:10.5px;color:var(--dim);margin-top:6px">Dhani designs appear as Dhani, Java designs as Java, and common designs as Zayro.</div>
         </div>
       </div>
 
@@ -918,28 +891,30 @@ async function loadDashboard() {
 
 // ── Designs ──
 let _editDesigns = [];
+function designCategory(design) {
+  const category = String(design?.category || '').toLowerCase();
+  if (category === 'dhani' || category === 'java' || category === 'zayro') return category;
+  const legacyType = String(design?.java_type || '').toLowerCase();
+  if (legacyType === 'dhani' || legacyType === 'premium' || /dhani/i.test(design?.name || '')) return 'dhani';
+  return 'zayro';
+}
+function categoryBadge(design) {
+  const category = designCategory(design);
+  if (category === 'dhani') return '<span class="badge" style="background:rgba(94,200,255,.14);color:var(--cyan);border:1px solid rgba(94,200,255,.3)">Dhani</span>';
+  if (category === 'java') return '<span class="badge" style="background:rgba(255,77,109,.12);color:var(--danger);border:1px solid rgba(255,77,109,.32)">Java</span>';
+  return '<span class="badge badge-blue">Zayro</span>';
+}
 async function loadDesigns() {
   const designs = await api('/api/admin/designs');
   _editDesigns = Array.isArray(designs) ? designs : [];
   const c = document.getElementById('designsList');
   if (!designs.length) { c.innerHTML = '<div style="color:var(--dim);padding:16px 4px">No designs yet.</div>'; return; }
   
-  const getVariantBadge = (category, variant) => {
-    if (!category || category === 'normal') return '<span class="badge badge-blue">Normal — Real</span>';
-    if (category === 'dhani' && variant === 'real') return '<span class="badge" style="background:rgba(94,200,255,.14);color:var(--cyan);border:1px solid rgba(94,200,255,.3)">Dhani — Real</span>';
-    if (category === 'dhani' && variant === 'mock') return '<span class="badge" style="background:rgba(255,194,51,.12);color:var(--gold);border:1px solid rgba(255,194,51,.32)">Dhani — Mock/Test</span>';
-    if (category === 'java' && variant === 'real') return '<span class="badge" style="background:rgba(255,77,109,.12);color:var(--danger);border:1px solid rgba(255,77,109,.32)">Java — Real</span>';
-    if (category === 'java' && variant === 'mock') return '<span class="badge" style="background:rgba(255,194,51,.12);color:var(--gold);border:1px solid rgba(255,194,51,.32)">Java — Mock/Test</span>';
-    return `<span class="badge badge-blue">${category || 'normal'} — ${variant || 'real'}</span>`;
-  };
-  
-  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Type</th><th>Java</th><th>Category</th><th>Variant</th><th>Price</th><th>Orig</th><th>Fake+</th><th>Status</th><th>Action</th></tr></thead><tbody>` +
+  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Category</th><th>Price</th><th>Orig</th><th>Fake+</th><th>Status</th><th>Action</th></tr></thead><tbody>` +
     designs.map((d, i) => `<tr>
       <td>${i+1}</td>
       <td><b>${d.name}</b><br><small>${d.description||''}</small></td>
-      <td>${d.type}</td><td>${d.java_type}</td>
-      <td>${d.category || 'normal'}</td>
-      <td>${getVariantBadge(d.category, d.variant)}</td>
+      <td>${categoryBadge(d)}</td>
       <td><span class="coin-chip">${d.price_coins}</span></td>
       <td>${d.original_price_coins>0?'<span style="color:var(--dim);text-decoration:'+(d.original_price_coins>d.price_coins?'line-through':'none')+'">'+d.original_price_coins+'c</span>':'—'}</td>
       <td><span style="color:var(--cyan);font-weight:700">+${d.fake_price_coins||5}c</span></td>
@@ -956,10 +931,7 @@ async function addDesign() {
   const btn = event.currentTarget || event.target;
   const name = document.getElementById('dName').value.trim();
   const price = document.getElementById('dPrice').value;
-  const type = document.getElementById('dType').value.trim();
-  const javaType = document.getElementById('dJavaType').value;
   const category = document.getElementById('dCategory').value;
-  const variant = document.getElementById('dVariant').value;
   const desc = document.getElementById('dDesc').value;
   const pf = document.getElementById('dPopupHtml').files[0];
   const fpf = document.getElementById('dFakePopupHtml').files[0];
@@ -976,10 +948,7 @@ async function addDesign() {
   fd.append('price_coins', price);
   fd.append('original_price_coins', document.getElementById('dOrigPrice').value || '0');
   fd.append('fake_price_coins', document.getElementById('dFakePrice').value || '5');
-  fd.append('type', type || 'normal');
-  fd.append('java_type', javaType);
-  fd.append('category', category || 'normal');
-  fd.append('variant', variant || 'real');
+  fd.append('category', category || 'zayro');
   fd.append('description', desc);
   fd.append('popup_html', pf);
   if (fpf) fd.append('fake_popup_html', fpf);
@@ -993,12 +962,11 @@ async function addDesign() {
 
   if (d.error) return toast(d.error, true);
   toast('✓ Design added successfully!');
-  ['dName','dDesc','dType','dPopupHtml','dFakePopupHtml','dPreviewImg','dPreviewVid','dPreviewImages'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['dName','dDesc','dPopupHtml','dFakePopupHtml','dPreviewImg','dPreviewVid','dPreviewImages'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('dPrice').value = '10';
   document.getElementById('dOrigPrice').value = '0';
   document.getElementById('dFakePrice').value = '5';
-  document.getElementById('dCategory').value = 'normal';
-  document.getElementById('dVariant').value = 'real';
+  document.getElementById('dCategory').value = 'zayro';
   loadDesigns();
 }
 
@@ -1013,10 +981,7 @@ function editDesign(id) {
   document.getElementById('eDesignId').value = id;
   document.getElementById('eName').value = d.name || '';
   document.getElementById('eDesc').value = d.description || '';
-  document.getElementById('eType').value = d.type || 'normal';
-  document.getElementById('eJavaType').value = d.java_type || 'normal';
-  document.getElementById('eCategory').value = d.category || 'normal';
-  document.getElementById('eVariant').value = d.variant || 'real';
+  document.getElementById('eCategory').value = designCategory(d);
   document.getElementById('ePrice').value = d.price_coins || 0;
   document.getElementById('eOrigPrice').value = d.original_price_coins || 0;
   document.getElementById('eFakePrice').value = d.fake_price_coins || 5;
@@ -1069,10 +1034,7 @@ async function saveDesignEdit() {
   const fd = new FormData();
   fd.append('name', document.getElementById('eName').value.trim());
   fd.append('description', document.getElementById('eDesc').value.trim());
-  fd.append('type', document.getElementById('eType').value);
-  fd.append('java_type', document.getElementById('eJavaType').value);
   fd.append('category', document.getElementById('eCategory').value);
-  fd.append('variant', document.getElementById('eVariant').value);
   fd.append('price_coins', document.getElementById('ePrice').value);
   fd.append('original_price_coins', document.getElementById('eOrigPrice').value);
   fd.append('fake_price_coins', document.getElementById('eFakePrice').value);
@@ -1160,7 +1122,7 @@ async function fetchOrders(status, search, sort, page, limit) {
             <th>User</th>
             <th>App Name</th>
             <th>Design</th>
-            <th>Variant</th>
+            <th>Category</th>
             <th>Status</th>
             <th>Coins</th>
             <th>Date</th>
@@ -1175,7 +1137,7 @@ async function fetchOrders(status, search, sort, page, limit) {
               <td>${o.username}<br><small>ID: ${o.user_id}</small></td>
               <td><b>${o.app_name}</b><br><small>${o.package_name}</small></td>
               <td>${o.design_name}</td>
-              <td><span class="badge badge-blue">${o.variant || 'real'}</span></td>
+              <td>${categoryBadge(o)}</td>
               <td><span class="badge ${o.status==='done'?'badge-ok':o.status==='failed'?'badge-danger':o.status==='building'?'badge-blue':'badge-pending'}">${o.status}</span></td>
               <td><span class="coin-chip">${o.coins_spent}</span></td>
               <td><small>${new Date(o.created_at).toLocaleDateString()} ${new Date(o.created_at).toLocaleTimeString()}</small></td>
@@ -1432,7 +1394,7 @@ async function loadUserOrders(userId) {
       <td><input type="checkbox" class="user-order-checkbox" value="${o.id}" onchange="toggleUserOrderSelection(this)"></td>
       <td>${o.id}</td>
       <td>${o.design_name}</td>
-      <td><span class="badge badge-blue">${o.variant || 'real'}</span></td>
+      <td>${categoryBadge(o)}</td>
       <td><span class="badge ${o.status==='done'?'badge-ok':o.status==='failed'?'badge-danger':o.status==='building'?'badge-blue':'badge-pending'}">${o.status}</span></td>
       <td><span class="coin-chip">${o.coins_spent}</span></td>
       <td><small>${new Date(o.created_at).toLocaleDateString()} ${new Date(o.created_at).toLocaleTimeString()}</small></td>

@@ -127,10 +127,19 @@ const designPreviewImagesStmt = db.prepare(`
   WHERE design_id=? ORDER BY sort_order ASC, id ASC
 `);
 
+function normalizeDesignCategory(value, design = {}) {
+  const category = String(value || '').trim().toLowerCase();
+  if (['zayro', 'dhani', 'java'].includes(category)) return category;
+  const legacyType = String(design.java_type || '').trim().toLowerCase();
+  if (legacyType === 'dhani' || legacyType === 'premium' || /dhani/i.test(design.name || '')) return 'dhani';
+  return 'zayro';
+}
+
 function withPreviewImages(design) {
   if (!design) return design;
   return {
     ...design,
+    category: normalizeDesignCategory(design.category, design),
     preview_images: designPreviewImagesStmt.all(design.id).map(row => row.file_name)
   };
 }
@@ -138,7 +147,7 @@ function withPreviewImages(design) {
 app.get('/api/designs', (req, res) => {
   const designs = db.prepare(`
     SELECT id,name,description,price_coins,original_price_coins,fake_price_coins,
-           type,java_type,category,variant,preview_image,preview_video
+           category,preview_image,preview_video
     FROM designs WHERE active=1 ORDER BY id DESC
   `).all().map(withPreviewImages);
   res.json(designs);
@@ -188,7 +197,7 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   const orderResult = db.prepare(`
     INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,status,coins_spent,design_variant)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'building',?,?)
-  `).run(user.id, design_id, app_name.trim(), packageName, register_url.trim(), depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? fake_register_url.trim() : null, totalCoins, design.variant || 'real');
+  `).run(user.id, design_id, app_name.trim(), packageName, register_url.trim(), depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? fake_register_url.trim() : null, totalCoins, 'real');
 
   const orderId = orderResult.lastInsertRowid;
   const buildId = `build_${orderId}_${Date.now()}`;
@@ -386,8 +395,10 @@ app.post('/api/admin/designs', requireAdmin, adminUpload.fields([
   { name: 'popup_html', maxCount: 1 },
   { name: 'fake_popup_html', maxCount: 1 }
 ]), async (req, res) => {
-  const { name, description, price_coins, type, java_type, category, variant } = req.body;
+  const { name, description, price_coins } = req.body;
   if (!name || !price_coins) return res.json({ error: 'Name and price required' });
+  const category = normalizeDesignCategory(req.body.category);
+  const legacyJavaType = category === 'dhani' ? 'dhani' : 'normal';
   const original_price_coins = parseInt(req.body.original_price_coins || 0);
   const fake_price_coins = parseInt(req.body.fake_price_coins || 5);
 
@@ -418,7 +429,7 @@ app.post('/api/admin/designs', requireAdmin, adminUpload.fields([
   if (!popupHtmlFile) return res.json({ error: 'Popup HTML file required' });
 
   const designResult = db.prepare(`INSERT INTO designs(name,description,price_coins,original_price_coins,fake_price_coins,type,java_type,category,variant,popup_html_file,fake_popup_html_file,preview_image,preview_video)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(name, description||'', parseInt(price_coins), original_price_coins, fake_price_coins, type||'normal', java_type||'normal', category||'normal', variant||'real', popupHtmlFile, fakePopupHtmlFile, previewImage, previewVideo);
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(name, description||'', parseInt(price_coins), original_price_coins, fake_price_coins, 'normal', legacyJavaType, category, 'real', popupHtmlFile, fakePopupHtmlFile, previewImage, previewVideo);
 
   const galleryFiles = req.files?.preview_images || [];
   if (galleryFiles.length) {
@@ -444,7 +455,7 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
 ]), (req, res) => {
   const templatesDir = path.join(__dirname, 'templates');
   const uploadsDir = path.join(__dirname, 'uploads');
-  const { name, description, price_coins, original_price_coins, fake_price_coins, active, type, java_type, category, variant } = req.body;
+  const { name, description, price_coins, original_price_coins, fake_price_coins, active, category } = req.body;
 
   // Get current design to know old file names
   const currentDesign = db.prepare('SELECT * FROM designs WHERE id=?').get(req.params.id);
@@ -461,10 +472,11 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
   if (original_price_coins !== undefined) { fields.push('original_price_coins=?'); vals.push(parseInt(original_price_coins) || 0); }
   if (fake_price_coins !== undefined) { fields.push('fake_price_coins=?');       vals.push(parseInt(fake_price_coins) || 5); }
   if (active           !== undefined) { fields.push('active=?');                 vals.push(active === '1' || active === 1 || active === true ? 1 : 0); }
-  if (type             !== undefined) { fields.push('type=?');                   vals.push(type); }
-  if (java_type        !== undefined) { fields.push('java_type=?');              vals.push(java_type); }
-  if (category         !== undefined) { fields.push('category=?');               vals.push(category); }
-  if (variant          !== undefined) { fields.push('variant=?');                vals.push(variant); }
+  if (category         !== undefined) {
+    const normalizedCategory = normalizeDesignCategory(category, currentDesign);
+    fields.push('category=?', 'type=?', 'java_type=?', 'variant=?');
+    vals.push(normalizedCategory, 'normal', normalizedCategory === 'dhani' ? 'dhani' : 'normal', 'real');
+  }
 
   // Track old files to delete after successful update
   const oldFilesToDelete = [];
@@ -661,7 +673,7 @@ app.get('/api/admin/orders', requireAdmin, (req, res) => {
 
   // Get orders
   const rows = db.prepare(`
-    SELECT o.*,u.username,d.name as design_name,d.category,d.variant FROM orders o
+    SELECT o.*,u.username,d.name as design_name,d.category FROM orders o
     JOIN users u ON o.user_id=u.id
     JOIN designs d ON o.design_id=d.id
     ${where}
@@ -751,7 +763,7 @@ app.get('/api/admin/users/:id/orders', requireAdmin, (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const orders = db.prepare(`
-    SELECT o.*,d.name as design_name,d.category,d.variant FROM orders o
+    SELECT o.*,d.name as design_name,d.category FROM orders o
     JOIN designs d ON o.design_id=d.id
     WHERE o.user_id=? ORDER BY o.id DESC
   `).all(userId);

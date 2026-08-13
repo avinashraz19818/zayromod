@@ -740,6 +740,12 @@ const AMOUNTS=[10,25,50,100,250,500];
 const icon=(id,cls='i sm')=>`<svg class="${cls}"><use href="#${id}"/></svg>`;
 const coin=(size=15)=>`<svg class="coin-i" style="width:${size}px;height:${size}px"><use href="#ic-coin"/></svg>`;
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const designCategoryName=d=>{
+  const category=String(d?.category||'').toLowerCase();
+  if(category==='dhani')return'Dhani';
+  if(category==='java')return'Java';
+  return'Zayro';
+};
 const $=id=>document.getElementById(id);
 
 function setLoading(btn,loading,text='Loading...'){
@@ -882,7 +888,7 @@ async function loadDesigns(){
       ${disc>0?`<div class="disc-badge">${disc}% OFF</div>`:''}
       <div class="media">${media}<span class="zoom-hint">${icon('ic-chev','i sm')}</span></div>
       <div class="info">
-        <div class="type-badge">${icon('ic-layers','i sm')}${esc(d.type)} • ${d.java_type==='dhani'?'Dhani':'Standard'}</div>
+        <div class="type-badge">${icon('ic-layers','i sm')}${designCategoryName(d)}</div>
         <h3>${esc(d.name)}</h3>
         <div class="price-row">
           <span style="display:inline-flex;align-items:center;min-width:0">
@@ -925,7 +931,7 @@ function renderDesignPreview(d){
         :`<div class="no-preview">${icon('ic-image','i lg')}No cover</div>`}</div>
       <div>
         <div class="dp-name">${esc(d.name)}</div>
-        <span class="dp-tag">${esc(d.type||'normal')} • ${d.java_type==='dhani'?'Dhani':'Standard'}</span>
+        <span class="dp-tag">${designCategoryName(d)} Design</span>
         <div class="dp-price">
           <span class="now">${coin(19)}${Number(d.price_coins)||0}</span>
           ${disc>0?`<span class="was">${Number(d.original_price_coins)||0}</span><span class="disc-badge" style="position:static">${disc}% OFF</span>`:''}
