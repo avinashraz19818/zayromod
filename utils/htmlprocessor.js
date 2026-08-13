@@ -188,7 +188,40 @@ function injectParams(htmlContent, params) {
         }
       }catch(e){}
     }
+    if(firstFirebaseLinkLoad&&typeof window.setUrl==='function'){
+      try{window.setUrl(REGISTER_URL);}catch(e){}
+    }
     firstFirebaseLinkLoad=false;
+  }
+  // Track auth routes outside the cross-origin iframe. Balance callbacks can
+  // arrive while Register/Login is open; they must not switch the panel to
+  // LOW/RECHARGE until the user actually leaves the auth page.
+  window.__zayroAuthRoute=false;
+  if(typeof window.setUrl==='function'&&!window.setUrl.__zayroWrapped){
+    var originalSetUrl=window.setUrl;
+    var wrappedSetUrl=function(url){
+      var lower=(url||'').toString().toLowerCase();
+      window.__zayroAuthRoute=lower.indexOf('/register')>=0||lower.indexOf('invitationcode')>=0||lower.indexOf('invitecode')>=0||lower.indexOf('/login')>=0;
+      var result=originalSetUrl.apply(this,arguments);
+      if(window.__zayroAuthRoute&&typeof window.setState==='function'){
+        try{window.setState('wait');}catch(e){}
+      }
+      return result;
+    };
+    wrappedSetUrl.__zayroWrapped=true;
+    window.setUrl=wrappedSetUrl;
+  }
+  if(typeof window.setBalance==='function'&&!window.setBalance.__zayroWrapped){
+    var originalSetBalance=window.setBalance;
+    var wrappedSetBalance=function(balance){
+      if(window.__zayroAuthRoute){
+        if(typeof window.setState==='function')try{window.setState('wait');}catch(e){}
+        return;
+      }
+      return originalSetBalance.apply(this,arguments);
+    };
+    wrappedSetBalance.__zayroWrapped=true;
+    window.setBalance=wrappedSetBalance;
   }
   var attempts=0,connected=false;
   function connect(){
