@@ -281,11 +281,15 @@ public class MainActivity extends Activity {
 				try {
 					String accept = request.getRequestHeaders().get("Accept");
 					if (accept != null && accept.toLowerCase().contains("text/html")) return true;
+					String destination = request.getRequestHeaders().get("Sec-Fetch-Dest");
+					if (destination != null) {
+						destination = destination.toLowerCase();
+						if (destination.equals("document") || destination.equals("iframe") || destination.equals("frame")) return true;
+					}
 				} catch (Exception ignored) {}
-				String lower = url == null ? "" : url.toLowerCase();
-				return lower.contains("/register") || lower.contains("/login")
-					|| lower.contains("/wallet") || lower.contains("/recharge")
-					|| lower.contains("/saaslottery") || lower.contains("wingo");
+				// Never infer panel state from JSON/API/image resources. Their URLs can
+				// contain words such as wingo or wallet while Register is still open.
+				return false;
 			}
 
 			@Override
