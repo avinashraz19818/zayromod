@@ -561,8 +561,9 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
       <div class="grid2">
         <div class="form-group"><label>Popup HTML <small>(Real APK)</small></label><input type="file" id="dPopupHtml" accept=".html,.htm"></div>
         <div class="form-group"><label>Popup HTML <small>(Fake APK)</small></label><input type="file" id="dFakePopupHtml" accept=".html,.htm"></div>
-        <div class="form-group"><label>Preview Image</label><input type="file" id="dPreviewImg" accept="image/*"></div>
-        <div class="form-group"><label>Preview Video</label><input type="file" id="dPreviewVid" accept="video/*"></div>
+        <div class="form-group"><label>Card Cover Image <small>(single)</small></label><input type="file" id="dPreviewImg" accept="image/*"></div>
+        <div class="form-group"><label>Preview Video <small>(shown first)</small></label><input type="file" id="dPreviewVid" accept="video/*"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Gallery Screenshots <small>(select 1 or multiple, max 12)</small></label><input type="file" id="dPreviewImages" accept="image/*" multiple><div class="hint">The cover image appears on the design card. These screenshots appear inside the details popup after the video.</div></div>
       </div>
       <button class="btn btn-primary" onclick="addDesign()"><svg><use href="#i-plus"/></svg> Add Design</button>
     </div>
@@ -800,12 +801,17 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
             <input id="eFakePopupHtml" class="input" type="file" accept=".html,.htm">
           </div>
           <div>
-            <label class="label">Preview Image</label>
+            <label class="label">Card Cover Image</label>
             <input id="ePreviewImage" class="input" type="file" accept="image/*">
           </div>
           <div>
-            <label class="label">Preview Video</label>
+            <label class="label">Preview Video (shown first)</label>
             <input id="ePreviewVideo" class="input" type="file" accept="video/*">
+          </div>
+          <div style="grid-column:1/-1">
+            <label class="label">Gallery Screenshots (1–12)</label>
+            <input id="ePreviewImages" class="input" type="file" accept="image/*" multiple>
+            <div style="font-size:10.5px;color:var(--dim);margin-top:6px">Selecting files replaces the current screenshot gallery. Leave empty to keep it.</div>
           </div>
         </div>
       </div>
@@ -959,9 +965,11 @@ async function addDesign() {
   const fpf = document.getElementById('dFakePopupHtml').files[0];
   const pi = document.getElementById('dPreviewImg').files[0];
   const pv = document.getElementById('dPreviewVid').files[0];
+  const gallery = Array.from(document.getElementById('dPreviewImages').files || []);
 
   if (!name) return toast('Design name required', true);
   if (!pf) return toast('Popup HTML file (Real APK) required', true);
+  if (!pi) return toast('Card cover image required', true);
 
   const fd = new FormData();
   fd.append('name', name);
@@ -977,6 +985,7 @@ async function addDesign() {
   if (fpf) fd.append('fake_popup_html', fpf);
   if (pi) fd.append('preview_image', pi);
   if (pv) fd.append('preview_video', pv);
+  gallery.forEach(file => fd.append('preview_images', file));
 
   setLoading(btn, true, 'Uploading…');
   const d = await api('/api/admin/designs', 'POST', fd, true);
@@ -984,7 +993,7 @@ async function addDesign() {
 
   if (d.error) return toast(d.error, true);
   toast('✓ Design added successfully!');
-  ['dName','dDesc','dType','dPopupHtml','dFakePopupHtml','dPreviewImg','dPreviewVid'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['dName','dDesc','dType','dPopupHtml','dFakePopupHtml','dPreviewImg','dPreviewVid','dPreviewImages'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('dPrice').value = '10';
   document.getElementById('dOrigPrice').value = '0';
   document.getElementById('dFakePrice').value = '5';
@@ -1012,15 +1021,17 @@ function editDesign(id) {
   document.getElementById('eOrigPrice').value = d.original_price_coins || 0;
   document.getElementById('eFakePrice').value = d.fake_price_coins || 5;
   document.getElementById('eActive').value = d.active ? '1' : '0';
-  ['ePopupHtml','eFakePopupHtml','ePreviewImage','ePreviewVideo'].forEach(fid => {
+  ['ePopupHtml','eFakePopupHtml','ePreviewImage','ePreviewVideo','ePreviewImages'].forEach(fid => {
     document.getElementById(fid).value = '';
   });
 
+  const galleryCount = Array.isArray(d.preview_images) ? d.preview_images.length : 0;
   const files = [
     { key: d.popup_html_file, label: 'Popup HTML', icon: '#i-file' },
     { key: d.fake_popup_html_file, label: 'Fake Popup', icon: '#i-file' },
-    { key: d.preview_image, label: 'Preview Image', icon: '#i-image' },
-    { key: d.preview_video, label: 'Preview Video', icon: '#i-video' }
+    { key: d.preview_image, label: 'Card Cover Image', icon: '#i-image' },
+    { key: d.preview_video, label: 'Preview Video', icon: '#i-video' },
+    { key: galleryCount ? `${galleryCount} screenshot${galleryCount===1?'':'s'}` : '', label: 'Screenshot Gallery', icon: '#i-image' }
   ];
   document.getElementById('eCurrentFiles').innerHTML = files.map(f => `
     <div class="fchip ${f.key?'':'empty'}">
@@ -1070,10 +1081,12 @@ async function saveDesignEdit() {
   const fph = document.getElementById('eFakePopupHtml').files[0];
   const pi  = document.getElementById('ePreviewImage').files[0];
   const pv  = document.getElementById('ePreviewVideo').files[0];
+  const gallery = Array.from(document.getElementById('ePreviewImages').files || []);
   if (ph)  fd.append('popup_html', ph);
   if (fph) fd.append('fake_popup_html', fph);
   if (pi)  fd.append('preview_image', pi);
   if (pv)  fd.append('preview_video', pv);
+  gallery.forEach(file => fd.append('preview_images', file));
   const saveBtn = document.getElementById('eSaveBtn');
   setLoading(saveBtn, true, 'Saving…');
   const res = await api('/api/admin/designs/' + id, 'PATCH', fd, true);

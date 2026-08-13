@@ -122,15 +122,32 @@ app.post('/api/me/telegram', requireAuth, (req, res) => {
 // DESIGN ROUTES
 // ═══════════════════════════════════════════
 
+const designPreviewImagesStmt = db.prepare(`
+  SELECT file_name FROM design_preview_images
+  WHERE design_id=? ORDER BY sort_order ASC, id ASC
+`);
+
+function withPreviewImages(design) {
+  if (!design) return design;
+  return {
+    ...design,
+    preview_images: designPreviewImagesStmt.all(design.id).map(row => row.file_name)
+  };
+}
+
 app.get('/api/designs', (req, res) => {
-  const designs = db.prepare('SELECT id,name,description,price_coins,original_price_coins,fake_price_coins,type,java_type,preview_image,preview_video FROM designs WHERE active=1 ORDER BY id DESC').all();
+  const designs = db.prepare(`
+    SELECT id,name,description,price_coins,original_price_coins,fake_price_coins,
+           type,java_type,category,variant,preview_image,preview_video
+    FROM designs WHERE active=1 ORDER BY id DESC
+  `).all().map(withPreviewImages);
   res.json(designs);
 });
 
 app.get('/api/designs/:id', (req, res) => {
   const d = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(req.params.id);
   if (!d) return res.status(404).json({ error: 'Not found' });
-  res.json(d);
+  res.json(withPreviewImages(d));
 });
 
 // ═══════════════════════════════════════════
@@ -359,12 +376,13 @@ app.post('/api/coins/request', requireAuth, iconUpload.single('screenshot'), asy
 
 // Designs CRUD
 app.get('/api/admin/designs', requireAdmin, (req, res) => {
-  res.json(db.prepare('SELECT * FROM designs ORDER BY id DESC').all());
+  res.json(db.prepare('SELECT * FROM designs ORDER BY id DESC').all().map(withPreviewImages));
 });
 
 app.post('/api/admin/designs', requireAdmin, adminUpload.fields([
   { name: 'preview_image', maxCount: 1 },
   { name: 'preview_video', maxCount: 1 },
+  { name: 'preview_images', maxCount: 12 },
   { name: 'popup_html', maxCount: 1 },
   { name: 'fake_popup_html', maxCount: 1 }
 ]), async (req, res) => {
@@ -399,15 +417,28 @@ app.post('/api/admin/designs', requireAdmin, adminUpload.fields([
 
   if (!popupHtmlFile) return res.json({ error: 'Popup HTML file required' });
 
-  db.prepare(`INSERT INTO designs(name,description,price_coins,original_price_coins,fake_price_coins,type,java_type,category,variant,popup_html_file,fake_popup_html_file,preview_image,preview_video)
+  const designResult = db.prepare(`INSERT INTO designs(name,description,price_coins,original_price_coins,fake_price_coins,type,java_type,category,variant,popup_html_file,fake_popup_html_file,preview_image,preview_video)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(name, description||'', parseInt(price_coins), original_price_coins, fake_price_coins, type||'normal', java_type||'normal', category||'normal', variant||'real', popupHtmlFile, fakePopupHtmlFile, previewImage, previewVideo);
 
-  res.json({ success: true });
+  const galleryFiles = req.files?.preview_images || [];
+  if (galleryFiles.length) {
+    const insertPreview = db.prepare('INSERT INTO design_preview_images(design_id,file_name,sort_order) VALUES(?,?,?)');
+    db.transaction(files => {
+      files.forEach((file, index) => insertPreview.run(
+        designResult.lastInsertRowid,
+        path.basename(file.path),
+        index
+      ));
+    })(galleryFiles);
+  }
+
+  res.json({ success: true, id: designResult.lastInsertRowid });
 });
 
 app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
   { name: 'preview_image',    maxCount: 1 },
   { name: 'preview_video',    maxCount: 1 },
+  { name: 'preview_images',   maxCount: 12 },
   { name: 'popup_html',       maxCount: 1 },
   { name: 'fake_popup_html',  maxCount: 1 }
 ]), (req, res) => {
@@ -418,6 +449,8 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
   // Get current design to know old file names
   const currentDesign = db.prepare('SELECT * FROM designs WHERE id=?').get(req.params.id);
   if (!currentDesign) return res.status(404).json({ error: 'Design not found' });
+  const currentPreviewImages = designPreviewImagesStmt.all(req.params.id);
+  const newGalleryFiles = req.files?.preview_images || [];
 
   const fields = [];
   const vals   = [];
@@ -473,9 +506,32 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
     }
   }
 
-  if (!fields.length) return res.json({ error: 'Nothing to update' });
-  vals.push(req.params.id);
-  db.prepare(`UPDATE designs SET ${fields.join(',')} WHERE id=?`).run(...vals);
+  if (newGalleryFiles.length) {
+    for (const row of currentPreviewImages) {
+      // A legacy cover may also appear in the gallery. Keep it if the cover is
+      // not being replaced, otherwise the design card would lose its image.
+      if (row.file_name !== currentDesign.preview_image || req.files?.preview_image?.[0]) {
+        oldFilesToDelete.push(path.join(uploadsDir, row.file_name));
+      }
+    }
+  }
+
+  if (!fields.length && !newGalleryFiles.length) return res.json({ error: 'Nothing to update' });
+
+  db.transaction(() => {
+    if (fields.length) {
+      db.prepare(`UPDATE designs SET ${fields.join(',')} WHERE id=?`).run(...vals, req.params.id);
+    }
+    if (newGalleryFiles.length) {
+      db.prepare('DELETE FROM design_preview_images WHERE design_id=?').run(req.params.id);
+      const insertPreview = db.prepare('INSERT INTO design_preview_images(design_id,file_name,sort_order) VALUES(?,?,?)');
+      newGalleryFiles.forEach((file, index) => insertPreview.run(
+        req.params.id,
+        path.basename(file.path),
+        index
+      ));
+    }
+  })();
 
   // Delete old files after successful database update
   for (const filePath of oldFilesToDelete) {
@@ -491,8 +547,19 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
 
 app.delete('/api/admin/designs/:id', requireAdmin, (req, res) => {
   try {
+    const design = withPreviewImages(db.prepare('SELECT * FROM designs WHERE id=?').get(req.params.id));
     db.prepare('DELETE FROM orders WHERE design_id=?').run(req.params.id);
     db.prepare('DELETE FROM designs WHERE id=?').run(req.params.id);
+
+    // Gallery rows are removed by ON DELETE CASCADE; remove their files too.
+    for (const fileName of new Set(design?.preview_images || [])) {
+      try {
+        const filePath = path.join(__dirname, 'uploads', fileName);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (error) {
+        console.error('Failed to delete design preview image:', fileName, error.message);
+      }
+    }
     res.json({ success: true });
   } catch(e) {
     res.status(500).json({ error: e.message });
