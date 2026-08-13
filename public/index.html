@@ -695,27 +695,34 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
 <div class="modal-overlay" id="domainModal">
   <div class="modal" style="max-width:450px">
     <button class="close-modal" onclick="closeModal('domainModal')" aria-label="Close"><svg class="i"><use href="#ic-x"/></svg></button>
-    <h2><svg class="i"><use href="#ic-globe"/></svg>Change Domain</h2>
+    <h2><svg class="i"><use href="#ic-globe"/></svg>Update App Link</h2>
     <input type="hidden" id="dcOrderId">
-    <p class="modal-sub">Enter a new register URL. A new APK will be built and your existing download link is replaced.</p>
-    <div class="form-group"><label><svg class="i sm"><use href="#ic-globe"/></svg>New Register URL</label>
-      <input type="url" id="dcNewUrl" placeholder="https://newsite.com/#/register?invitationCode=..." inputmode="url"></div>
+    <input type="hidden" id="dcLiveEnabled">
+    <div class="form-group"><label><svg class="i sm"><use href="#ic-edit"/></svg>What do you want to change?</label>
+      <select id="dcChangeType" onchange="syncLinkChangeMode()">
+        <option value="domain">Domain Change</option>
+        <option value="invite">Invitation Code / Full Link Change</option>
+      </select></div>
+    <p class="modal-sub" id="dcModeHint"></p>
+    <div class="form-group"><label id="dcUrlLabel"><svg class="i sm"><use href="#ic-globe"/></svg>New Domain URL</label>
+      <input type="url" id="dcNewUrl" placeholder="https://newsite.com" inputmode="url">
+      <div class="hint" id="dcUrlHelp">Current invitation code and register path will stay unchanged.</div></div>
     <div class="cost-bar">
       <span class="cb"><span class="k">Cost</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="dcPrice" style="color:var(--gold)">?</b></span>
       <span class="cb"><span class="k">Balance</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="dcBalance" style="color:var(--cyan)">?</b></span>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('domainModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitDomainChange(this)"><svg class="i sm"><use href="#ic-bolt"/></svg>Regenerate APK</button>
+      <button class="btn btn-primary" onclick="submitDomainChange(this)"><svg class="i sm"><use href="#ic-bolt"/></svg>Update Link</button>
     </div>
   </div>
 </div>
 
 <div id="toast"></div>
 
-<div id="lightbox" onclick="closeLightbox()">
+<div id="lightbox">
   <button class="lb-close" type="button" aria-label="Close" onclick="closeLightbox()">&times;</button>
-  <div class="lb-inner" id="lbInner" onclick="event.stopPropagation()"></div>
+  <div class="lb-inner" id="lbInner"></div>
 </div>
 
 <!-- ══ BOTTOM NAV ══ -->
@@ -730,7 +737,7 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
 <script>
 let currentUser=null,currentDesign=null,currentPreviewDesign=null;
 let designCatalog=new Map();
-let fakeAddonPrice=5,domainChangePrice=10,coinRate=1;
+let fakeAddonPrice=5,domainChangePrice=10,inviteCodeChangePrice=10,coinRate=1;
 let buildStepIdx=0,buildTimeouts=[],buildPollTimer=null,buildStepTimer=null;
 let buildFinished=false,buildToken=0,buildRunning=false;
 const STEP_COUNT=5,STEP_DELAYS=[0,8000,20000,35000,52000];
@@ -740,12 +747,7 @@ const AMOUNTS=[10,25,50,100,250,500];
 const icon=(id,cls='i sm')=>`<svg class="${cls}"><use href="#${id}"/></svg>`;
 const coin=(size=15)=>`<svg class="coin-i" style="width:${size}px;height:${size}px"><use href="#ic-coin"/></svg>`;
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const designCategoryName=d=>{
-  const category=String(d?.category||'').toLowerCase();
-  if(category==='dhani')return'Dhani';
-  if(category==='java')return'Java';
-  return'Zayro';
-};
+const designCategoryName=d=>String(d?.category||'').toLowerCase()==='dhani'?'Dhani':'Zayro';
 const $=id=>document.getElementById(id);
 
 function setLoading(btn,loading,text='Loading...'){
@@ -799,14 +801,9 @@ function closeModal(id,force){
   }
   if(!document.querySelector('.modal-overlay.show'))document.body.style.overflow='';
 }
-document.addEventListener('keydown',e=>{
-  if(e.key!=='Escape')return;
-  document.querySelectorAll('.modal-overlay.show').forEach(m=>{if(!isLocked(m.id))closeModal(m.id);});
-  closeLightbox();
-});
-document.querySelectorAll('.modal-overlay').forEach(o=>{
-  o.addEventListener('click',e=>{if(e.target===o)closeModal(o.id);});
-});
+// Modals close only through their visible Close/Cancel buttons. Backdrop taps
+// and the Escape key are intentionally ignored so partially filled forms and
+// build details cannot disappear accidentally on phones.
 window.addEventListener('beforeunload',e=>{
   if(buildRunning){e.preventDefault();e.returnValue='';}
 });
@@ -1144,7 +1141,7 @@ async function pollBuildStatus(orderId,hasFake,token){
       const orders=await api('/api/orders');
       if(Array.isArray(orders)){
         const o=orders.find(x=>String(x.id)===String(orderId));
-        if(o&&(isDoneStatus(o.status)||isFailStatus(o.status)||o.apk_file||o.download_url))response=o;
+        if(o&&!response?.build_log&&(isDoneStatus(o.status)||isFailStatus(o.status)||o.apk_file||o.download_url))response=o;
       }
     }
     if(!response||response.error){
@@ -1155,6 +1152,9 @@ async function pollBuildStatus(orderId,hasFake,token){
     netFails=0;
     const s=normalizeBuildResult(response);
     if(s.build_log){log.textContent=s.build_log;log.scrollTop=log.scrollHeight;}
+    if(/^Live-link upgrade failed:/im.test(s.build_log||'')){
+      await showFail((s.build_log.match(/Live-link upgrade failed:\s*(.*)/i)||[])[1]||'Live Link upgrade failed. Coins were refunded.');return;
+    }
     if(isDoneStatus(s.status)||s.apk_file||s.download_url){await showDone(s);return;}
     if(isFailStatus(s.status)){await showFail(s.message||'Build failed.');return;}
     if(Date.now()-startedAt>BUILD_TIMEOUT_MS){await showFail('Build is taking too long. Check "Orders" in a minute.');return;}
@@ -1194,7 +1194,7 @@ async function loadOrders(){
       o.status==='done'
         ?`<a href="/api/orders/${o.id}/download" class="btn btn-primary btn-sm">${icon('ic-download')}APK</a>
           ${o.fake_apk_file?`<a href="/api/orders/${o.id}/download-fake" class="btn btn-gold btn-sm">${icon('ic-download')}Fake</a>`:''}
-          <button class="btn btn-outline btn-sm" onclick="openChangeDomain(${o.id})">${icon('ic-edit')}Domain</button>`
+          <button class="btn btn-outline btn-sm" onclick="openChangeDomain(${o.id},${o.live_link_enabled?1:0})">${icon('ic-edit')}${o.live_link_enabled?'Update Link':'Upgrade Link'}</button>`
         :o.status==='building'
           ?`<span style="color:var(--cyan);font-size:12px;display:inline-flex;align-items:center;gap:7px"><span class="spinner"></span>Building...</span>`
           :`<span style="color:var(--dim);font-size:12px">No actions</span>`}</div>
@@ -1214,25 +1214,53 @@ function toggleBlock(blockId,btnId,labelText){
 }
 
 /* ── Domain Change ── */
-async function openChangeDomain(orderId){
-  $('dcOrderId').value=orderId;$('dcNewUrl').value='';
+function syncLinkChangeMode(){
+  const type=$('dcChangeType').value;
+  const isDomain=type==='domain';
+  const liveEnabled=$('dcLiveEnabled').value==='1';
+  $('dcUrlLabel').innerHTML=icon('ic-globe','i sm')+(isDomain?'New Domain URL':'New Register URL');
+  $('dcNewUrl').placeholder=isDomain
+    ?'https://newsite.com'
+    :'https://newsite.com/#/register?invitationCode=NEWCODE';
+  $('dcUrlHelp').textContent=isDomain
+    ?'Sirf domain badlega; current register path aur invitation code same rahenge.'
+    :'Poora register URL replace hoga, including invitation code.';
+  $('dcModeHint').textContent=(liveEnabled
+    ?'Firebase /config mein instant update hoga. '
+    :'Old APK ke liye ek baar Firebase upgrade build hoga. ')
+    +(isDomain?'New link se sirf domain nikala jayega.':'Aapka diya hua poora register URL save hoga.');
+  $('dcPrice').textContent=isDomain?domainChangePrice:inviteCodeChangePrice;
+}
+async function openChangeDomain(orderId,liveEnabled){
+  $('dcOrderId').value=orderId;
+  $('dcLiveEnabled').value=liveEnabled?'1':'0';
+  $('dcChangeType').value='domain';
+  $('dcNewUrl').value='';
   const s=await api('/api/settings/payment');
   domainChangePrice=parseInt(s.domain_change_price||10);
-  $('dcPrice').textContent=domainChangePrice;
+  inviteCodeChangePrice=parseInt(s.invite_code_change_price||10);
   $('dcBalance').textContent=currentUser?currentUser.coins:0;
+  syncLinkChangeMode();
   openModal('domainModal');
 }
 async function submitDomainChange(btn){
-  const orderId=$('dcOrderId').value,newUrl=$('dcNewUrl').value.trim();
-  if(!newUrl)return toast('Enter new register URL',true);
-  setLoading(btn,true,'Processing...');
-  const d=await api('/api/orders/'+orderId+'/change-domain','POST',{new_register_url:newUrl});
+  const orderId=$('dcOrderId').value,newUrl=$('dcNewUrl').value.trim(),changeType=$('dcChangeType').value;
+  if(!newUrl)return toast(changeType==='domain'?'Enter new domain URL':'Enter new register URL',true);
+  setLoading(btn,true,'Updating...');
+  const d=await api('/api/orders/'+orderId+'/change-domain','POST',{new_register_url:newUrl,change_type:changeType});
   setLoading(btn,false);
   if(d.error)return toast(d.error,true);
   closeModal('domainModal');
-  toast('Rebuilding APK with new domain...');
-  startBuildProgress(d.orderId,false);
   await loadMe();
+
+  if(d.mode==='instant'){
+    toast(d.message||'Link updated instantly!');
+    await loadOrders();
+    return;
+  }
+
+  toast(d.message||'One-time Live Link upgrade started...');
+  startBuildProgress(d.orderId,false);
 }
 
 /* ── Wallet ── */

@@ -56,24 +56,31 @@ function injectParams(htmlContent, params) {
   // Matches: REGISTER_URL="...", href="...", gameFrame.src="..."
   html = html.replace(
     /(var\s+REGISTER_URL\s*=\s*["'])([^"']+)(["'])/g,
-    `$1${registerUrl}$3`
+    '$1$3'
   );
-  // cold start: gameFrame.src = "https://..."
+  // Cold-start assignments in templates sometimes contain a second hardcoded
+  // register URL. Route every quoted http(s) cold-start URL through the same
+  // live link so database updates also affect initial app loading.
   html = html.replace(
-    /(gameFrame\.src\s*=\s*["'])https?:\/\/[^"'#]+\/#\/register[^"']*(["'])/g,
-    `$1${registerUrl}$2`
+    /((?:gameFrame|gameIframe)\.src\s*=\s*["'])https?:\/\/[^"']+(["'])/g,
+    '$1about:blank$2'
+  );
+  // Some Dhani templates put the initial URL directly on the iframe element.
+  html = html.replace(
+    /(<iframe\b[^>]*\bid=["'](?:target-game-frame|gameIframe)["'][^>]*\bsrc=["'])https?:\/\/[^"']+(["'])/gi,
+    '$1about:blank$2'
   );
 
   // ── DEPOSIT URL ──
   html = html.replace(
     /(var\s+DEPOSIT_URL\s*=\s*["'])([^"']+)(["'])/g,
-    `$1${depositUrl}$3`
+    '$1$3'
   );
 
   // ── WINGO URL ──
   html = html.replace(
     /(var\s+WINGO_URL\s*=\s*["'])([^"']+)(["'])/g,
-    `$1${wingoUrl}$3`
+    '$1$3'
   );
 
   // ── FIREBASE DB PATH (e.g. "zayroliveharsh", "zayrowingsbittu") ──
@@ -127,9 +134,69 @@ function injectParams(htmlContent, params) {
     );
   }
 
-  // ── DHANI-SPECIFIC: gameIframe instead of target-game-frame ──
-  // (dhani.java uses gameIframe; mainactivity.java uses target-game-frame)
-  // HTML already has correct id, nothing to change here
+  // ── FIREBASE LIVE LINKS ──
+  // URLs are intentionally NOT stored in the APK or localStorage. The app
+  // waits for <firebasePath>/config and always uses those Firebase values.
+  let firebaseSdkScripts = '';
+  if (!/firebase-app-compat\.js/i.test(html)) {
+    firebaseSdkScripts += '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>';
+  }
+  if (!/firebase-database-compat\.js/i.test(html)) {
+    firebaseSdkScripts += '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>';
+  }
+  const liveLinksScript = `${firebaseSdkScripts}<script>
+(function(){
+  var livePath=${JSON.stringify(firebasePath)};
+  var firebaseConfig={
+    apiKey:'AIzaSyDja5Gx4v4sMbx4BM2_od9_bLkdxdEY4do',
+    authDomain:'zayrodev-195f3.firebaseapp.com',
+    projectId:'zayrodev-195f3',
+    storageBucket:'zayrodev-195f3.firebasestorage.app',
+    messagingSenderId:'357941061158',
+    appId:'1:357941061158:web:12882185e2fa7f4f5328e7',
+    databaseURL:'https://zayrodev-195f3-default-rtdb.firebaseio.com'
+  };
+  function valid(u){return typeof u==='string' && /^https?:\\/\\//i.test(u);}
+  function applyLinks(data){
+    if(!data||typeof data!=='object')return;
+    var previousRegister=REGISTER_URL;
+    var nextRegister=data.registerUrl||data.register_url;
+    var nextDeposit=data.depositUrl||data.deposit_url;
+    var nextWingo=data.wingoUrl||data.wingo_url;
+    if(!valid(nextRegister)||!valid(nextDeposit)||!valid(nextWingo))return;
+    REGISTER_URL=nextRegister;
+    DEPOSIT_URL=nextDeposit;
+    WINGO_URL=nextWingo;
+    if(typeof gameFrame!=='undefined'&&gameFrame){
+      try{
+        var current=gameFrame.src||'';
+        if(!current||current==='about:blank'||current===previousRegister)gameFrame.src=REGISTER_URL;
+      }catch(e){}
+    }
+  }
+  var attempts=0,connected=false;
+  function connect(){
+    if(connected)return;
+    try{
+      if((typeof rtdb==='undefined'||!rtdb)&&typeof firebase!=='undefined'){
+        var app=firebase.apps&&firebase.apps.length?firebase.app():firebase.initializeApp(firebaseConfig);
+        rtdb=app.database?app.database():firebase.database();
+      }
+      if(typeof rtdb!=='undefined'&&rtdb&&typeof rtdb.ref==='function'){
+        connected=true;
+        rtdb.ref(livePath+'/config').on('value',function(snap){
+          if(snap&&snap.exists())applyLinks(snap.val());
+        });
+        return;
+      }
+    }catch(e){}
+    if(++attempts<120)setTimeout(connect,250);
+  }
+  connect();
+})();
+</script>`;
+  if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, `${liveLinksScript}</body>`);
+  else html += liveLinksScript;
 
   return html;
 }

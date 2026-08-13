@@ -63,6 +63,8 @@ db.exec(`
     apk_file TEXT,
     fake_register_url TEXT,
     fake_apk_file TEXT,
+    fake_firebase_path TEXT,
+    live_link_enabled INTEGER NOT NULL DEFAULT 0,
     build_log TEXT,
     coins_spent INTEGER NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -96,7 +98,8 @@ db.exec(`
     ('telegram_bot_token',''),
     ('telegram_admin_id',''),
     ('loading_html_file','loading.html'),
-    ('addon_fake_price','5');
+    ('addon_fake_price','5'),
+    ('invite_code_change_price','10');
 `);
 
 // Migrations — safe on existing DB
@@ -104,7 +107,11 @@ db.exec(`
   try { db.exec("ALTER TABLE designs ADD COLUMN original_price_coins INTEGER DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE designs ADD COLUMN fake_price_coins INTEGER DEFAULT 5"); } catch(e) {}
   try { db.exec("ALTER TABLE orders ADD COLUMN domain_change_count INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN invite_code_change_count INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN live_link_enabled INTEGER NOT NULL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN fake_firebase_path TEXT"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('domain_change_price','10')"); } catch(e) {}
+  try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('invite_code_change_price','10')"); } catch(e) {}
   try { db.exec("ALTER TABLE coin_requests ADD COLUMN screenshot_file TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('site_url','')"); } catch(e) {}
@@ -115,7 +122,6 @@ db.exec(`
   try {
     db.exec(`
       UPDATE designs SET category = CASE
-        WHEN LOWER(COALESCE(category,'')) = 'java' THEN 'java'
         WHEN LOWER(COALESCE(category,'')) = 'dhani'
           OR LOWER(COALESCE(java_type,'')) IN ('dhani','premium')
           OR LOWER(COALESCE(name,'')) LIKE '%dhani%' THEN 'dhani'
