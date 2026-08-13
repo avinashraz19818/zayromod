@@ -285,8 +285,7 @@ async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
     ).join('\n');
     const finalMsg =
       `✅ *Your APK is Ready\\!*\n\n` +
-      `📱 App: *${appName}*\n` +
-      `📦 \`${order.package_name}\`\n\n` +
+      `📱 App: *${appName}*\n\n` +
       linksMsg;
     try {
       await sender.sendMessage(telegramId, finalMsg, {
