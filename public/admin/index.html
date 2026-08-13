@@ -1,0 +1,1694 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zayro Mod Builder — Admin Console</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#04091a;--bg-2:#060e22;--card:#0a1428;--card-2:#0c1a34;
+  --border:#17325f;--border-soft:rgba(26,58,110,.45);
+  --blue:#2a7bff;--blue-deep:#0b34c0;--cyan:#5ec8ff;
+  --ok:#3dffab;--danger:#ff4d6d;--gold:#ffc233;--warn:#ffb700;
+  --text:#c9e2ff;--dim:#5d7aa8;--white:#fff;
+  --glow:rgba(42,123,255,.35);--gold-glow:rgba(255,194,51,.3);
+  --r:16px;--r-sm:12px;--r-lg:22px;
+  --grad-blue:linear-gradient(135deg,#0b34c0,#2a7bff 60%,#5ec8ff);
+  --grad-gold:linear-gradient(135deg,#a56a00,#ffc233);
+  --grad-ok:linear-gradient(135deg,#0a6a3f,#3dffab);
+  --grad-danger:linear-gradient(135deg,#7a0018,#ff4d6d);
+  --sheen:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0));
+  --shadow:0 24px 60px -28px rgba(0,0,0,.92);
+}
+html,body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+body{
+  display:flex;
+  background:
+    radial-gradient(1000px 500px at 85% -10%,rgba(42,123,255,.14),transparent 60%),
+    radial-gradient(700px 400px at -10% 100%,rgba(94,200,255,.09),transparent 70%),
+    var(--bg);
+}
+a{color:inherit;text-decoration:none}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#183463;border-radius:20px}
+
+/* ═══ SIDEBAR ═══ */
+.sidebar{
+  width:250px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;
+  background:linear-gradient(180deg,var(--card-2),var(--card));
+  border-right:1px solid var(--border-soft);
+  padding:22px 14px;
+  display:flex;flex-direction:column;gap:6px;
+}
+.brand{
+  display:flex;align-items:center;gap:11px;padding:6px 8px 20px;
+  border-bottom:1px solid var(--border-soft);margin-bottom:14px;
+}
+.brand-mark{
+  width:42px;height:42px;border-radius:12px;
+  background:var(--grad-blue);display:grid;place-items:center;
+  box-shadow:0 8px 22px -8px var(--glow);
+  font-family:'Orbitron',sans-serif;font-weight:900;color:#fff;font-size:16px;
+}
+.brand-txt{font-family:'Orbitron',sans-serif;font-size:14px;letter-spacing:2px;color:var(--cyan);line-height:1.15}
+.brand-txt b{display:block;color:#fff;font-size:15px;letter-spacing:2.5px}
+.nav-label{font-size:10px;color:var(--dim);letter-spacing:2px;padding:14px 12px 6px;text-transform:uppercase}
+.nav-link{
+  display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:11px;
+  color:var(--dim);font-size:14px;font-weight:500;cursor:pointer;transition:.18s;
+  border:1px solid transparent;
+}
+.nav-link:hover{color:#fff;background:rgba(42,123,255,.08)}
+.nav-link.active{
+  color:#fff;background:linear-gradient(135deg,rgba(42,123,255,.22),rgba(94,200,255,.06));
+  border-color:rgba(94,200,255,.28);
+  box-shadow:inset 0 0 0 1px rgba(94,200,255,.08),0 8px 22px -14px var(--glow);
+}
+.nav-link .ni{width:18px;height:18px;flex-shrink:0}
+.nav-link .badge-mini{margin-left:auto;font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(255,194,51,.15);color:var(--gold);border:1px solid rgba(255,194,51,.3);font-weight:700}
+.nav-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--border-soft)}
+.nav-foot .nav-link{color:var(--danger)}
+.nav-foot .nav-link:hover{background:rgba(255,77,109,.08)}
+
+/* ═══ MAIN ═══ */
+.main{flex:1;padding:26px 30px 60px;min-width:0;overflow-x:hidden}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:26px;
+}
+.topbar h1{font-family:'Orbitron',sans-serif;font-size:22px;color:#fff;letter-spacing:1px;line-height:1.15}
+.topbar h1 small{display:block;font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--dim);letter-spacing:.5px;font-weight:400;margin-top:4px;text-transform:none}
+.status-pill{
+  display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:100px;
+  background:rgba(61,255,171,.09);border:1px solid rgba(61,255,171,.28);color:var(--ok);
+  font-size:12px;font-weight:600;letter-spacing:.5px;
+}
+.status-pill .dot{width:8px;height:8px;background:var(--ok);border-radius:50%;box-shadow:0 0 12px var(--ok);animation:pulse 1.6s infinite}
+
+.section{display:none;animation:fadeIn .25s ease}
+.section.active{display:block}
+
+/* Cards */
+.card{
+  background:linear-gradient(180deg,var(--card-2),var(--card));
+  border:1px solid var(--border-soft);border-radius:var(--r);padding:22px;margin-bottom:18px;
+  box-shadow:var(--shadow);
+  position:relative;overflow:hidden;
+}
+.card::before{content:"";position:absolute;inset:0;background:var(--sheen);pointer-events:none;border-radius:inherit}
+.card-hd{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.card-hd h3{font-family:'Orbitron',sans-serif;font-size:14px;color:#fff;letter-spacing:1.5px;text-transform:uppercase}
+.card-hd .accent{width:4px;height:20px;background:var(--grad-blue);border-radius:4px}
+.card-hd .hint{color:var(--dim);font-size:12px;margin-left:auto}
+
+/* Stat cards */
+.stat-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin-bottom:26px}
+.stat-card{
+  background:linear-gradient(180deg,var(--card-2),var(--card));
+  border:1px solid var(--border-soft);border-radius:var(--r);padding:20px;
+  position:relative;overflow:hidden;animation:slideUp .35s ease both;
+  box-shadow:var(--shadow);
+}
+.stat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad-blue);opacity:.9}
+.stat-card .icn{width:38px;height:38px;border-radius:11px;background:rgba(42,123,255,.14);display:grid;place-items:center;margin-bottom:12px;color:var(--cyan)}
+.stat-card .icn svg{width:20px;height:20px}
+.stat-card .val{font-family:'Orbitron',sans-serif;font-size:28px;color:#fff;line-height:1;letter-spacing:.5px}
+.stat-card .lbl{font-size:11px;color:var(--dim);margin-top:6px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600}
+.stat-card.gold::before{background:var(--grad-gold)}
+.stat-card.gold .icn{background:rgba(255,194,51,.12);color:var(--gold)}
+.stat-card.gold .val{color:var(--gold)}
+.stat-card.ok::before{background:var(--grad-ok)}
+.stat-card.ok .icn{background:rgba(61,255,171,.12);color:var(--ok)}
+
+/* Buttons */
+.btn{
+  padding:11px 20px;border-radius:11px;border:none;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;letter-spacing:.4px;
+  transition:.18s;display:inline-flex;align-items:center;gap:8px;position:relative;
+}
+.btn svg{width:15px;height:15px}
+.btn-primary{background:var(--grad-blue);color:#fff;box-shadow:0 10px 26px -12px var(--glow)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 14px 32px -12px var(--glow)}
+.btn-ok{background:var(--grad-ok);color:#04140a}
+.btn-danger{background:var(--grad-danger);color:#fff}
+.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--cyan);color:#fff}
+.btn-gold{background:var(--grad-gold);color:#241500}
+.btn-sm{padding:7px 13px;font-size:12px;border-radius:9px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn:active:not(:disabled){transform:scale(.97)}
+
+/* Tables */
+.tbl-wrap{overflow-x:auto;border-radius:var(--r-sm);border:1px solid var(--border-soft);background:var(--bg-2)}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+th{
+  text-align:left;padding:14px 16px;background:rgba(42,123,255,.05);
+  font-size:10.5px;color:var(--cyan);text-transform:uppercase;letter-spacing:1.5px;
+  border-bottom:1px solid var(--border-soft);font-family:'Orbitron',sans-serif;font-weight:700;
+}
+td{padding:14px 16px;border-bottom:1px solid rgba(23,50,95,.4);color:var(--text);font-size:13px;vertical-align:middle}
+tbody tr{transition:background .15s}
+tbody tr:hover td{background:rgba(42,123,255,.05)}
+tbody tr:last-child td{border-bottom:none}
+td b{color:#fff;font-weight:600}
+td small{color:var(--dim);font-size:11px}
+td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border-radius:6px;font-size:11px}
+
+/* Badges */
+.badge{padding:4px 11px;border-radius:20px;font-size:10.5px;font-weight:700;display:inline-block;letter-spacing:.5px;text-transform:uppercase}
+.badge-ok{background:rgba(61,255,171,.12);color:var(--ok);border:1px solid rgba(61,255,171,.32)}
+.badge-pending{background:rgba(255,194,51,.12);color:var(--gold);border:1px solid rgba(255,194,51,.32)}
+.badge-danger{background:rgba(255,77,109,.12);color:var(--danger);border:1px solid rgba(255,77,109,.32)}
+.badge-blue{background:rgba(42,123,255,.14);color:var(--cyan);border:1px solid rgba(94,200,255,.3)}
+
+/* Forms */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:11px;color:var(--cyan);margin-bottom:7px;letter-spacing:1.2px;text-transform:uppercase;font-weight:600}
+.form-group label small{color:var(--dim);font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;margin-left:4px}
+.form-group input,.form-group select,.form-group textarea{
+  width:100%;padding:12px 14px;background:var(--bg-2);border:1.5px solid var(--border);
+  border-radius:var(--r-sm);color:#fff;font-family:'Space Grotesk',sans-serif;font-size:14px;
+  outline:none;transition:.18s;
+}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{
+  border-color:var(--cyan);box-shadow:0 0 0 3px rgba(94,200,255,.14)
+}
+.form-group textarea{resize:vertical;min-height:80px}
+.form-group input[type=file]{padding:10px;cursor:pointer}
+.form-group .hint{font-size:11px;color:var(--dim);margin-top:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+
+/* Coin chip */
+.coin-chip{
+  display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;
+  background:rgba(255,194,51,.1);color:var(--gold);border:1px solid rgba(255,194,51,.28);
+  font-weight:700;font-size:12px;
+}
+.coin-chip::before{content:"◉";font-size:10px}
+
+/* Toast */
+#toast{
+  position:fixed;bottom:24px;right:24px;background:var(--card-2);
+  border:1px solid var(--cyan);color:#fff;padding:14px 22px;border-radius:12px;
+  font-size:13px;font-weight:600;opacity:0;transform:translateY(20px);transition:.3s;z-index:99999;
+  box-shadow:0 20px 40px -20px rgba(0,0,0,.8);
+}
+#toast.show{opacity:1;transform:translateY(0)}
+#toast.error{border-color:var(--danger)}
+
+/* Login Overlay */
+#loginOverlay{position:fixed;inset:0;background:var(--bg);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:
+    radial-gradient(700px 400px at 20% 20%,rgba(42,123,255,.18),transparent 60%),
+    radial-gradient(600px 400px at 80% 80%,rgba(255,194,51,.06),transparent 70%),
+    var(--bg);
+}
+#loginOverlay .box{
+  background:linear-gradient(180deg,var(--card-2),var(--card));
+  border:1px solid var(--border-soft);border-radius:var(--r-lg);padding:36px 32px;
+  width:100%;max-width:400px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+}
+#loginOverlay .box::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad-blue)}
+#loginOverlay .lg-icn{width:56px;height:56px;border-radius:16px;background:var(--grad-blue);display:grid;place-items:center;margin:0 auto 18px;color:#fff;box-shadow:0 12px 28px -12px var(--glow)}
+#loginOverlay .lg-icn svg{width:26px;height:26px}
+#loginOverlay h2{font-family:'Orbitron',sans-serif;font-size:20px;color:#fff;margin-bottom:6px;text-align:center;letter-spacing:1.5px}
+#loginOverlay p.sub{color:var(--dim);text-align:center;font-size:13px;margin-bottom:26px}
+#loginOverlay .btn{width:100%;justify-content:center;padding:13px;margin-top:6px;font-size:14px}
+#loginOverlay .err{color:var(--danger);font-size:12px;text-align:center;margin-top:12px;min-height:18px;font-weight:600}
+
+/* Preview Carousel */
+.preview-carousel {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 9/16;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+}
+.preview-carousel img,
+.preview-carousel video {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.preview-carousel img.active,
+.preview-carousel video.active {
+  opacity: 1;
+}
+.preview-carousel video {
+  pointer-events: none;
+}
+.preview-carousel .loading {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--dim);
+  font-size: 12px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.85)}}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.22);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle}
+.stat-cards .stat-card:nth-child(1){animation-delay:.04s}
+.stat-cards .stat-card:nth-child(2){animation-delay:.09s}
+.stat-cards .stat-card:nth-child(3){animation-delay:.14s}
+.stat-cards .stat-card:nth-child(4){animation-delay:.19s}
+
+/* ═══ PREMIUM EDIT DESIGN MODAL ═══ */
+.emodal{
+  display:none;position:fixed;inset:0;z-index:10000;
+  align-items:center;justify-content:center;padding:18px;
+  background:rgba(2,6,18,.78);backdrop-filter:blur(6px);
+}
+.emodal.show{display:flex;animation:fadeIn .18s ease}
+.esheet{
+  width:100%;max-width:640px;max-height:calc(100dvh - 36px);
+  background:linear-gradient(180deg,var(--card-2),var(--card));
+  border:1px solid var(--border-soft);border-radius:var(--r-lg);
+  box-shadow:var(--shadow),0 0 0 1px rgba(94,200,255,.06);
+  display:flex;flex-direction:column;overflow:hidden;
+  animation:modalIn .22s ease both;
+}
+.emodal.show .esheet{animation:modalIn .22s ease both}
+.ehead{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:18px 22px;border-bottom:1px solid var(--border-soft);
+  background:rgba(42,123,255,.06);
+}
+.ehead h3{font-family:'Orbitron',sans-serif;font-size:16px;color:#fff;letter-spacing:1.2px}
+.ehead .close{
+  width:34px;height:34px;border-radius:10px;background:rgba(255,77,109,.1);
+  border:1px solid rgba(255,77,109,.25);color:var(--danger);cursor:pointer;
+  display:grid;place-items:center;font-size:18px;line-height:1;transition:.18s;
+}
+.ehead .close:hover{background:rgba(255,77,109,.2);transform:scale(1.05)}
+.ebody{padding:22px;overflow-y:auto}
+.ebody::-webkit-scrollbar{width:6px}
+.ebody::-webkit-scrollbar-thumb{background:#1a3a6e;border-radius:10px}
+
+/* Steps */
+.esteps{
+  display:flex;align-items:center;gap:8px;margin-bottom:20px;
+  padding:14px;background:rgba(0,0,0,.18);border-radius:var(--r-sm);
+  border:1px solid var(--border-soft);
+}
+.estep{
+  flex:1;text-align:center;font-size:11px;font-weight:700;letter-spacing:.8px;
+  color:var(--dim);padding:8px 6px;border-radius:9px;text-transform:uppercase;
+  transition:.18s;
+}
+.estep.active{background:rgba(42,123,255,.16);color:var(--cyan);border:1px solid rgba(94,200,255,.25)}
+
+/* Modal form */
+.esec{background:rgba(0,0,0,.16);border:1px solid var(--border-soft);border-radius:var(--r);padding:18px;margin-bottom:16px}
+.esec-hd{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.esec-hd .num{
+  width:26px;height:26px;border-radius:50%;background:var(--grad-blue);color:#fff;
+  font-family:'Orbitron',sans-serif;font-size:11px;font-weight:900;display:grid;place-items:center;
+}
+.esec-hd h4{font-family:'Orbitron',sans-serif;font-size:12px;color:#fff;letter-spacing:1px;text-transform:uppercase}
+.esheet .label{
+  display:block;font-size:10px;color:var(--cyan);margin-bottom:6px;
+  letter-spacing:1.1px;text-transform:uppercase;font-weight:700;
+}
+.esheet .input{
+  width:100%;padding:12px 14px;background:var(--bg-2);border:1.5px solid var(--border);
+  border-radius:var(--r-sm);color:#fff;font-family:'Space Grotesk',sans-serif;font-size:14px;
+  outline:none;transition:.18s;
+}
+.esheet .input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(94,200,255,.14)}
+.esheet .input::placeholder{color:var(--dim);opacity:.7}
+.esheet select.input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235ec8ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
+.esheet textarea.input{resize:vertical;min-height:78px}
+.esheet input[type=file].input{
+  padding:10px 12px;cursor:pointer;
+  background:var(--bg-2);
+}
+.esheet input[type=file].input::file-selector-button{
+  margin-right:12px;padding:7px 12px;border-radius:8px;
+  background:var(--grad-blue);color:#fff;border:none;
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;cursor:pointer;
+}
+.efoot{
+  display:flex;justify-content:flex-end;gap:10px;padding:16px 22px;
+  border-top:1px solid var(--border-soft);background:rgba(0,0,0,.14);
+}
+.efoot .btn{padding:11px 22px}
+
+/* File chips */
+.fchips{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.fchip{
+  display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:10px;
+  background:rgba(42,123,255,.08);border:1px solid rgba(94,200,255,.18);
+}
+.fchip .ficon{width:28px;height:28px;border-radius:8px;background:rgba(42,123,255,.14);display:grid;place-items:center;color:var(--cyan);flex-shrink:0}
+.fchip .ficon svg{width:15px;height:15px}
+.fchip .fmeta{min-width:0}
+.fchip .fname{font-size:12px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fchip .ftype{font-size:10px;color:var(--dim)}
+.fchip.empty{opacity:.65;background:rgba(255,77,109,.06);border-color:rgba(255,77,109,.18)}
+.fchip.empty .ficon{background:rgba(255,77,109,.12);color:var(--danger)}
+
+/* Mobile */
+#menuBtn{
+  display:none;position:fixed;top:14px;left:14px;z-index:99998;
+  background:linear-gradient(180deg,var(--card-2),var(--card));
+  border:1px solid var(--border);color:var(--cyan);cursor:pointer;
+  width:44px;height:44px;border-radius:12px;align-items:center;justify-content:center;
+  box-shadow:0 10px 24px -14px rgba(0,0,0,.9);
+}
+#menuBtn svg{width:20px;height:20px}
+#sidebarOverlay{display:none;position:fixed;inset:0;background:rgba(2,6,18,.72);backdrop-filter:blur(4px);z-index:9989}
+@media(max-width:900px){
+  body{flex-direction:column}
+  .sidebar{position:fixed;top:0;left:-280px;width:270px;height:100vh;z-index:9990;transition:left .3s}
+  .sidebar.open{left:0;box-shadow:20px 0 40px rgba(0,0,0,.6)}
+  #sidebarOverlay.show{display:block}
+  #menuBtn{display:flex}
+  .main{padding:70px 16px 40px;width:100%}
+  .topbar h1{font-size:18px}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .stat-cards{grid-template-columns:repeat(2,1fr);gap:12px}
+  .stat-card{padding:16px}
+  .stat-card .val{font-size:22px}
+  .card{padding:18px}
+  th,td{padding:11px 12px;font-size:12px}
+}
+@media(max-width:640px){
+  .main{padding:66px 12px 40px}
+  .topbar{gap:10px}
+  .topbar h1{font-size:16px}
+  .card{padding:15px;border-radius:16px}
+  .stat-cards{grid-template-columns:repeat(2,1fr);gap:10px}
+  .stat-card{padding:14px}
+  .stat-card .val{font-size:19px}
+  /* tables -> compact stacked rows */
+  .tbl-wrap{overflow-x:visible;border:none;background:transparent;border-radius:0}
+  .tbl-wrap table{min-width:0;width:100%;display:block}
+  .tbl-wrap thead{display:none}
+  .tbl-wrap tbody,.tbl-wrap tr,.tbl-wrap td{display:block;width:100%}
+  .tbl-wrap tr{background:var(--bg-2);border:1px solid var(--border-soft);border-radius:12px;padding:9px 11px;margin-bottom:8px}
+  .tbl-wrap td{border:none!important;padding:2px 0!important;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:right;font-size:12px!important;line-height:1.35;word-break:break-word;min-height:22px}
+  .tbl-wrap td::before{content:attr(data-l);text-align:left;color:var(--dim);font-size:9px;letter-spacing:.7px;text-transform:uppercase;font-weight:800;flex:0 0 auto;white-space:nowrap;opacity:.85}
+  .tbl-wrap td b{font-size:12.5px}
+  .tbl-wrap td .badge{font-size:9px;padding:2px 8px}
+  .tbl-wrap td:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;padding-top:8px!important;margin-top:6px;border-top:1px solid var(--border-soft)!important}
+  .tbl-wrap td:last-child::before{flex:1 1 auto;text-align:left}
+  .tbl-wrap td:last-child .btn{flex:0 0 auto;padding:6px 12px!important;font-size:11.5px!important;border-radius:8px;min-height:0}
+  .tbl-wrap td code,.tbl-wrap td small{word-break:break-all;font-size:10.5px}
+  .form-row,.grid2,.grid3{grid-template-columns:1fr!important}
+  .btn{padding:11px 16px;font-size:13.5px}
+
+  /* Modal mobile */
+  .emodal{padding:10px}
+  .esheet{max-height:calc(100dvh - 20px);border-radius:18px}
+  .ehead{padding:14px 16px}
+  .ehead h3{font-size:14px}
+  .ebody{padding:14px}
+  .esteps{flex-wrap:wrap;padding:10px;gap:6px}
+  .estep{flex:none;min-width:calc(50% - 3px);font-size:9px;padding:6px 4px}
+  .esec{padding:13px;margin-bottom:12px}
+  .fchips{grid-template-columns:1fr}
+  .efoot{padding:12px 16px;flex-direction:column}
+  .efoot .btn{width:100%;justify-content:center}
+}
+
+@media(max-width:640px){
+  .topbar{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;margin-bottom:16px}
+  .topbar .tb-txt,.topbar>div:nth-child(2){min-width:0}
+  .topbar h1{font-size:17px;line-height:1.25;white-space:normal}
+  .topbar p,.topbar .sub{font-size:11px;line-height:1.35}
+  .card-head{flex-direction:column;align-items:flex-start!important;gap:6px}
+  .card-head h2,.card-head h3{font-size:13px;line-height:1.3}
+  .stat-cards{grid-template-columns:repeat(2,1fr)!important}
+}
+
+/* Mobile-first repair */
+@media(max-width:640px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden}
+  #menuBtn{top:10px;left:10px;width:42px;height:42px;border-radius:11px}
+  .main{width:100%;min-width:0;padding:62px 10px 30px;overflow-x:hidden}
+  .topbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;min-width:0;margin-bottom:14px;padding-left:50px;min-height:42px}
+  .topbar h1{min-width:0;font-size:16px;line-height:1.25;letter-spacing:.4px;overflow-wrap:anywhere}
+  .topbar h1 small{font-size:10.5px;line-height:1.35;margin-top:2px}
+  .status-pill{padding:7px 9px;font-size:10px;white-space:nowrap}
+
+  .sidebar{width:min(284px,86vw);left:-100%;padding:16px 12px max(16px,env(safe-area-inset-bottom));height:100dvh}
+  .brand{padding:2px 6px 14px;margin-bottom:8px}
+  .nav-label{padding:11px 10px 5px}
+  .nav-link{padding:12px 11px}
+
+  .stat-cards{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px;margin-bottom:14px}
+  .stat-card{min-width:0;padding:12px;border-radius:13px}
+  .stat-card .icn{width:32px;height:32px;margin-bottom:9px}
+  .stat-card .val{font-size:18px;overflow-wrap:anywhere}
+  .stat-card .lbl{font-size:8px;line-height:1.35;letter-spacing:.7px}
+
+  .card{width:100%;min-width:0;padding:13px;margin-bottom:12px;border-radius:14px;overflow:visible}
+  .card-hd{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;margin-bottom:12px}
+  .card-hd h3{min-width:0;font-size:11px;line-height:1.35;letter-spacing:.7px;overflow-wrap:anywhere}
+  .card-hd .hint{grid-column:2;margin:0;font-size:10px;line-height:1.35}
+  .grid2,.grid3{grid-template-columns:minmax(0,1fr)!important;gap:0}
+  .form-group{min-width:0;margin-bottom:13px}
+  .form-group label{font-size:9.5px;line-height:1.4;letter-spacing:.7px;overflow-wrap:anywhere}
+  .form-group input,.form-group select,.form-group textarea{padding:10px 12px;font-size:13.5px}
+
+  .tbl-wrap tr{padding:8px 10px;margin-bottom:7px}
+  .tbl-wrap td{font-size:11.5px!important;min-height:20px}
+  .tbl-wrap td::before{font-size:8.5px}
+  .tbl-wrap td:last-child .btn{padding:5px 10px!important;font-size:11px!important}
+}
+</style>
+</head>
+<body>
+
+<!-- SVG Sprite -->
+<svg width="0" height="0" style="position:absolute;visibility:hidden">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 9.5l9-7 9 7M5 19V10h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 2a10 10 0 0 1 0 20 2 2 0 0 1-2-2c0-1.5 2-2 2-3.5a2.5 2.5 0 0 0-5 0v.5a10 10 0 0 0 18 0c0-5.5-4.5-10-10-10z"/></symbol>
+    <symbol id="i-orders" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 2h12l3 7-3 13H6L3 9l3-7z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 2v7M6 9h12"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" d="M12 6v12M9 9h4.5a2.5 2.5 0 0 1 0 5H9v-5"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+    <symbol id="i-package" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path fill="none" stroke="currentColor" stroke-width="2" d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path fill="none" stroke="currentColor" stroke-width="2" d="M17 8l-5-5-5 5"/><path fill="none" stroke="currentColor" stroke-width="2" d="M12 3v12"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path fill="none" stroke="currentColor" stroke-width="2" d="M7 10l5 5 5-5"/><path fill="none" stroke="currentColor" stroke-width="2" d="M12 15V3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M18 6L6 18M6 6l12 12"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path fill="none" stroke="currentColor" stroke-width="2" d="M16 17l5-5-5-5"/><path fill="none" stroke="currentColor" stroke-width="2" d="M21 12H9"/></symbol>
+    <symbol id="i-android" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 16V8a7 7 0 0 1 7-7 7 7 0 0 1 7 7v8"/><rect x="3" y="16" width="18" height="5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path fill="none" stroke="currentColor" stroke-width="2" d="M14 2v6h6M12 18v-6M9 15h6"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2" d="M21 15l-5-5L5 21"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><rect x="2" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path fill="currentColor" d="M10 8l6 4-6 4V8z"/></symbol>
+  </defs>
+</svg>
+
+<button id="menuBtn" onclick="toggleSidebar()" aria-label="Open menu"><svg><use href="#i-orders"/></svg></button>
+<div id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-mark">Z</div>
+    <div class="brand-txt">ZAYRO <b>MOD BUILDER</b></div>
+  </div>
+  <div class="nav-label">Menu</div>
+  <a class="nav-link active" data-sec="dashboard" onclick="showSec('dashboard',this)"><svg class="ni"><use href="#i-home"/></svg> Dashboard</a>
+  <a class="nav-link" data-sec="designs" onclick="showSec('designs',this)"><svg class="ni"><use href="#i-palette"/></svg> Designs</a>
+  <a class="nav-link" data-sec="orders" onclick="showSec('orders',this)"><svg class="ni"><use href="#i-orders"/></svg> Orders</a>
+  <a class="nav-link" data-sec="coin-requests" onclick="showSec('coin-requests',this)"><svg class="ni"><use href="#i-coin"/></svg> Coin Requests <span id="navPendingBadge" class="badge-mini" style="display:none">0</span></a>
+  <a class="nav-link" data-sec="users" onclick="showSec('users',this)"><svg class="ni"><use href="#i-users"/></svg> Users</a>
+  <a class="nav-link" data-sec="base-apk" onclick="showSec('base-apk',this)"><svg class="ni"><use href="#i-android"/></svg> Android Project</a>
+  <a class="nav-link" data-sec="settings" onclick="showSec('settings',this)"><svg class="ni"><use href="#i-settings"/></svg> Settings</a>
+  <div class="nav-foot">
+    <a class="nav-link" href="/" target="_blank"><svg class="ni"><use href="#i-home"/></svg> Main Site</a>
+    <a class="nav-link" onclick="location.reload()"><svg class="ni"><use href="#i-logout"/></svg> Logout / Refresh</a>
+  </div>
+</aside>
+
+<main class="main">
+
+  <!-- DASHBOARD -->
+  <div id="sec-dashboard" class="section active">
+    <div class="topbar">
+      <h1>Admin Dashboard<small>Overview of Zayro Mod Builder</small></h1>
+      <div class="status-pill"><span class="dot"></span> System Online</div>
+    </div>
+    <div class="stat-cards" id="statsCards">
+      <div class="stat-card"><div class="icn"><svg><use href="#i-users"/></svg></div><div class="val">—</div><div class="lbl">Total Users</div></div>
+      <div class="stat-card ok"><div class="icn"><svg><use href="#i-orders"/></svg></div><div class="val">—</div><div class="lbl">Total Orders</div></div>
+      <div class="stat-card ok"><div class="icn"><svg><use href="#i-package"/></svg></div><div class="val">—</div><div class="lbl">APKs Built</div></div>
+      <div class="stat-card gold"><div class="icn"><svg><use href="#i-coin"/></svg></div><div class="val">—</div><div class="lbl">Pending Coins</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><span class="accent"></span><h3>Pending Coin Requests</h3><span class="hint">Needs approval</span></div>
+      <div id="dashPendingCoins" style="color:var(--dim)">Loading…</div>
+    </div>
+  </div>
+
+  <!-- DESIGNS -->
+  <div id="sec-designs" class="section">
+    <div class="topbar"><h1>Designs<small>Manage app templates & pricing</small></h1></div>
+    <div class="card" style="max-width:720px">
+      <div class="card-hd"><span class="accent"></span><h3>Add New Design</h3></div>
+      <div class="grid2">
+        <div class="form-group"><label>Name</label><input type="text" id="dName" placeholder="e.g. Fire Mod"></div>
+        <div class="form-group"><label>Type</label><input type="text" id="dType" value="normal" placeholder="normal / premium"></div>
+        <div class="form-group"><label>Java Type</label>
+          <select id="dJavaType"><option value="normal">Normal</option><option value="premium">Premium</option><option value="dhani">Dhani</option></select>
+        </div>
+        <div class="form-group"><label>Category</label>
+          <select id="dCategory"><option value="normal">Normal</option><option value="dhani">Dhani</option><option value="java">Java</option></select>
+        </div>
+        <div class="form-group"><label>Variant</label>
+          <select id="dVariant"><option value="real">Real</option><option value="mock">Mock/Test</option></select>
+        </div>
+        <div class="form-group"><label>Price (coins)</label><input type="number" id="dPrice" value="10" min="0"></div>
+        <div class="form-group"><label>Original Price</label><input type="number" id="dOrigPrice" value="0" min="0"></div>
+        <div class="form-group"><label>Fake Addon Price</label><input type="number" id="dFakePrice" value="5" min="0"></div>
+      </div>
+      <div class="form-group"><label>Description</label><textarea id="dDesc" placeholder="Short description shown to users"></textarea></div>
+      <div class="grid2">
+        <div class="form-group"><label>Popup HTML <small>(Real APK)</small></label><input type="file" id="dPopupHtml" accept=".html,.htm"></div>
+        <div class="form-group"><label>Popup HTML <small>(Fake APK)</small></label><input type="file" id="dFakePopupHtml" accept=".html,.htm"></div>
+        <div class="form-group"><label>Preview Image</label><input type="file" id="dPreviewImg" accept="image/*"></div>
+        <div class="form-group"><label>Preview Video</label><input type="file" id="dPreviewVid" accept="video/*"></div>
+      </div>
+      <button class="btn btn-primary" onclick="addDesign()"><svg><use href="#i-plus"/></svg> Add Design</button>
+    </div>
+    <div class="card">
+      <div class="card-hd"><span class="accent"></span><h3>All Designs</h3><span class="hint">Click edit to modify</span></div>
+      <div id="designsList" style="color:var(--dim)">Loading…</div>
+    </div>
+  </div>
+
+  <!-- ORDERS -->
+  <div id="sec-orders" class="section">
+    <div class="topbar"><h1>All Orders<small>Every APK build request</small></h1></div>
+    <div class="card">
+      <div class="card-hd"><span class="accent"></span><h3>Filters & Search</h3></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:16px">
+        <div class="form-group" style="margin:0;min-width:180px"><label>Status</label><select id="orderStatusFilter" class="input"><option value="all">All</option><option value="completed">Completed</option><option value="failed">Failed</option><option value="pending">Pending</option><option value="building">Building</option></select></div>
+        <div class="form-group" style="margin:0;min-width:200px;flex:1"><label>Search</label><input type="text" id="orderSearch" class="input" placeholder="Order ID, Username, User ID, Design name..."></div>
+        <div class="form-group" style="margin:0;min-width:160px"><label>Sort</label><select id="orderSort" class="input"><option value="desc">Newest First</option><option value="asc">Oldest First</option></select></div>
+        <div class="form-group" style="margin:0;min-width:120px"><label>Per Page</label><select id="orderLimit" class="input"><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></div>
+        <button class="btn btn-primary" onclick="loadOrders()">Apply Filters</button>
+        <button class="btn btn-danger" id="bulkDeleteBtn" style="display:none" onclick="bulkDeleteOrders()"><svg><use href="#i-x"/></svg> Delete Selected (<span id="selectedCount">0</span>)</button>
+      </div>
+      <div id="ordersList" style="color:var(--dim)">Loading…</div>
+    </div>
+  </div>
+
+  <!-- COIN REQUESTS -->
+  <div id="sec-coin-requests" class="section">
+    <div class="topbar"><h1>Coin Requests<small>Payment approvals</small></h1></div>
+    <div class="card">
+      <div class="card-hd"><span class="accent"></span><h3>Requests</h3></div>
+      <div id="coinReqList" style="color:var(--dim)">Loading…</div>
+    </div>
+  </div>
+
+  <!-- USERS -->
+  <div id="sec-users" class="section">
+    <div class="topbar"><h1>Users<small>Registered accounts and balances</small></h1></div>
+    <div class="card">
+      <div class="card-hd"><span class="accent"></span><h3>All Users</h3><span class="hint">Click a user to view their orders</span></div>
+      <div id="usersList" style="color:var(--dim)">Loading…</div>
+    </div>
+    <!-- User Orders Modal -->
+    <div id="userOrdersModal" class="emodal" onclick="if(event.target===this) closeUserOrdersModal()">
+      <div class="esheet" role="dialog" aria-modal="true" style="max-width:900px">
+        <div class="ehead">
+          <h3>User Orders - <span id="userOrdersUsername"></span></h3>
+          <button class="close" onclick="closeUserOrdersModal()" aria-label="Close">✕</button>
+        </div>
+        <div class="ebody">
+          <div id="userOrdersStats" class="stat-cards" style="margin-bottom:20px"></div>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:40px"><input type="checkbox" id="selectAllUserOrders" onchange="toggleSelectAllUserOrders(this)"></th>
+                  <th>Order ID</th>
+                  <th>Design</th>
+                  <th>Variant</th>
+                  <th>Status</th>
+                  <th>Coins</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="userOrdersTableBody"></tbody>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+            <button class="btn btn-danger" id="bulkDeleteUserOrdersBtn" style="display:none" onclick="bulkDeleteUserOrders()"><svg><use href="#i-x"/></svg> Delete Selected (<span id="selectedUserOrdersCount">0</span>)</button>
+            <button class="btn btn-outline" onclick="closeUserOrdersModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="sec-settings" class="section">
+    <div class="topbar"><h1>Settings<small>Configure platform & integrations</small></h1></div>
+    <div class="card" style="max-width:640px">
+      <div class="card-hd"><span class="accent"></span><h3>Payment</h3></div>
+      <div class="form-group"><label>UPI ID</label><input type="text" id="sUpiId" placeholder="yourname@upi"></div>
+      <div class="form-group"><label>UPI QR Image</label><input type="file" id="sQrImg" accept="image/*"><div id="currentQr" style="margin-top:10px"></div></div>
+      <div class="grid2">
+        <div class="form-group"><label>Coin Rate <small>(₹ per coin)</small></label><input type="number" id="sCoinRate" step="0.1" value="1"></div>
+        <div class="form-group"><label>Fake Site Addon <small>(coins)</small></label><input type="number" id="sFakePrice" value="5"></div>
+      </div>
+      <div class="grid2">
+        <div class="form-group"><label>Domain Change Price <small>(coins)</small></label><input type="number" id="sDomainPrice" value="10"></div>
+        <div class="form-group"><label>Site Name</label><input type="text" id="sSiteName" value="Zayro Mod Builder"></div>
+      </div>
+    </div>
+    <div class="card" style="max-width:640px">
+      <div class="card-hd"><span class="accent"></span><h3>Telegram Alerts</h3></div>
+      <div class="form-group"><label>Bot Token</label><input type="text" id="sTgToken" placeholder="1234567890:AAxxxx…"></div>
+      <div class="form-group"><label>Admin Chat ID</label><input type="text" id="sTgAdminId" placeholder="Your chat ID"></div>
+    </div>
+    <div class="card" style="max-width:640px">
+      <div class="card-hd"><span class="accent"></span><h3>Assets</h3></div>
+      <div class="form-group">
+        <label>Loading HTML File <small>(shared for all APKs)</small></label>
+        <input type="file" id="sLoadingHtml" accept=".html">
+        <div class="hint">Current: <span id="currentLoadingHtml" style="color:var(--cyan)">loading.html</span></div>
+      </div>
+      <button class="btn btn-primary" onclick="saveSettings()"><svg><use href="#i-check"/></svg> Save Settings</button>
+    </div>
+  </div>
+
+  <!-- ANDROID PROJECT -->
+  <div id="sec-base-apk" class="section">
+    <div class="topbar"><h1>Android Project<small>Upload Sketchware/Android Studio project ZIP</small></h1></div>
+    <div class="card" style="max-width:640px">
+      <div class="card-hd"><span class="accent"></span><h3>Android Project Template</h3></div>
+      <p style="font-size:13px;color:var(--dim);margin-bottom:20px;line-height:1.5">
+        Export your project from Sketchware as Android Studio format, then upload the ZIP here.
+        The builder will compile a fresh APK for each order using Gradle.
+      </p>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          Project Status
+          <span id="androidProjectStatusBadge" style="margin-left:auto"><span class="badge badge-pending">Checking…</span></span>
+        </label>
+        <input type="file" id="androidProjectZip" accept=".zip">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="uploadAndroidProject()"><svg><use href="#i-upload"/></svg> Upload Project ZIP</button>
+    </div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<!-- ═══ Premium Edit Design Modal ═══ -->
+<div id="editDesignModal" class="emodal" onclick="if(event.target===this) closeEditDesign()">
+  <div class="esheet" role="dialog" aria-modal="true">
+    <div class="ehead">
+      <h3>Edit Design</h3>
+      <button class="close" onclick="closeEditDesign()" aria-label="Close">✕</button>
+    </div>
+    <div class="ebody">
+      <div class="esteps">
+        <div class="estep active">Basic Info</div>
+        <div class="estep active">Pricing</div>
+        <div class="estep active">Files</div>
+      </div>
+
+      <input type="hidden" id="eDesignId">
+
+      <div class="esec">
+        <div class="esec-hd"><div class="num">1</div><h4>Basic Information</h4></div>
+        <div class="grid2">
+          <div>
+            <label class="label">Design Name</label>
+            <input id="eName" class="input" type="text" placeholder="e.g. Fire Mod">
+          </div>
+          <div>
+            <label class="label">Status</label>
+            <select id="eActive" class="input">
+              <option value="1">Active</option>
+              <option value="0">Hidden</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <label class="label">Description</label>
+          <textarea id="eDesc" class="input" placeholder="Short description shown to users"></textarea>
+        </div>
+        <div class="grid2" style="margin-top:12px">
+          <div>
+            <label class="label">Type</label>
+            <select id="eType" class="input">
+              <option value="normal">Normal</option>
+              <option value="premium">Premium</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Java Type</label>
+            <select id="eJavaType" class="input">
+              <option value="normal">Normal</option>
+              <option value="premium">Premium</option>
+              <option value="dhani">Dhani</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid2" style="margin-top:12px">
+          <div>
+            <label class="label">Category</label>
+            <select id="eCategory" class="input">
+              <option value="normal">Normal</option>
+              <option value="dhani">Dhani</option>
+              <option value="java">Java</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Variant</label>
+            <select id="eVariant" class="input">
+              <option value="real">Real</option>
+              <option value="mock">Mock/Test</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="esec">
+        <div class="esec-hd"><div class="num">2</div><h4>Pricing</h4></div>
+        <div class="grid3">
+          <div>
+            <label class="label">Price (coins)</label>
+            <input id="ePrice" class="input" type="number" min="0">
+          </div>
+          <div>
+            <label class="label">Original Price</label>
+            <input id="eOrigPrice" class="input" type="number" min="0">
+          </div>
+          <div>
+            <label class="label">Fake Addon Price</label>
+            <input id="eFakePrice" class="input" type="number" min="0">
+          </div>
+        </div>
+      </div>
+
+      <div class="esec">
+        <div class="esec-hd"><div class="num">3</div><h4>Current Files</h4></div>
+        <div id="eCurrentFiles" class="fchips"></div>
+        <div style="height:1px;background:var(--border-soft);margin:14px 0"></div>
+        <div style="font-size:11px;color:var(--dim);letter-spacing:.8px;text-transform:uppercase;font-weight:700;margin-bottom:12px">Replace Files <span style="text-transform:none;font-weight:500">— leave empty to keep current</span></div>
+        <div class="grid2">
+          <div>
+            <label class="label">Popup HTML (Real APK)</label>
+            <input id="ePopupHtml" class="input" type="file" accept=".html,.htm">
+          </div>
+          <div>
+            <label class="label">Popup HTML (Fake APK)</label>
+            <input id="eFakePopupHtml" class="input" type="file" accept=".html,.htm">
+          </div>
+          <div>
+            <label class="label">Preview Image</label>
+            <input id="ePreviewImage" class="input" type="file" accept="image/*">
+          </div>
+          <div>
+            <label class="label">Preview Video</label>
+            <input id="ePreviewVideo" class="input" type="file" accept="video/*">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="efoot">
+      <button class="btn btn-outline" onclick="closeEditDesign()">Cancel</button>
+      <button id="eSaveBtn" class="btn btn-ok" onclick="saveDesignEdit()"><svg><use href="#i-check"/></svg> Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function setLoading(btn, loading, text='Loading…') {
+  if (loading) {
+    btn.disabled = true;
+    btn.dataset.orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> ' + text;
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = btn.dataset.orig || btn.innerHTML;
+  }
+}
+
+function toast(msg, err=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show' + (err?' error':'');
+  setTimeout(() => t.className = '', 3000);
+}
+
+async function api(url, method='GET', body=null, isForm=false) {
+  const opts = { method, headers:{} };
+  if (body) {
+    if (isForm) { opts.body = body; }
+    else { opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
+  }
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+function toggleSidebar(){
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('show');
+}
+
+function showSec(name, ev) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.sidebar .nav-link').forEach(a => a.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  const link = document.querySelector('.sidebar .nav-link[data-sec="'+name+'"]');
+  if (link) link.classList.add('active');
+  if(window.innerWidth<=900){
+    document.querySelector('.sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('show');
+  }
+  loadSection(name);
+}
+
+function loadSection(name) {
+  if (name==='dashboard') loadDashboard();
+  else if (name==='designs') loadDesigns();
+  else if (name==='orders') loadOrders();
+  else if (name==='coin-requests') loadCoinReqs();
+  else if (name==='users') loadUsers();
+  else if (name==='settings') loadSettings();
+  else if (name==='base-apk') loadBaseApkStatus();
+}
+
+// ── Dashboard ──
+async function loadDashboard() {
+  try {
+    const [usersRes, ordersRes, coinsRes] = await Promise.all([
+      api('/api/admin/users'),
+      api('/api/admin/orders'),
+      api('/api/admin/coin-requests')
+    ]);
+    
+    // Handle new paginated response format for orders
+    const users = Array.isArray(usersRes) ? usersRes : [];
+    const orders = Array.isArray(ordersRes) ? ordersRes : (ordersRes?.orders || []);
+    const coins = Array.isArray(coinsRes) ? coinsRes : [];
+    
+    const pending = coins.filter(c => c.status==='pending');
+    const done = orders.filter(o => o.status==='done').length;
+    document.getElementById('statsCards').innerHTML = `
+      <div class="stat-card"><div class="icn"><svg><use href="#i-users"/></svg></div><div class="val">${users.length}</div><div class="lbl">Total Users</div></div>
+      <div class="stat-card ok"><div class="icn"><svg><use href="#i-orders"/></svg></div><div class="val">${orders.length}</div><div class="lbl">Total Orders</div></div>
+      <div class="stat-card ok"><div class="icn"><svg><use href="#i-package"/></svg></div><div class="val">${done}</div><div class="lbl">APKs Built</div></div>
+      <div class="stat-card gold"><div class="icn"><svg><use href="#i-coin"/></svg></div><div class="val">${pending.length}</div><div class="lbl">Pending Coins</div></div>
+    `;
+    const nb = document.getElementById('navPendingBadge');
+    if (pending.length){ nb.style.display='inline-block'; nb.textContent = pending.length; } else nb.style.display='none';
+    renderCoinReqs(pending, 'dashPendingCoins', true);
+  } catch (err) {
+    console.error('Dashboard load error:', err);
+    document.getElementById('statsCards').innerHTML = `
+      <div class="stat-card"><div class="icn"><svg><use href="#i-users"/></svg></div><div class="val" style="color:var(--danger)">Error</div><div class="lbl">Total Users</div></div>
+      <div class="stat-card ok"><div class="icn"><svg><use href="#i-orders"/></svg></div><div class="val" style="color:var(--danger)">Error</div><div class="lbl">Total Orders</div></div>
+      <div class="stat-card ok"><div class="icn"><svg><use href="#i-package"/></svg></div><div class="val" style="color:var(--danger)">Error</div><div class="lbl">APKs Built</div></div>
+      <div class="stat-card gold"><div class="icn"><svg><use href="#i-coin"/></svg></div><div class="val" style="color:var(--danger)">Error</div><div class="lbl">Pending Coins</div></div>
+    `;
+    document.getElementById('dashPendingCoins').innerHTML = '<div style="color:var(--danger);padding:16px">Failed to load dashboard data</div>';
+  }
+}
+
+// ── Designs ──
+let _editDesigns = [];
+async function loadDesigns() {
+  const designs = await api('/api/admin/designs');
+  _editDesigns = Array.isArray(designs) ? designs : [];
+  const c = document.getElementById('designsList');
+  if (!designs.length) { c.innerHTML = '<div style="color:var(--dim);padding:16px 4px">No designs yet.</div>'; return; }
+  
+  const getVariantBadge = (category, variant) => {
+    if (!category || category === 'normal') return '<span class="badge badge-blue">Normal — Real</span>';
+    if (category === 'dhani' && variant === 'real') return '<span class="badge" style="background:rgba(94,200,255,.14);color:var(--cyan);border:1px solid rgba(94,200,255,.3)">Dhani — Real</span>';
+    if (category === 'dhani' && variant === 'mock') return '<span class="badge" style="background:rgba(255,194,51,.12);color:var(--gold);border:1px solid rgba(255,194,51,.32)">Dhani — Mock/Test</span>';
+    if (category === 'java' && variant === 'real') return '<span class="badge" style="background:rgba(255,77,109,.12);color:var(--danger);border:1px solid rgba(255,77,109,.32)">Java — Real</span>';
+    if (category === 'java' && variant === 'mock') return '<span class="badge" style="background:rgba(255,194,51,.12);color:var(--gold);border:1px solid rgba(255,194,51,.32)">Java — Mock/Test</span>';
+    return `<span class="badge badge-blue">${category || 'normal'} — ${variant || 'real'}</span>`;
+  };
+  
+  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Type</th><th>Java</th><th>Category</th><th>Variant</th><th>Price</th><th>Orig</th><th>Fake+</th><th>Status</th><th>Action</th></tr></thead><tbody>` +
+    designs.map((d, i) => `<tr>
+      <td>${i+1}</td>
+      <td><b>${d.name}</b><br><small>${d.description||''}</small></td>
+      <td>${d.type}</td><td>${d.java_type}</td>
+      <td>${d.category || 'normal'}</td>
+      <td>${getVariantBadge(d.category, d.variant)}</td>
+      <td><span class="coin-chip">${d.price_coins}</span></td>
+      <td>${d.original_price_coins>0?'<span style="color:var(--dim);text-decoration:'+(d.original_price_coins>d.price_coins?'line-through':'none')+'">'+d.original_price_coins+'c</span>':'—'}</td>
+      <td><span style="color:var(--cyan);font-weight:700">+${d.fake_price_coins||5}c</span></td>
+      <td><span class="badge ${d.active?'badge-ok':'badge-danger'}">${d.active?'Active':'Hidden'}</span></td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm ${d.active?'btn-outline':'btn-ok'}" onclick="toggleDesign(${d.id},${d.active})">${d.active?'Hide':'Show'}</button>
+        <button class="btn btn-sm" style="background:rgba(42,123,255,.18);color:var(--cyan);border:1px solid rgba(94,200,255,.3)" onclick="editDesign(${d.id})"><svg><use href="#i-settings"/></svg> Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteDesign(${d.id},'${d.name.replace(/'/g,"\\'")}')">Delete</button>
+      </div></td>
+    </tr>`).join('') + `</tbody></table></div>`;
+}
+
+async function addDesign() {
+  const btn = event.currentTarget || event.target;
+  const name = document.getElementById('dName').value.trim();
+  const price = document.getElementById('dPrice').value;
+  const type = document.getElementById('dType').value.trim();
+  const javaType = document.getElementById('dJavaType').value;
+  const category = document.getElementById('dCategory').value;
+  const variant = document.getElementById('dVariant').value;
+  const desc = document.getElementById('dDesc').value;
+  const pf = document.getElementById('dPopupHtml').files[0];
+  const fpf = document.getElementById('dFakePopupHtml').files[0];
+  const pi = document.getElementById('dPreviewImg').files[0];
+  const pv = document.getElementById('dPreviewVid').files[0];
+
+  if (!name) return toast('Design name required', true);
+  if (!pf) return toast('Popup HTML file (Real APK) required', true);
+
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('price_coins', price);
+  fd.append('original_price_coins', document.getElementById('dOrigPrice').value || '0');
+  fd.append('fake_price_coins', document.getElementById('dFakePrice').value || '5');
+  fd.append('type', type || 'normal');
+  fd.append('java_type', javaType);
+  fd.append('category', category || 'normal');
+  fd.append('variant', variant || 'real');
+  fd.append('description', desc);
+  fd.append('popup_html', pf);
+  if (fpf) fd.append('fake_popup_html', fpf);
+  if (pi) fd.append('preview_image', pi);
+  if (pv) fd.append('preview_video', pv);
+
+  setLoading(btn, true, 'Uploading…');
+  const d = await api('/api/admin/designs', 'POST', fd, true);
+  setLoading(btn, false);
+
+  if (d.error) return toast(d.error, true);
+  toast('✓ Design added successfully!');
+  ['dName','dDesc','dType','dPopupHtml','dFakePopupHtml','dPreviewImg','dPreviewVid'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('dPrice').value = '10';
+  document.getElementById('dOrigPrice').value = '0';
+  document.getElementById('dFakePrice').value = '5';
+  document.getElementById('dCategory').value = 'normal';
+  document.getElementById('dVariant').value = 'real';
+  loadDesigns();
+}
+
+async function toggleDesign(id, active) {
+  await api('/api/admin/designs/' + id, 'PATCH', { active: active?0:1 });
+  loadDesigns();
+}
+
+function editDesign(id) {
+  const d = _editDesigns.find(x => x.id === id);
+  if (!d) return toast('Design not found', true);
+  document.getElementById('eDesignId').value = id;
+  document.getElementById('eName').value = d.name || '';
+  document.getElementById('eDesc').value = d.description || '';
+  document.getElementById('eType').value = d.type || 'normal';
+  document.getElementById('eJavaType').value = d.java_type || 'normal';
+  document.getElementById('eCategory').value = d.category || 'normal';
+  document.getElementById('eVariant').value = d.variant || 'real';
+  document.getElementById('ePrice').value = d.price_coins || 0;
+  document.getElementById('eOrigPrice').value = d.original_price_coins || 0;
+  document.getElementById('eFakePrice').value = d.fake_price_coins || 5;
+  document.getElementById('eActive').value = d.active ? '1' : '0';
+  ['ePopupHtml','eFakePopupHtml','ePreviewImage','ePreviewVideo'].forEach(fid => {
+    document.getElementById(fid).value = '';
+  });
+
+  const files = [
+    { key: d.popup_html_file, label: 'Popup HTML', icon: '#i-file' },
+    { key: d.fake_popup_html_file, label: 'Fake Popup', icon: '#i-file' },
+    { key: d.preview_image, label: 'Preview Image', icon: '#i-image' },
+    { key: d.preview_video, label: 'Preview Video', icon: '#i-video' }
+  ];
+  document.getElementById('eCurrentFiles').innerHTML = files.map(f => `
+    <div class="fchip ${f.key?'':'empty'}">
+      <div class="ficon"><svg><use href="${f.icon}"/></svg></div>
+      <div class="fmeta">
+        <div class="fname">${f.key || 'Empty'}</div>
+        <div class="ftype">${f.label}</div>
+      </div>
+    </div>
+  `).join('');
+
+  const modal = document.getElementById('editDesignModal');
+  modal.classList.add('show');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  if(window.innerWidth<=900){
+    const menuBtn = document.getElementById('menuBtn');
+    if(menuBtn) menuBtn.style.display = 'none';
+  }
+}
+
+function closeEditDesign() {
+  const modal = document.getElementById('editDesignModal');
+  modal.classList.remove('show');
+  modal.style.display = 'none';
+  document.body.style.overflow = '';
+  if(window.innerWidth<=900){
+    const menuBtn = document.getElementById('menuBtn');
+    if(menuBtn) menuBtn.style.display = 'flex';
+  }
+}
+
+async function saveDesignEdit() {
+  const id = document.getElementById('eDesignId').value;
+  const fd = new FormData();
+  fd.append('name', document.getElementById('eName').value.trim());
+  fd.append('description', document.getElementById('eDesc').value.trim());
+  fd.append('type', document.getElementById('eType').value);
+  fd.append('java_type', document.getElementById('eJavaType').value);
+  fd.append('category', document.getElementById('eCategory').value);
+  fd.append('variant', document.getElementById('eVariant').value);
+  fd.append('price_coins', document.getElementById('ePrice').value);
+  fd.append('original_price_coins', document.getElementById('eOrigPrice').value);
+  fd.append('fake_price_coins', document.getElementById('eFakePrice').value);
+  fd.append('active', document.getElementById('eActive').value);
+  const ph  = document.getElementById('ePopupHtml').files[0];
+  const fph = document.getElementById('eFakePopupHtml').files[0];
+  const pi  = document.getElementById('ePreviewImage').files[0];
+  const pv  = document.getElementById('ePreviewVideo').files[0];
+  if (ph)  fd.append('popup_html', ph);
+  if (fph) fd.append('fake_popup_html', fph);
+  if (pi)  fd.append('preview_image', pi);
+  if (pv)  fd.append('preview_video', pv);
+  const saveBtn = document.getElementById('eSaveBtn');
+  setLoading(saveBtn, true, 'Saving…');
+  const res = await api('/api/admin/designs/' + id, 'PATCH', fd, true);
+  setLoading(saveBtn, false);
+  if (res.error) return toast(res.error, true);
+  toast('✓ Design updated!');
+  closeEditDesign();
+  loadDesigns();
+}
+
+async function deleteDesign(id, name) {
+  if (!confirm(`Delete "${name}"?\n\nThis will also delete all orders for this design. Cannot be undone.`)) return;
+  const d = await api('/api/admin/designs/' + id, 'DELETE');
+  if (d.error) return toast(d.error, true);
+  toast('Design deleted.');
+  loadDesigns();
+}
+
+// ── Orders ──
+let _ordersPage = 1;
+let _ordersTotalPages = 1;
+let _selectedOrderIds = new Set();
+
+async function loadOrders() {
+  const status = document.getElementById('orderStatusFilter').value;
+  const search = document.getElementById('orderSearch').value;
+  const sort = document.getElementById('orderSort').value;
+  const limit = document.getElementById('orderLimit').value;
+  _ordersPage = 1;
+  
+  await fetchOrders(status, search, sort, _ordersPage, limit);
+}
+
+async function fetchOrders(status, search, sort, page, limit) {
+  const c = document.getElementById('ordersList');
+  c.innerHTML = '<div style="color:var(--dim);padding:16px 4px">Loading…</div>';
+  
+  const params = new URLSearchParams({
+    status: status || 'all',
+    search: search || '',
+    sort: sort || 'desc',
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  const res = await api('/api/admin/orders?' + params.toString());
+  
+  if (res.error) {
+    c.innerHTML = '<div style="color:var(--danger);padding:16px 4px">Error: ' + res.error + '</div>';
+    return;
+  }
+  
+  const { orders, pagination } = res;
+  _ordersTotalPages = pagination.totalPages;
+  
+  if (!orders.length) {
+    c.innerHTML = '<div style="color:var(--dim);padding:16px 4px">No orders found.</div>';
+    return;
+  }
+  
+  _selectedOrderIds.clear();
+  updateBulkDeleteBtn();
+  
+  c.innerHTML = `
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px"><input type="checkbox" id="selectAllOrders" onchange="toggleSelectAll(this)"></th>
+            <th>Order ID</th>
+            <th>User</th>
+            <th>App Name</th>
+            <th>Design</th>
+            <th>Variant</th>
+            <th>Status</th>
+            <th>Coins</th>
+            <th>Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${orders.map(o => `
+            <tr data-id="${o.id}">
+              <td><input type="checkbox" class="order-checkbox" value="${o.id}" onchange="toggleOrderSelection(this)"></td>
+              <td>${o.id}</td>
+              <td>${o.username}<br><small>ID: ${o.user_id}</small></td>
+              <td><b>${o.app_name}</b><br><small>${o.package_name}</small></td>
+              <td>${o.design_name}</td>
+              <td><span class="badge badge-blue">${o.variant || 'real'}</span></td>
+              <td><span class="badge ${o.status==='done'?'badge-ok':o.status==='failed'?'badge-danger':o.status==='building'?'badge-blue':'badge-pending'}">${o.status}</span></td>
+              <td><span class="coin-chip">${o.coins_spent}</span></td>
+              <td><small>${new Date(o.created_at).toLocaleDateString()} ${new Date(o.created_at).toLocaleTimeString()}</small></td>
+              <td>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  ${o.apk_file ? `<a href="/api/orders/${o.id}/download" class="btn btn-sm btn-primary" target="_blank" title="Download APK"><svg><use href="#i-download"/></svg></a>` : ''}
+                  ${o.fake_apk_file ? `<a href="/api/orders/${o.id}/download-fake" class="btn btn-sm btn-gold" target="_blank" title="Download Fake APK"><svg><use href="#i-download"/></svg> Fake</a>` : ''}
+                  <button class="btn btn-sm btn-danger" onclick="deleteOrder(${o.id})" title="Delete Order"><svg><use href="#i-x"/></svg></button>
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${pagination.totalPages > 1 ? `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding:12px;background:var(--bg-2);border-radius:var(--r-sm);border:1px solid var(--border-soft)">
+        <div style="color:var(--dim);font-size:13px">
+          Showing ${((pagination.page - 1) * pagination.limit) + 1} - ${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total} orders
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-outline" onclick="changeOrdersPage(${pagination.page - 1})" ${pagination.page === 1 ? 'disabled' : ''}><svg><use href="#i-x"/></svg> Previous</button>
+          <button class="btn btn-sm btn-outline" onclick="changeOrdersPage(${pagination.page + 1})" ${pagination.page === pagination.totalPages ? 'disabled' : ''}>Next <svg><use href="#i-x"/></svg></button>
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+function changeOrdersPage(page) {
+  if (page < 1 || page > _ordersTotalPages) return;
+  _ordersPage = page;
+  const status = document.getElementById('orderStatusFilter').value;
+  const search = document.getElementById('orderSearch').value;
+  const sort = document.getElementById('orderSort').value;
+  const limit = document.getElementById('orderLimit').value;
+  fetchOrders(status, search, sort, page, limit);
+}
+
+function toggleSelectAll(checkbox) {
+  document.querySelectorAll('.order-checkbox').forEach(cb => {
+    cb.checked = checkbox.checked;
+    toggleOrderSelection(cb);
+  });
+}
+
+function toggleOrderSelection(checkbox) {
+  const id = parseInt(checkbox.value);
+  if (checkbox.checked) {
+    _selectedOrderIds.add(id);
+  } else {
+    _selectedOrderIds.delete(id);
+  }
+  updateBulkDeleteBtn();
+  const selectAll = document.getElementById('selectAllOrders');
+  if (selectAll) {
+    selectAll.checked = _selectedOrderIds.size === document.querySelectorAll('.order-checkbox').length;
+    selectAll.indeterminate = _selectedOrderIds.size > 0 && _selectedOrderIds.size < document.querySelectorAll('.order-checkbox').length;
+  }
+}
+
+function updateBulkDeleteBtn() {
+  const btn = document.getElementById('bulkDeleteBtn');
+  const count = document.getElementById('selectedCount');
+  if (_selectedOrderIds.size > 0) {
+    btn.style.display = 'inline-flex';
+    count.textContent = _selectedOrderIds.size;
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+async function deleteOrder(id) {
+  if (!confirm('Delete this order? This will also delete associated APK files. Cannot be undone.')) return;
+  const res = await api('/api/admin/orders/' + id, 'DELETE');
+  if (res.error) return toast(res.error, true);
+  toast('Order deleted.');
+  loadOrders();
+}
+
+async function bulkDeleteOrders() {
+  if (_selectedOrderIds.size === 0) return;
+  if (!confirm(`Delete ${_selectedOrderIds.size} selected orders? This will also delete associated APK files. Cannot be undone.`)) return;
+  const res = await api('/api/admin/orders', 'DELETE', { ids: Array.from(_selectedOrderIds) });
+  if (res.error) return toast(res.error, true);
+  toast(`${res.deleted} orders deleted.`);
+  _selectedOrderIds.clear();
+  loadOrders();
+}
+
+// ── Coin Requests ──
+async function loadCoinReqs() {
+  const reqs = await api('/api/admin/coin-requests');
+  renderCoinReqs(reqs, 'coinReqList', false);
+}
+
+function renderCoinReqs(reqs, containerId, onlyPending) {
+  const c = document.getElementById(containerId);
+  const filtered = onlyPending ? reqs.filter(r=>r.status==='pending') : reqs;
+  if (!filtered.length) { c.innerHTML = '<div style="color:var(--dim);padding:16px 4px">No requests.</div>'; return; }
+  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>User</th><th>Coins</th><th>Amount</th><th>UTR</th><th>Screenshot</th><th>Status</th><th>Action</th></tr></thead><tbody>` +
+    filtered.map(r => `<tr>
+      <td>${r.id}</td>
+      <td><b>${r.username}</b><br><small>${r.email}</small></td>
+      <td><span class="coin-chip">${r.coins_requested}</span></td>
+      <td><b style="color:var(--ok)">₹${r.amount_paid}</b></td>
+      <td><code>${r.utr}</code></td>
+      <td>${r.screenshot_file
+        ? `<a href="/uploads/${r.screenshot_file}" target="_blank"><img src="/uploads/${r.screenshot_file}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer"></a>`
+        : '<span style="color:var(--dim)">—</span>'}</td>
+      <td><span class="badge ${r.status==='approved'?'badge-ok':r.status==='rejected'?'badge-danger':'badge-pending'}">${r.status}</span></td>
+      <td>
+        ${r.status==='pending'?`
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-ok btn-sm" onclick="approveCoin(${r.id})"><svg><use href="#i-check"/></svg> Approve</button>
+            <button class="btn btn-danger btn-sm" onclick="rejectCoin(${r.id})"><svg><use href="#i-x"/></svg> Reject</button>
+          </div>
+        `:'—'}
+      </td>
+    </tr>`).join('') + `</tbody></table></div>`;
+}
+
+async function approveCoin(id) {
+  const btn = event.currentTarget || event.target;
+  setLoading(btn, true, '…');
+  const d = await api('/api/admin/coin-requests/' + id + '/approve','POST');
+  setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+  toast('✓ Approved! Coins added to user.');
+  loadCoinReqs();
+  loadDashboard();
+}
+async function rejectCoin(id) {
+  const btn = event.currentTarget || event.target;
+  setLoading(btn, true, '…');
+  await api('/api/admin/coin-requests/' + id + '/reject','POST');
+  setLoading(btn, false);
+  toast('Rejected.');
+  loadCoinReqs();
+}
+
+// ── Users ──
+let _selectedUserOrdersIds = new Set();
+let _currentUserOrdersUserId = null;
+
+async function loadUsers() {
+  const users = await api('/api/admin/users');
+  const c = document.getElementById('usersList');
+  if (!users.length) { c.innerHTML = '<div style="color:var(--dim);padding:16px 4px">No users yet.</div>'; return; }
+  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Username</th><th>Email</th><th>Password</th><th>Coins</th><th>Joined</th><th>Manage Coins</th><th>Actions</th></tr></thead><tbody>` +
+    users.map(u => `<tr>
+      <td>${u.id}</td><td><b>${u.username}</b></td><td>${u.email}</td>
+      <td><code style="background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--cyan)">${u.plain_password || '(hashed)'}</code></td>
+      <td><span class="coin-chip">${u.coins}</span></td>
+      <td><small>${new Date(u.created_at).toLocaleDateString()}</small></td>
+      <td>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+          <input type="number" id="addCoins_${u.id}" style="width:70px;padding:6px 8px;background:var(--bg-2);border:1.5px solid var(--border);color:#fff;border-radius:8px;font-size:12px" value="10" min="1">
+          <button class="btn btn-sm btn-ok" onclick="addUserCoins(${u.id})" title="Add coins"><svg><use href="#i-plus"/></svg></button>
+          <button class="btn btn-sm btn-danger" onclick="subUserCoins(${u.id})" title="Subtract coins" style="font-size:16px;line-height:1;padding:6px 10px">−</button>
+        </div>
+      </td>
+      <td>
+        <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id},'${u.username.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-x"/></svg> Delete</button>
+      </td>
+    </tr>`).join('') + `</tbody></table></div>`;
+}
+
+async function addUserCoins(userId) {
+  const btn = event.currentTarget || event.target;
+  const amount = document.getElementById('addCoins_' + userId).value;
+  if (!amount || parseInt(amount) <= 0) return toast('Enter a valid amount', true);
+  setLoading(btn, true, '…');
+  const d = await api('/api/admin/users/' + userId + '/coins','POST',{amount, action:'add'});
+  setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+  toast('✓ ' + amount + ' coins added!');
+  loadUsers();
+}
+
+async function subUserCoins(userId) {
+  const btn = event.currentTarget || event.target;
+  const amount = document.getElementById('addCoins_' + userId).value;
+  if (!amount || parseInt(amount) <= 0) return toast('Enter a valid amount', true);
+  setLoading(btn, true, '…');
+  const d = await api('/api/admin/users/' + userId + '/coins','POST',{amount, action:'subtract'});
+  setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+  toast('✓ ' + amount + ' coins subtracted!');
+  loadUsers();
+}
+
+async function deleteUser(userId, username) {
+  if (!confirm(`Delete user "${username}"?\n\nAll their orders and coin requests will also be deleted. This cannot be undone.`)) return;
+  const d = await api('/api/admin/users/' + userId, 'DELETE');
+  if (d.error) return toast(d.error, true);
+  toast('✓ User "' + username + '" deleted.');
+  loadUsers();
+  loadDashboard();
+}
+
+// ── User Orders Modal ──
+async function openUserOrders(userId, username) {
+  _currentUserOrdersUserId = userId;
+  _selectedUserOrdersIds.clear();
+  document.getElementById('userOrdersUsername').textContent = `@${username} (ID: ${userId})`;
+  document.getElementById('selectAllUserOrders').checked = false;
+  document.getElementById('bulkDeleteUserOrdersBtn').style.display = 'none';
+  
+  const modal = document.getElementById('userOrdersModal');
+  modal.classList.add('show');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  
+  await loadUserOrders(userId);
+}
+
+function closeUserOrdersModal() {
+  const modal = document.getElementById('userOrdersModal');
+  modal.classList.remove('show');
+  modal.style.display = 'none';
+  document.body.style.overflow = '';
+  _currentUserOrdersUserId = null;
+  _selectedUserOrdersIds.clear();
+}
+
+async function loadUserOrders(userId) {
+  const res = await api('/api/admin/users/' + userId + '/orders');
+  if (res.error) {
+    toast(res.error, true);
+    return;
+  }
+  
+  const { user, orders, stats } = res;
+  
+  // Update stats
+  document.getElementById('userOrdersStats').innerHTML = `
+    <div class="stat-card"><div class="icn"><svg><use href="#i-orders"/></svg></div><div class="val">${stats.total}</div><div class="lbl">Total Orders</div></div>
+    <div class="stat-card ok"><div class="icn"><svg><use href="#i-check"/></svg></div><div class="val">${stats.completed}</div><div class="lbl">Completed</div></div>
+    <div class="stat-card" style="--grad-blue:var(--grad-danger)"><div class="icn"><svg><use href="#i-x"/></svg></div><div class="val">${stats.failed}</div><div class="lbl">Failed</div></div>
+    <div class="stat-card" style="--grad-blue:var(--grad-gold)"><div class="icn"><svg><use href="#i-clock"/></svg></div><div class="val">${stats.pending}</div><div class="lbl">Pending</div></div>
+    <div class="stat-card" style="--grad-blue:var(--grad-blue)"><div class="icn"><svg><use href="#i-package"/></svg></div><div class="val">${stats.building}</div><div class="lbl">Building</div></div>
+  `;
+  
+  // Render orders table
+  const tbody = document.getElementById('userOrdersTableBody');
+  if (!orders.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:20px">No orders for this user</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = orders.map(o => `
+    <tr data-id="${o.id}">
+      <td><input type="checkbox" class="user-order-checkbox" value="${o.id}" onchange="toggleUserOrderSelection(this)"></td>
+      <td>${o.id}</td>
+      <td>${o.design_name}</td>
+      <td><span class="badge badge-blue">${o.variant || 'real'}</span></td>
+      <td><span class="badge ${o.status==='done'?'badge-ok':o.status==='failed'?'badge-danger':o.status==='building'?'badge-blue':'badge-pending'}">${o.status}</span></td>
+      <td><span class="coin-chip">${o.coins_spent}</span></td>
+      <td><small>${new Date(o.created_at).toLocaleDateString()} ${new Date(o.created_at).toLocaleTimeString()}</small></td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${o.apk_file ? `<a href="/api/orders/${o.id}/download" class="btn btn-sm btn-primary" target="_blank" title="Download APK"><svg><use href="#i-download"/></svg></a>` : ''}
+          ${o.fake_apk_file ? `<a href="/api/orders/${o.id}/download-fake" class="btn btn-sm btn-gold" target="_blank" title="Download Fake APK"><svg><use href="#i-download"/></svg> Fake</a>` : ''}
+          <button class="btn btn-sm btn-danger" onclick="deleteOrder(${o.id})" title="Delete Order"><svg><use href="#i-x"/></svg></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function toggleSelectAllUserOrders(checkbox) {
+  document.querySelectorAll('.user-order-checkbox').forEach(cb => {
+    cb.checked = checkbox.checked;
+    toggleUserOrderSelection(cb);
+  });
+}
+
+function toggleUserOrderSelection(checkbox) {
+  const id = parseInt(checkbox.value);
+  if (checkbox.checked) {
+    _selectedUserOrdersIds.add(id);
+  } else {
+    _selectedUserOrdersIds.delete(id);
+  }
+  updateBulkDeleteUserOrdersBtn();
+  const selectAll = document.getElementById('selectAllUserOrders');
+  if (selectAll) {
+    selectAll.checked = _selectedUserOrdersIds.size === document.querySelectorAll('.user-order-checkbox').length;
+    selectAll.indeterminate = _selectedUserOrdersIds.size > 0 && _selectedUserOrdersIds.size < document.querySelectorAll('.user-order-checkbox').length;
+  }
+}
+
+function updateBulkDeleteUserOrdersBtn() {
+  const btn = document.getElementById('bulkDeleteUserOrdersBtn');
+  const count = document.getElementById('selectedUserOrdersCount');
+  if (_selectedUserOrdersIds.size > 0) {
+    btn.style.display = 'inline-flex';
+    count.textContent = _selectedUserOrdersIds.size;
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+async function bulkDeleteUserOrders() {
+  if (_selectedUserOrdersIds.size === 0) return;
+  if (!confirm(`Delete ${_selectedUserOrdersIds.size} selected orders? This will also delete associated APK files. Cannot be undone.`)) return;
+  const res = await api('/api/admin/orders', 'DELETE', { ids: Array.from(_selectedUserOrdersIds) });
+  if (res.error) return toast(res.error, true);
+  toast(`${res.deleted} orders deleted.`);
+  _selectedUserOrdersIds.clear();
+  if (_currentUserOrdersUserId) {
+    await loadUserOrders(_currentUserOrdersUserId);
+  }
+  loadUsers();
+  loadOrders();
+}
+
+// ── Settings ──
+async function loadSettings() {
+  const s = await api('/api/admin/settings');
+  document.getElementById('sUpiId').value = s.upi_id || '';
+  document.getElementById('sCoinRate').value = s.coin_rate || '1';
+  document.getElementById('sFakePrice').value = s.addon_fake_price || '5';
+  document.getElementById('sDomainPrice').value = s.domain_change_price || '10';
+  document.getElementById('sSiteName').value = s.site_name || '';
+  document.getElementById('sTgToken').value = s.telegram_bot_token || '';
+  document.getElementById('sTgAdminId').value = s.telegram_admin_id || '';
+  document.getElementById('currentLoadingHtml').textContent = s.loading_html_file || 'Not uploaded yet';
+  if (s.upi_qr_image) {
+    document.getElementById('currentQr').innerHTML = `<img src="/uploads/${s.upi_qr_image}" style="width:110px;border-radius:10px;border:1px solid var(--border)">`;
+  }
+}
+
+async function saveSettings() {
+  const btn = event.currentTarget || event.target;
+  setLoading(btn, true, 'Saving…');
+  const fd = new FormData();
+  fd.append('upi_id', document.getElementById('sUpiId').value);
+  fd.append('coin_rate', document.getElementById('sCoinRate').value);
+  fd.append('addon_fake_price', document.getElementById('sFakePrice').value);
+  fd.append('domain_change_price', document.getElementById('sDomainPrice').value);
+  fd.append('site_name', document.getElementById('sSiteName').value);
+  fd.append('telegram_bot_token', document.getElementById('sTgToken').value);
+  fd.append('telegram_admin_id', document.getElementById('sTgAdminId').value);
+  const qrFile = document.getElementById('sQrImg').files[0];
+  if (qrFile) fd.append('upi_qr_image', qrFile);
+  const loadingHtmlFile = document.getElementById('sLoadingHtml').files[0];
+  if (loadingHtmlFile) fd.append('loading_html', loadingHtmlFile);
+  const d = await api('/api/admin/settings','POST',fd,true);
+  setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+  toast('✓ Settings saved!');
+}
+
+// ── Android Project ──
+async function loadBaseApkStatus() {
+  const s = await api('/api/admin/android-project/status');
+  const el = document.getElementById('androidProjectStatusBadge');
+  if (el) el.innerHTML = s.uploaded
+    ? '<span class="badge badge-ok">Uploaded</span>'
+    : '<span class="badge badge-danger">Not uploaded</span>';
+}
+
+async function uploadAndroidProject() {
+  const btn       = event.currentTarget || event.target;
+  const fileInput = document.getElementById('androidProjectZip');
+  if (!fileInput.files[0]) return toast('Select ZIP file first', true);
+  const fd = new FormData();
+  fd.append('zip', fileInput.files[0]);
+  setLoading(btn, true, 'Uploading…');
+  const d = await api('/api/admin/upload-android-project', 'POST', fd, true);
+  setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+  toast('Project uploaded successfully.');
+  fileInput.value = '';
+  loadBaseApkStatus();
+}
+
+// ── Preview Carousel ──
+function createPreviewCarousel(imageUrl, videoUrl, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  
+  const hasImage = imageUrl && imageUrl.trim() !== '';
+  const hasVideo = videoUrl && videoUrl.trim() !== '';
+  
+  if (!hasImage && !hasVideo) {
+    container.innerHTML = '<div class="preview-carousel"><div class="loading">No preview available</div></div>';
+    return;
+  }
+  
+  let html = '<div class="preview-carousel">';
+  
+  if (hasImage) {
+    html += `<img src="/uploads/${imageUrl}" class="carousel-item active" alt="Preview Image" onerror="this.style.display='none'; checkCarouselFallback('${containerId}')">`;
+  }
+  
+  if (hasVideo) {
+    html += `<video class="carousel-item ${!hasImage ? 'active' : ''}" muted playsinline preload="metadata" onerror="this.style.display='none'; checkCarouselFallback('${containerId}')">
+      <source src="/uploads/${videoUrl}" type="video/mp4">
+    </video>`;
+  }
+  
+  html += '<div class="loading">Loading...</div></div>';
+  container.innerHTML = html;
+  
+  if (hasImage && hasVideo) {
+    startCarousel(containerId);
+  }
+}
+
+let _carouselTimers = {};
+
+function startCarousel(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  
+  const items = container.querySelectorAll('.carousel-item');
+  if (items.length < 2) return;
+  
+  if (_carouselTimers[containerId]) {
+    clearInterval(_carouselTimers[containerId]);
+  }
+  
+  let currentIndex = 0;
+  items[0].classList.add('active');
+  
+  _carouselTimers[containerId] = setInterval(() => {
+    const items = container.querySelectorAll('.carousel-item');
+    if (items.length < 2) return;
+    
+    items[currentIndex].classList.remove('active');
+    currentIndex = (currentIndex + 1) % items.length;
+    items[currentIndex].classList.add('active');
+    
+    // If it's a video, play it
+    const currentItem = items[currentIndex];
+    if (currentItem.tagName === 'VIDEO') {
+      currentItem.currentTime = 0;
+      currentItem.play().catch(() => {});
+      
+      // When video ends, move to next
+      currentItem.onended = () => {
+        currentItem.classList.remove('active');
+        currentIndex = (currentIndex + 1) % items.length;
+        items[currentIndex].classList.add('active');
+      };
+    }
+  }, 5000); // Switch every 5 seconds
+}
+
+function checkCarouselFallback(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  
+  const items = container.querySelectorAll('.carousel-item');
+  const visibleItems = Array.from(items).filter(item => item.style.display !== 'none');
+  const loading = container.querySelector('.loading');
+  
+  if (visibleItems.length === 0 && loading) {
+    loading.textContent = 'Preview unavailable';
+  } else if (visibleItems.length > 0 && loading) {
+    loading.style.display = 'none';
+  }
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  Object.values(_carouselTimers).forEach(timer => clearInterval(timer));
+  _carouselTimers = {};
+});
+
+// ── Admin Login ──
+async function doAdminLogin() {
+  const username = document.getElementById('aUser').value.trim();
+  const password = document.getElementById('aPass').value;
+  if (!username || !password) { document.getElementById('loginErr').textContent = 'Enter username and password'; return; }
+  const d = await api('/api/login','POST',{username, password});
+  if (d.error || !d.isAdmin) {
+    document.getElementById('loginErr').textContent = d.error || 'Not an admin account';
+    return;
+  }
+  document.getElementById('loginOverlay').style.display = 'none';
+  loadDashboard();
+}
+
+// ── Init ──
+window.onload = async () => {
+  const me = await api('/api/me');
+  if (me && me.isAdmin) {
+    document.getElementById('loginOverlay').style.display = 'none';
+    loadDashboard();
+  }
+};
+
+/* ── Mobile: auto data-labels so tables render as cards on phones ── */
+function labelTables(root){
+  (root||document).querySelectorAll('.tbl-wrap table').forEach(t=>{
+    const hs=[...t.querySelectorAll('thead th')].map(h=>h.textContent.trim());
+    t.querySelectorAll('tbody tr').forEach(tr=>{
+      [...tr.children].forEach((td,i)=>{ if(hs[i]&&!td.hasAttribute('data-l')) td.setAttribute('data-l',hs[i]==='#'?'ID':hs[i]); });
+    });
+  });
+}
+new MutationObserver(()=>labelTables()).observe(document.documentElement,{childList:true,subtree:true});
+document.addEventListener('DOMContentLoaded',()=>labelTables());
+
+// ESC key closes modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeEditDesign();
+});
+</script>
+
+<!-- Login Overlay -->
+<div id="loginOverlay">
+  <div class="box">
+    <div class="lg-icn"><svg><use href="#i-settings"/></svg></div>
+    <h2>Admin Login</h2>
+    <p class="sub">Zayro Mod Builder Console</p>
+    <div class="form-group"><label>Username</label><input type="text" id="aUser" placeholder="admin"></div>
+    <div class="form-group"><label>Password</label><input type="password" id="aPass" placeholder="••••••"></div>
+    <button class="btn btn-primary" onclick="doAdminLogin()">Login</button>
+    <div id="loginErr" class="err"></div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,1283 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5">
+<meta name="theme-color" content="#05070f">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<title>Zayro Mod Builder — Build Your App in Minutes</title>
+<meta name="description" content="Choose a design, customize your app, and get a signed APK instantly.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#05070f;--card:rgba(16,22,38,.72);--card-2:rgba(11,16,30,.9);
+  --border:rgba(120,160,255,.16);--border-soft:rgba(120,160,255,.10);
+  --blue:#3d7bff;--cyan:#67e8ff;--ok:#48f5b4;--danger:#ff5470;--gold:#ffcb5c;
+  --text:#cbd9f2;--dim:#7286a8;
+  --glow:rgba(61,123,255,.42);
+  --grad-blue:linear-gradient(135deg,#1b3fd4,#3d7bff 52%,#67e8ff);
+  --grad-gold:linear-gradient(135deg,#b57b12,#ffcb5c);
+  --r:20px;--r-sm:14px;
+  --shadow:0 28px 70px -34px rgba(0,0,0,.95);
+  --nav-h:calc(64px + env(safe-area-inset-bottom));
+}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);font-family:'Sora',system-ui,sans-serif;font-size:15px;
+  min-height:100dvh;overflow-x:hidden;letter-spacing:-.1px;
+  padding-bottom:calc(var(--nav-h) + 18px);
+  background-image:
+    radial-gradient(1100px 600px at 10% -10%,rgba(61,123,255,.20),transparent 62%),
+    radial-gradient(820px 520px at 96% 0%,rgba(103,232,255,.10),transparent 64%),
+    radial-gradient(760px 520px at 50% 112%,rgba(255,203,92,.06),transparent 62%),
+    linear-gradient(180deg,#05070f,#04060d);
+  background-attachment:fixed;
+}
+h1,h2,h3,h4,.brand-text,.sec-title,.balance-big{font-family:'Chakra Petch','Sora',sans-serif;letter-spacing:.3px}
+a{color:var(--cyan);text-decoration:none}
+::selection{background:rgba(61,123,255,.35);color:#fff}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#16305c;border-radius:9px}
+svg.i{width:18px;height:18px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.i.sm{width:15px;height:15px}
+svg.i.lg{width:22px;height:22px}
+.coin-i{width:16px;height:16px;flex-shrink:0;vertical-align:-3px}
+input,select,textarea,button{font-family:inherit}
+
+/* ───── TOP BAR ───── */
+header.topbar{
+  position:sticky;top:0;z-index:80;display:flex;align-items:center;gap:12px;
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+  background:linear-gradient(180deg,rgba(8,12,24,.92),rgba(6,9,18,.62));
+  backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid var(--border-soft);
+}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.brand-mark{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;
+  background:var(--grad-blue);color:#fff;box-shadow:0 10px 26px -12px var(--glow),inset 0 1px 0 rgba(255,255,255,.35)}
+.brand-text{font-size:16px;font-weight:700;letter-spacing:2px;color:#fff;text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-text small{display:block;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2.4px;color:var(--dim);font-weight:400}
+.coin-chip{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding:7px 13px;border-radius:999px;
+  font-weight:700;font-size:13.5px;color:var(--gold);cursor:pointer;
+  background:rgba(255,203,92,.10);border:1px solid rgba(255,203,92,.28)}
+.coin-chip:active{transform:scale(.96)}
+
+/* ───── PAGES ───── */
+.page{display:none;padding:16px 16px 8px;max-width:1180px;margin:0 auto;animation:fade .28s ease}
+.page.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.sec-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;margin:22px 0 12px}
+.sec-title{display:flex;align-items:center;gap:9px;min-width:0;font-size:15.5px;letter-spacing:1.5px;text-transform:uppercase;color:#fff}
+.sec-title svg{color:var(--cyan);flex-shrink:0}
+.sec-sub{font-size:11.5px;color:var(--dim);white-space:nowrap}
+
+/* ───── HERO ───── */
+.hero{position:relative;overflow:hidden;border:1px solid var(--border-soft);border-radius:26px;padding:26px 20px;
+  background:linear-gradient(165deg,rgba(18,26,46,.78),rgba(8,12,24,.55));backdrop-filter:blur(14px);box-shadow:var(--shadow)}
+.hero-pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;margin-bottom:14px;
+  background:rgba(72,245,180,.08);border:1px solid rgba(72,245,180,.28);color:var(--ok);
+  font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.6px}
+.hero h1{font-size:clamp(26px,7.6vw,44px);line-height:1.08;font-weight:700;color:#fff;letter-spacing:-.8px}
+.hero h1 span{background:linear-gradient(110deg,#67e8ff,#9ad8ff 45%,#ffcb5c);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{margin-top:12px;color:var(--dim);font-size:14px;line-height:1.6;max-width:56ch}
+.hero-cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.hero-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:22px}
+.hero-stats .stat{padding:13px 10px;border-radius:16px;text-align:center;background:rgba(255,255,255,.03);border:1px solid var(--border-soft)}
+.hero-stats .stat b{display:block;font-family:'Chakra Petch',sans-serif;font-size:19px;color:#fff}
+.hero-stats .stat span{font-size:10.5px;color:var(--dim);letter-spacing:.6px}
+
+/* ───── BUTTONS ───── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:none;
+  padding:13px 20px;border-radius:999px;font-size:14px;font-weight:700;color:#fff;transition:.22s;min-height:46px}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.6;pointer-events:none}
+.btn-sm{padding:9px 15px;font-size:12.5px;min-height:38px}
+.btn-block{width:100%}
+.btn-primary{background:var(--grad-blue);box-shadow:0 14px 34px -14px var(--glow),inset 0 1px 0 rgba(255,255,255,.28)}
+.btn-outline{background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text)}
+.btn-gold{background:var(--grad-gold);color:#2a1c00}
+.btn-danger{background:rgba(255,84,112,.12);border:1px solid rgba(255,84,112,.35);color:var(--danger)}
+.spinner,.loader{width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:currentColor;
+  border-radius:50%;display:inline-block;animation:spin .7s linear infinite;flex-shrink:0}
+.loader{width:12px;height:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ───── DESIGN CARDS ───── */
+.designs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;perspective:1200px}
+.design-card{position:relative;overflow:hidden;border-radius:22px;border:1px solid var(--border-soft);
+  background:linear-gradient(170deg,rgba(18,25,44,.85),rgba(9,13,25,.92));box-shadow:0 26px 60px -34px #000;
+  transform-style:preserve-3d;transition:transform .45s cubic-bezier(.2,.7,.2,1),box-shadow .45s,border-color .3s;
+  animation:card3d .55s cubic-bezier(.2,.8,.2,1) both}
+@keyframes card3d{from{opacity:0;transform:perspective(1000px) rotateX(14deg) translateY(26px) scale(.96)}
+  to{opacity:1;transform:perspective(1000px) rotateX(0) translateY(0) scale(1)}}
+/* 3D sheen overlay */
+.design-card::after{content:'';position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;
+  background:linear-gradient(115deg,transparent 32%,rgba(103,232,255,.16) 48%,rgba(255,255,255,.1) 52%,transparent 68%);
+  transform:translateX(-120%);transition:transform .7s ease;mix-blend-mode:screen}
+.design-card:hover::after{transform:translateX(120%)}
+.design-card:hover{transform:perspective(900px) rotateX(5deg) rotateY(-5deg) translateY(-6px) scale(1.02);
+  border-color:rgba(103,232,255,.4);box-shadow:0 40px 70px -30px rgba(0,0,0,.9),0 0 32px -12px rgba(103,232,255,.45)}
+.design-card:active{transform:perspective(900px) rotateX(3deg) scale(.985)}
+.disc-badge{position:absolute;top:12px;left:12px;z-index:3;padding:5px 10px;border-radius:999px;
+  background:var(--grad-gold);color:#2a1c00;font-size:10.5px;font-weight:800;letter-spacing:.5px}
+.media{position:relative;aspect-ratio:4/3;background:#070b16;overflow:hidden;cursor:zoom-in}
+.media .preview{width:100%;height:100%;object-fit:cover;display:block}
+.no-preview{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--dim);font-size:12px}
+.zoom-hint{position:absolute;right:10px;bottom:10px;display:grid;place-items:center;width:30px;height:30px;border-radius:10px;
+  background:rgba(4,7,15,.7);border:1px solid var(--border);color:var(--cyan)}
+.info{padding:14px}
+.type-badge{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--dim);letter-spacing:.6px;text-transform:uppercase}
+.info h3{margin:7px 0 12px;font-size:16.5px;color:#fff}
+.price-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}
+.price-coins{display:inline-flex;align-items:center;gap:5px;font-weight:800;color:var(--gold);font-size:16px}
+.original-price{color:var(--dim);text-decoration:line-through;font-size:12.5px;margin-right:8px}
+body.in-telegram .tg-only{display:flex!important}
+.media .preview{object-position:center top}
+@media(max-width:560px){
+  .designs-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .design-card{border-radius:16px}
+  .media{aspect-ratio:1/1.05}
+  .info{padding:10px 10px 12px}
+  .type-badge{font-size:8.5px;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block}
+  .info h3{font-size:13px;line-height:1.25;margin:5px 0 9px;height:2.5em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal}
+  .price-row{grid-template-columns:minmax(0,1fr);gap:8px;justify-items:stretch}
+  .price-row>span{justify-content:flex-start;flex-wrap:wrap;row-gap:2px}
+  .price-row .btn{width:100%;padding:9px 8px;min-height:38px;font-size:12px}
+  .price-coins{font-size:15px}
+  .original-price{font-size:10.5px;margin-right:6px}
+  .disc-badge{top:7px;left:7px;padding:4px 7px;font-size:8.5px}
+  .zoom-hint{right:7px;bottom:7px;width:25px;height:25px;border-radius:8px}
+}
+
+/* ───── GENERIC CARD / LIST ───── */
+.card{border:1px solid var(--border-soft);border-radius:var(--r);padding:16px;background:var(--card);backdrop-filter:blur(12px);box-shadow:var(--shadow)}
+.empty-state{padding:38px 18px;text-align:center;border:1px dashed var(--border);border-radius:var(--r);background:rgba(255,255,255,.02)}
+.empty-state .ico{width:52px;height:52px;margin:0 auto 12px;border-radius:16px;display:grid;place-items:center;background:rgba(61,123,255,.12);color:var(--cyan)}
+.empty-state h4{color:#fff;font-size:15px;margin-bottom:6px}
+.empty-state p{color:var(--dim);font-size:12.5px;margin-bottom:14px}
+
+/* ───── ORDERS (card list, mobile-first) ───── */
+.order-item{border:1px solid var(--border-soft);border-radius:18px;padding:14px;margin-bottom:12px;
+  background:linear-gradient(170deg,rgba(18,25,44,.7),rgba(9,13,25,.85))}
+.order-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start}
+.order-top h4{font-size:15px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pkg{display:block;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:700;flex-shrink:0}
+.status-badge.done{background:rgba(72,245,180,.1);color:var(--ok);border:1px solid rgba(72,245,180,.3)}
+.status-badge.building{background:rgba(103,232,255,.1);color:var(--cyan);border:1px solid rgba(103,232,255,.3)}
+.status-badge.failed{background:rgba(255,84,112,.1);color:var(--danger);border:1px solid rgba(255,84,112,.3)}
+.order-meta{margin-top:8px;font-size:11.5px;color:var(--dim)}
+.order-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+
+/* ───── WALLET ───── */
+.wallet-hero{position:relative;overflow:hidden;border-radius:24px;padding:20px;border:1px solid rgba(255,203,92,.22);
+  background:linear-gradient(150deg,rgba(48,36,10,.75),rgba(10,14,26,.9));box-shadow:var(--shadow)}
+.wallet-hero::after{content:'';position:absolute;width:220px;height:220px;right:-70px;top:-90px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,203,92,.22),transparent 68%)}
+.wallet-hero .lbl{font-size:11px;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+.balance-big{display:flex;align-items:center;gap:10px;font-size:44px;font-weight:700;color:#fff;margin:6px 0 2px;line-height:1}
+.balance-big svg{width:32px;height:32px}
+.balance-sub{font-size:12px;color:var(--dim)}
+.wallet-quick{display:flex;gap:9px;margin-top:16px;position:relative;z-index:2}
+.step-card{margin-top:14px;border:1px solid var(--border-soft);border-radius:20px;padding:16px;background:var(--card-2)}
+.step-head{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.step-head .n{width:26px;height:26px;border-radius:9px;display:grid;place-items:center;flex-shrink:0;
+  background:var(--grad-blue);color:#fff;font-size:12.5px;font-weight:800}
+.step-head h4{font-size:14px;color:#fff}
+.step-head small{display:block;font-size:11px;color:var(--dim);font-weight:400;margin-top:2px}
+.amt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:9px;margin-bottom:14px}
+.amt-chip{padding:12px 8px;border-radius:14px;text-align:center;cursor:pointer;transition:.2s;
+  border:1px solid var(--border);background:rgba(255,255,255,.03);color:var(--text)}
+.amt-chip b{display:block;font-size:15px;color:#fff;font-weight:700}
+.amt-chip span{font-size:10.5px;color:var(--dim)}
+.amt-chip.active{border-color:rgba(255,203,92,.6);background:rgba(255,203,92,.1);box-shadow:0 0 0 3px rgba(255,203,92,.08)}
+.pay-box{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center;
+  border:1px solid var(--border);border-radius:16px;padding:14px;background:rgba(255,255,255,.025)}
+@media(max-width:430px){.pay-box{grid-template-columns:1fr;text-align:center;justify-items:center}}
+.qr-frame{padding:8px;border-radius:14px;background:#fff;line-height:0}
+.qr-img{width:118px;height:118px;object-fit:contain;display:block}
+.upi-line{font-size:11px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+.upi-val{display:block;margin:5px 0 10px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#fff;word-break:break-all}
+.total-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:13px 15px;
+  border-radius:14px;border:1px dashed rgba(255,203,92,.32);background:rgba(255,203,92,.06)}
+.total-bar .k{font-size:11.5px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+.total-bar .v{font-size:20px;font-weight:800;color:var(--gold);font-family:'Chakra Petch',sans-serif}
+.note{display:flex;gap:9px;margin-top:12px;padding:11px 13px;border-radius:13px;font-size:11.5px;line-height:1.55;
+  color:var(--dim);background:rgba(103,232,255,.05);border:1px solid rgba(103,232,255,.16)}
+.note svg{color:var(--cyan);margin-top:1px}
+
+/* ───── PROFILE ───── */
+.prof-head{display:flex;align-items:center;gap:14px;padding:18px;border-radius:22px;
+  border:1px solid var(--border-soft);background:linear-gradient(160deg,rgba(18,26,46,.8),rgba(8,12,24,.7))}
+.avatar{width:58px;height:58px;border-radius:20px;flex-shrink:0;display:grid;place-items:center;
+  font-family:'Chakra Petch',sans-serif;font-size:24px;font-weight:700;color:#fff;background:var(--grad-blue);
+  box-shadow:0 14px 30px -14px var(--glow)}
+.prof-head .who{min-width:0}
+.prof-head h3{font-size:18px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prof-head p{font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stat-duo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.stat-duo .s{padding:15px;border-radius:18px;border:1px solid var(--border-soft);background:rgba(255,255,255,.03)}
+.stat-duo .s b{display:flex;align-items:center;gap:7px;font-family:'Chakra Petch',sans-serif;font-size:22px;color:#fff}
+.stat-duo .s span{font-size:11px;color:var(--dim);letter-spacing:.6px;text-transform:uppercase}
+.menu-list{margin-top:12px;border:1px solid var(--border-soft);border-radius:20px;overflow:hidden;background:var(--card-2)}
+.menu-list button{display:flex;align-items:center;gap:12px;width:100%;padding:15px 16px;cursor:pointer;
+  background:none;border:none;border-bottom:1px solid var(--border-soft);color:var(--text);font-size:14px;text-align:left}
+.menu-list button:last-child{border-bottom:none}
+.menu-list button:active{background:rgba(255,255,255,.04)}
+.menu-list button .chev{margin-left:auto;color:var(--dim)}
+
+/* ───── FORMS ───── */
+.form-group{margin-bottom:14px}
+.form-group.full{grid-column:1/-1}
+label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text);margin-bottom:7px}
+label svg{color:var(--cyan)}
+input[type=text],input[type=url],input[type=number],input[type=email],input[type=password],input[type=file],select,textarea{
+  width:100%;padding:13px 14px;border-radius:13px;font-size:15px;color:#fff;
+  background:rgba(4,7,15,.7);border:1px solid var(--border);transition:.2s;outline:none}
+input[type=file]{padding:10px 12px;font-size:12.5px;color:var(--dim)}
+input:focus,select:focus,textarea:focus{border-color:rgba(103,232,255,.55);box-shadow:0 0 0 3px rgba(103,232,255,.1)}
+.hint{font-size:11px;color:var(--dim);margin-top:6px;line-height:1.5}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px}
+.addon-box{border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:14px;background:rgba(255,255,255,.025);transition:.25s}
+.addon-box.active{border-color:rgba(255,203,92,.45);background:rgba(255,203,92,.06)}
+.addon-head{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:#fff;margin-bottom:0;cursor:pointer}
+.addon-head input[type=checkbox]{width:19px;height:19px;accent-color:var(--gold);flex-shrink:0}
+.tag-gold{margin-left:auto;display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;
+  font-size:11px;font-weight:700;background:rgba(255,203,92,.14);color:var(--gold)}
+.cost-bar{display:flex;gap:10px;justify-content:space-between;padding:13px 15px;border-radius:14px;margin:4px 0 16px;
+  border:1px solid var(--border);background:rgba(4,7,15,.55)}
+.cost-bar .cb{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700}
+.cost-bar .k{font-size:10.5px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;font-weight:600}
+
+/* ───── MODALS ───── */
+.modal-overlay{position:fixed;inset:0;z-index:500;display:none;align-items:center;justify-content:center;
+  background:rgba(2,4,10,.78);backdrop-filter:blur(7px);padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom))}
+.modal-overlay.show{display:flex;animation:overlayIn .25s ease both;perspective:1000px}
+@media(min-width:620px){.modal-overlay{padding:24px}}
+.modal{position:relative;width:100%;max-width:540px;max-height:calc(100dvh - 28px);overflow-y:auto;overscroll-behavior:contain;
+  padding:22px 18px;
+  border:1px solid var(--border);border-radius:22px;
+  background:linear-gradient(175deg,#0d1426,#080c18);box-shadow:0 24px 80px -24px #000;
+  animation:pop3d .34s cubic-bezier(.2,.85,.25,1)}
+.modal.wide{max-width:640px}
+@keyframes sheet{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+@keyframes pop{from{transform:scale(.96);opacity:0}to{transform:none;opacity:1}}
+@keyframes pop3d{from{opacity:0;transform:perspective(900px) rotateX(12deg) translateY(28px) scale(.94)}
+  to{opacity:1;transform:perspective(900px) rotateX(0) translateY(0) scale(1)}}
+@keyframes overlayIn{from{opacity:0;backdrop-filter:blur(0)}to{opacity:1;backdrop-filter:blur(7px)}}
+.modal::before{display:none}
+.modal h2{display:flex;align-items:center;gap:9px;font-size:18px;color:#fff;margin-bottom:6px;padding-right:34px}
+.modal h2 svg{color:var(--cyan)}
+.modal-sub{font-size:12.5px;color:var(--dim);margin-bottom:18px;line-height:1.55}
+.close-modal{position:absolute;top:16px;right:14px;width:34px;height:34px;border-radius:12px;display:grid;place-items:center;
+  cursor:pointer;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text)}
+.modal-actions{display:flex;gap:10px;margin-top:6px}
+.modal-actions .btn{flex:1}
+.fsec{border:1px solid var(--border-soft);border-radius:18px;padding:14px;margin-bottom:14px;background:rgba(255,255,255,.02)}
+.fsec-head{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.fsec-head .n{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;flex-shrink:0;
+  background:var(--grad-blue);color:#fff;font-size:12px;font-weight:800}
+.fsec-head h4{font-size:13.5px;color:#fff}
+.fsec-head small{display:block;font-size:11px;color:var(--dim);font-weight:400;margin-top:2px}
+.confirm-details{border:1px solid var(--border-soft);border-radius:16px;overflow:hidden;margin-bottom:12px}
+.confirm-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;padding:12px 14px;border-bottom:1px solid var(--border-soft);align-items:start}
+.confirm-row:last-child{border-bottom:none}
+.confirm-row .label{font-size:11.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px}
+.confirm-row .val{font-size:13.5px;color:#fff;text-align:right;word-break:break-all}
+.confirm-cost-row{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:16px;
+  background:rgba(255,203,92,.07);border:1px solid rgba(255,203,92,.28)}
+.confirm-cost-row .lbl{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+.confirm-cost-row .val{display:flex;align-items:center;gap:8px;font-family:'Chakra Petch',sans-serif;font-size:26px;font-weight:700;color:var(--gold)}
+.auth-tabs{display:flex;gap:8px;margin-bottom:18px;padding:5px;border-radius:14px;background:rgba(4,7,15,.6);border:1px solid var(--border-soft)}
+.auth-tab{flex:1;padding:11px;border-radius:10px;border:none;cursor:pointer;background:none;color:var(--dim);font-size:13.5px;font-weight:700}
+.auth-tab.active{background:var(--grad-blue);color:#fff}
+
+/* ───── BUILD TERMINAL ───── */
+.terminal-build{border:1px solid var(--border);border-radius:14px;padding:12px;background:#04060d;margin-bottom:12px}
+.term-line{display:flex;align-items:center;gap:9px;padding:7px 4px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--dim);opacity:.5;transition:.3s}
+.term-line.active{opacity:1;color:var(--cyan)}
+.term-line.done{opacity:1;color:var(--ok)}
+.term-line.failed{opacity:1;color:var(--danger)}
+.term-num{flex-shrink:0}
+.term-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.term-line.active .term-status::after{content:'…'}
+.term-line.done .term-status::after{content:'OK'}
+.term-line.failed .term-status::after{content:'ERR'}
+.build-log{max-height:130px;overflow:auto;padding:11px;border-radius:12px;background:#04060d;border:1px solid var(--border-soft);
+  font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim);white-space:pre-wrap;word-break:break-word;line-height:1.6}
+.build-warn{display:flex;gap:8px;align-items:flex-start;margin-top:12px;padding:11px 13px;border-radius:13px;font-size:11.5px;line-height:1.5;
+  color:var(--gold);background:rgba(255,203,92,.07);border:1px solid rgba(255,203,92,.22)}
+#downloadArea{display:none;flex-direction:column;gap:10px;margin-top:14px}
+.success-glow{display:flex;align-items:center;justify-content:center;gap:9px;padding:13px;border-radius:14px;font-weight:800;
+  color:var(--ok);background:rgba(72,245,180,.08);border:1px solid rgba(72,245,180,.3)}
+
+/* ───── BOTTOM NAV ───── */
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:200;display:grid;grid-template-columns:repeat(4,1fr);
+  padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,rgba(8,12,24,.82),rgba(5,8,16,.97));
+  backdrop-filter:blur(22px) saturate(1.6);border-top:1px solid var(--border-soft)}
+.bottom-nav::before{content:'';position:absolute;left:12%;right:12%;top:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(103,232,255,.5),transparent)}
+.nav-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 2px;border:none;
+  background:none;cursor:pointer;color:var(--dim);font-size:10.5px;font-weight:600;letter-spacing:.3px;transition:.22s}
+.nav-item svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav-item.active{color:var(--cyan)}
+.nav-item.active svg{filter:drop-shadow(0 0 9px rgba(103,232,255,.65))}
+.nav-item.active::before{content:'';position:absolute;top:0;width:26px;height:3px;border-radius:99px;background:var(--cyan);box-shadow:0 0 12px var(--cyan)}
+.nav-item:active{transform:scale(.93)}
+
+/* ───── TOAST / LIGHTBOX ───── */
+#toast{position:fixed;left:50%;transform:translateX(-50%) translateY(-24px);top:calc(14px + env(safe-area-inset-top));
+  z-index:900;display:none;align-items:center;gap:9px;max-width:calc(100% - 28px);padding:13px 17px;border-radius:14px;
+  font-size:13px;font-weight:600;color:#fff;background:rgba(12,18,34,.97);border:1px solid var(--border);
+  box-shadow:0 20px 50px -20px #000;opacity:0;transition:.3s}
+#toast.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:rgba(255,84,112,.5);color:#ffd7de}
+#toast.ok{border-color:rgba(72,245,180,.45)}
+#lightbox{position:fixed;inset:0;z-index:950;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(2,4,10,.93)}
+#lightbox.open{display:flex}
+.lb-inner img,.lb-inner video{max-width:92vw;max-height:82dvh;border-radius:18px;display:block}
+.lb-close{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;width:40px;height:40px;border-radius:14px;
+  cursor:pointer;font-size:24px;line-height:1;color:#fff;background:rgba(255,255,255,.08);border:1px solid var(--border)}
+footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
+</style>
+</head>
+<body>
+
+<svg style="display:none">
+  <defs>
+    <linearGradient id="cg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#e0a11a"/></linearGradient>
+  </defs>
+  <symbol id="ic-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="url(#cg)"/><circle cx="12" cy="12" r="7.4" fill="none" stroke="#8a6208" stroke-width="1.1" opacity=".55"/><path d="M12 7.5v9M14.4 9.6c0-1-1-1.7-2.4-1.7s-2.4.7-2.4 1.7 1 1.5 2.4 1.8 2.4.8 2.4 1.9-1 1.8-2.4 1.8-2.4-.8-2.4-1.8" fill="none" stroke="#7a5606" stroke-width="1.4" stroke-linecap="round"/></symbol>
+  <symbol id="ic-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 21v-7h6v7"/></symbol>
+  <symbol id="ic-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09zM12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+  <symbol id="ic-box" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></symbol>
+  <symbol id="ic-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="ic-login" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></symbol>
+  <symbol id="ic-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="ic-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="ic-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="ic-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+  <symbol id="ic-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 15-5-5L5 21"/></symbol>
+  <symbol id="ic-tag" viewBox="0 0 24 24"><path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/></symbol>
+  <symbol id="ic-wallet" viewBox="0 0 24 24"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><circle cx="16.5" cy="12.5" r="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="ic-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="ic-bolt" viewBox="0 0 24 24"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></symbol>
+  <symbol id="ic-check" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></symbol>
+  <symbol id="ic-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16.5v.01"/></symbol>
+  <symbol id="ic-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-5M12 7.5v.01"/></symbol>
+  <symbol id="ic-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="ic-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></symbol>
+  <symbol id="ic-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+  <symbol id="ic-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="ic-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2.5"/><path d="m2.5 6.5 9.5 6.5 9.5-6.5"/></symbol>
+  <symbol id="ic-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="ic-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="ic-eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/></symbol>
+  <symbol id="ic-rupee" viewBox="0 0 24 24"><path d="M6 3h12M6 8h12M15.5 3c0 5-3.5 5-6 5h-.5l7 8"/></symbol>
+  <symbol id="ic-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></symbol>
+  <symbol id="ic-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"/></symbol>
+</svg>
+
+<!-- ══ TOP BAR ══ -->
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark"><svg class="i"><use href="#ic-bolt"/></svg></span>
+    <span class="brand-text">Zayro<small>MOD BUILDER</small></span>
+  </div>
+  <button class="coin-chip" id="topCoins" style="display:none" onclick="showPage('wallet')">
+    <svg class="coin-i"><use href="#ic-coin"/></svg><span id="topCoinBal">0</span>
+  </button>
+  <button class="btn btn-primary btn-sm" id="topLoginBtn" onclick="openAuth()"><svg class="i sm"><use href="#ic-login"/></svg>Login</button>
+</header>
+
+<!-- ══ HOME ══ -->
+<main id="page-home" class="page active">
+  <section class="hero">
+    <span class="hero-pill"><svg class="i sm"><use href="#ic-shield"/></svg>SIGNED &amp; READY TO INSTALL</span>
+    <h1>Build your <span>own APK</span> in minutes.</h1>
+    <p>Pick a template, set your name, icon and site URL — we compile and sign the APK for you. No coding, no computer needed.</p>
+    <div class="hero-cta">
+      <button class="btn btn-primary" onclick="scrollToDesigns()"><svg class="i sm"><use href="#ic-rocket"/></svg>Start Building</button>
+      <button class="btn btn-outline" onclick="showPage('wallet')"><svg class="i sm"><use href="#ic-wallet"/></svg>Add Coins</button>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><b>~60s</b><span>BUILD TIME</span></div>
+      <div class="stat"><b>100%</b><span>SIGNED</span></div>
+      <div class="stat"><b>24/7</b><span>AVAILABLE</span></div>
+    </div>
+  </section>
+
+  <div class="sec-head" id="designsHead">
+    <h2 class="sec-title"><svg class="i"><use href="#ic-layers"/></svg>Templates</h2>
+    <div class="sec-sub" id="designCount"></div>
+  </div>
+  <div class="designs-grid" id="designsGrid">
+    <div style="grid-column:1/-1"><div class="empty-state"><span class="loader"></span></div></div>
+  </div>
+  <footer>© Zayro Mod Builder</footer>
+</main>
+
+<!-- ══ ORDERS ══ -->
+<main id="page-orders" class="page">
+  <div class="sec-head">
+    <h2 class="sec-title"><svg class="i"><use href="#ic-box"/></svg>My Orders</h2>
+    <button class="btn btn-outline btn-sm" onclick="loadOrders()"><svg class="i sm"><use href="#ic-refresh"/></svg>Refresh</button>
+  </div>
+  <div id="ordersContainer"><div class="empty-state"><span class="loader"></span></div></div>
+</main>
+
+<!-- ══ WALLET ══ -->
+<main id="page-wallet" class="page">
+  <div class="sec-head">
+    <h2 class="sec-title"><svg class="i"><use href="#ic-wallet"/></svg>Wallet</h2>
+    <button class="btn btn-outline btn-sm" onclick="loadWalletPage()"><svg class="i sm"><use href="#ic-refresh"/></svg>Refresh</button>
+  </div>
+
+  <div class="wallet-hero">
+    <div class="lbl">Available Balance</div>
+    <div class="balance-big"><svg class="coin-i"><use href="#ic-coin"/></svg><span id="coinBalance">0</span></div>
+    <div class="balance-sub" id="balanceInr">— worth of build credits</div>
+    <div class="wallet-quick">
+      <button class="btn btn-gold btn-sm" onclick="focusDeposit()"><svg class="i sm"><use href="#ic-rupee"/></svg>Deposit</button>
+      <button class="btn btn-outline btn-sm" onclick="showPage('orders')"><svg class="i sm"><use href="#ic-box"/></svg>My Orders</button>
+    </div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="step-card" id="depositCard">
+    <div class="step-head"><span class="n">1</span><div><h4>Choose amount</h4><small>Tap a pack or type your own</small></div></div>
+    <div class="amt-grid" id="amtGrid"></div>
+    <div class="form-group" style="margin-bottom:0">
+      <label><svg class="i sm"><use href="#ic-coin"/></svg>Coins you want</label>
+      <input type="number" id="buyCoins" min="1" value="10" inputmode="numeric">
+      <div class="hint" id="coinRateHint">Rate: ₹1 per coin</div>
+    </div>
+    <div class="total-bar"><span class="k">Pay exactly</span><span class="v" id="payTotal">₹10</span></div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="step-card">
+    <div class="step-head"><span class="n">2</span><div><h4>Pay via UPI</h4><small>Scan the QR or copy the UPI ID</small></div></div>
+    <div class="pay-box">
+      <div class="qr-frame" id="qrFrame" style="display:none"><img id="qrImage" class="qr-img" src="" alt="UPI QR code"></div>
+      <div style="min-width:0;width:100%">
+        <span class="upi-line">UPI ID</span>
+        <b class="upi-val" id="upiId">Loading...</b>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="copyUpi()"><svg class="i sm"><use href="#ic-copy"/></svg>Copy ID</button>
+          <button class="btn btn-outline btn-sm" onclick="copyAmount()"><svg class="i sm"><use href="#ic-copy"/></svg>Copy Amount</button>
+          <button type="button" class="btn btn-primary btn-sm" id="upiPayBtn" onclick="openUpiApp()"><svg class="i sm"><use href="#ic-bolt"/></svg><span id="upiPayLabel">Pay in UPI app</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="note"><svg class="i sm"><use href="#ic-info"/></svg><span>Pay the exact amount shown above. After paying, copy the 12-digit UTR / reference number from your payment app.</span></div>
+    <div class="note tg-only" style="display:none"><svg class="i sm"><use href="#ic-info"/></svg><span>Telegram ke andar UPI app direct nahi khulti — <b>QR scan</b> karein ya <b>Copy ID</b> + <b>Copy Amount</b> se apni UPI app me paste karein.</span></div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="step-card" style="margin-bottom:8px">
+    <div class="step-head"><span class="n">3</span><div><h4>Submit proof</h4><small>Coins are added after admin approval</small></div></div>
+    <div class="form-group">
+      <label><svg class="i sm"><use href="#ic-tag"/></svg>UTR / Reference Number</label>
+      <input type="text" id="buyUtr" placeholder="e.g. 4531 2298 7741" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label><svg class="i sm"><use href="#ic-image"/></svg>Payment Screenshot (optional)</label>
+      <input type="file" id="buyScreenshot" accept="image/*">
+    </div>
+    <button class="btn btn-gold btn-block" onclick="submitCoinRequest()"><svg class="i sm"><use href="#ic-check"/></svg>Submit Deposit Request</button>
+    <div class="hint" style="text-align:center;margin-top:10px">Usually approved within a few minutes.</div>
+  </div>
+</main>
+
+<!-- ══ PROFILE ══ -->
+<main id="page-profile" class="page">
+  <div class="sec-head">
+    <h2 class="sec-title"><svg class="i"><use href="#ic-user"/></svg>Profile</h2>
+  </div>
+  <div id="profileBody"></div>
+</main>
+
+<!-- ══ AUTH MODAL ══ -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal" style="max-width:440px">
+    <button class="close-modal" onclick="closeModal('authModal')" aria-label="Close"><svg class="i"><use href="#ic-x"/></svg></button>
+    <h2><svg class="i"><use href="#ic-login"/></svg>Welcome</h2>
+    <p class="modal-sub">Login or create an account to start building.</p>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
+      <button class="auth-tab" onclick="switchAuthTab('register')">Register</button>
+    </div>
+    <div id="loginForm">
+      <div class="form-group"><label><svg class="i sm"><use href="#ic-user"/></svg>Username or Email</label>
+        <input type="text" id="loginUser" placeholder="Enter username or email" autocomplete="username"></div>
+      <div class="form-group"><label><svg class="i sm"><use href="#ic-lock"/></svg>Password</label>
+        <div style="position:relative">
+          <input type="password" id="loginPass" placeholder="Enter password" autocomplete="current-password" style="padding-right:44px" onkeydown="if(event.key==='Enter')doLogin(this)">
+          <button type="button" onclick="togglePassword('loginPass','loginEye')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:8px;opacity:.6">
+            <svg class="i sm" id="loginEye" style="stroke:var(--text)"><use href="#ic-eye-off"/></svg></button>
+        </div></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal('authModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="doLogin(this)"><svg class="i sm"><use href="#ic-login"/></svg>Login</button>
+      </div>
+    </div>
+    <div id="registerForm" style="display:none">
+      <div class="form-group"><label><svg class="i sm"><use href="#ic-user"/></svg>Username</label>
+        <input type="text" id="regUser" placeholder="Choose username"></div>
+      <div class="form-group"><label><svg class="i sm"><use href="#ic-mail"/></svg>Email</label>
+        <input type="email" id="regEmail" placeholder="Your email"></div>
+      <div class="form-group"><label><svg class="i sm"><use href="#ic-lock"/></svg>Password</label>
+        <div style="position:relative">
+          <input type="password" id="regPass" placeholder="Choose password" style="padding-right:44px">
+          <button type="button" onclick="togglePassword('regPass','regEye')" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:8px;opacity:.6">
+            <svg class="i sm" id="regEye" style="stroke:var(--text)"><use href="#ic-eye-off"/></svg></button>
+        </div></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal('authModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="doRegister(this)"><svg class="i sm"><use href="#ic-check"/></svg>Register</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ORDER MODAL ══ -->
+<div class="modal-overlay" id="orderModal">
+  <div class="modal wide">
+    <button class="close-modal" onclick="closeModal('orderModal')" aria-label="Close"><svg class="i"><use href="#ic-x"/></svg></button>
+    <div id="orderFormView">
+      <h2><svg class="i"><use href="#ic-rocket"/></svg><span id="orderModalTitle">Create APK</span></h2>
+      <p class="modal-sub">Fill the details below — everything else is handled automatically.</p>
+      <input type="hidden" id="orderDesignId">
+      <div class="fsec">
+        <div class="fsec-head"><span class="n">1</span><div><h4>App Identity</h4><small>Name and icon shown on the phone</small></div></div>
+        <div class="form-grid">
+          <div class="form-group"><label><svg class="i sm"><use href="#ic-tag"/></svg>App Name</label>
+            <input type="text" id="orderAppName" placeholder="e.g. VIP Panel">
+            <div class="hint">Package: com.zayro.&lt;appname&gt;</div></div>
+          <div class="form-group"><label><svg class="i sm"><use href="#ic-image"/></svg>App Icon</label>
+            <input type="file" id="orderIcon" accept="image/*">
+            <div class="hint">PNG, square 512×512 recommended.</div></div>
+        </div>
+      </div>
+      <div class="fsec">
+        <div class="fsec-head"><span class="n">2</span><div><h4>Site &amp; Deposit</h4><small>Where the app should point</small></div></div>
+        <div class="form-grid">
+          <div class="form-group full"><label><svg class="i sm"><use href="#ic-globe"/></svg>Register URL</label>
+            <input type="url" id="orderRegUrl" placeholder="https://example.com/#/register?invitationCode=..." inputmode="url">
+            <div class="hint">Deposit &amp; Wingo URLs auto-built from this domain.</div></div>
+          <div class="form-group full"><label><svg class="i sm"><use href="#ic-rupee"/></svg>Minimum Deposit Amount (₹)</label>
+            <input type="number" id="orderMinDeposit" value="300" min="1" inputmode="numeric"></div>
+        </div>
+      </div>
+      <div class="addon-box" id="fakeAddonBox">
+        <label class="addon-head">
+          <input type="checkbox" id="fakeAddonCheck" onchange="toggleFakeAddon()">
+          <svg class="i sm" style="color:var(--gold)"><use href="#ic-layers"/></svg>
+          Add Fake Site APK
+          <span class="tag-gold" id="fakeAddonPriceTag"><svg class="coin-i" style="width:13px;height:13px"><use href="#ic-coin"/></svg>+?</span>
+        </label>
+        <div class="hint" style="margin-left:29px">Same design, different URL. You get 2 APKs — real + fake.</div>
+        <div id="fakeUrlBox" style="display:none;margin-top:14px">
+          <div class="form-group" style="margin-bottom:0"><label><svg class="i sm"><use href="#ic-globe"/></svg>Fake Site Register URL</label>
+            <input type="url" id="fakeRegUrl" placeholder="https://fakesite.com/#/register?..." inputmode="url"></div>
+        </div>
+      </div>
+      <div class="cost-bar">
+        <span class="cb"><span class="k">Cost</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="orderCost" style="color:var(--gold)">—</b></span>
+        <span class="cb"><span class="k">Balance</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="orderBalance" style="color:var(--cyan)">—</b></span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal('orderModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="previewOrder()"><svg class="i sm"><use href="#ic-rocket"/></svg>Build APK</button>
+      </div>
+    </div>
+
+    <div id="orderConfirmView" style="display:none">
+      <h2><svg class="i"><use href="#ic-check"/></svg>Review Your Order</h2>
+      <p class="modal-sub">Double-check everything — coins are deducted once the build starts.</p>
+      <div class="confirm-details">
+        <div class="confirm-row"><span class="label">App Name</span><span class="val" id="cnfAppName">—</span></div>
+        <div class="confirm-row"><span class="label">Register URL</span><span class="val" id="cnfUrl" style="font-size:12px;color:var(--dim)">—</span></div>
+        <div class="confirm-row"><span class="label">Min Deposit</span><span class="val" id="cnfDeposit">—</span></div>
+        <div class="confirm-row"><span class="label">Fake APK</span><span class="val" id="cnfFake">—</span></div>
+      </div>
+      <div class="confirm-cost-row">
+        <span class="lbl">Total Cost</span>
+        <span class="val"><svg class="coin-i" style="width:24px;height:24px"><use href="#ic-coin"/></svg><span id="cnfCost">—</span></span>
+      </div>
+      <div class="hint" style="text-align:center;margin:12px 0 14px">Balance after: <b id="cnfAfter" style="color:var(--cyan)">—</b></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="backToForm()"><svg class="i sm"><use href="#ic-arrow-left"/></svg>Edit</button>
+        <button class="btn btn-primary" id="confirmBuildBtn" onclick="submitOrder()"><svg class="i sm"><use href="#ic-bolt"/></svg>Confirm &amp; Build</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BUILD PROGRESS (locked while building) ══ -->
+<div class="modal-overlay" id="progressModal" data-locked="true">
+  <div class="modal" style="max-width:470px">
+    <h2 id="progressTitle" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--cyan);letter-spacing:1px">
+      <span class="loader"></span> BUILDING APK...</h2>
+    <p class="modal-sub" id="progressSub">Please keep this screen open until the build finishes.</p>
+    <div class="terminal-build" id="buildSteps">
+      <div class="term-line active" id="bstep-0"><span class="term-num">[ 1/5 ]</span><span class="term-label">Initializing build environment</span><span class="term-status"></span></div>
+      <div class="term-line" id="bstep-1"><span class="term-num">[ 2/5 ]</span><span class="term-label">Processing template HTML</span><span class="term-status"></span></div>
+      <div class="term-line" id="bstep-2"><span class="term-num">[ 3/5 ]</span><span class="term-label">Compiling APK package</span><span class="term-status"></span></div>
+      <div class="term-line" id="bstep-3"><span class="term-num">[ 4/5 ]</span><span class="term-label">Signing with keystore</span><span class="term-status"></span></div>
+      <div class="term-line" id="bstep-4"><span class="term-num">[ 5/5 ]</span><span class="term-label">Finalizing package</span><span class="term-status"></span></div>
+    </div>
+    <div class="build-log" id="buildLog">Starting...</div>
+    <div class="build-warn" id="buildWarn"><svg class="i sm"><use href="#ic-alert"/></svg><span>Build in progress — this window can't be closed. Don't refresh or leave the page.</span></div>
+    <div id="downloadArea">
+      <div class="success-glow"><svg class="i"><use href="#ic-check"/></svg>APK READY!</div>
+      <button class="btn btn-primary btn-block" id="downloadBtn"><svg class="i sm"><use href="#ic-download"/></svg>Download APK</button>
+      <button class="btn btn-gold btn-block" style="display:none" id="downloadFakeBtn"><svg class="i sm"><use href="#ic-download"/></svg>Download APK (Fake)</button>
+      <button class="btn btn-outline btn-block" onclick="closeModal('progressModal',true)">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DOMAIN MODAL ══ -->
+<div class="modal-overlay" id="domainModal">
+  <div class="modal" style="max-width:450px">
+    <button class="close-modal" onclick="closeModal('domainModal')" aria-label="Close"><svg class="i"><use href="#ic-x"/></svg></button>
+    <h2><svg class="i"><use href="#ic-globe"/></svg>Change Domain</h2>
+    <input type="hidden" id="dcOrderId">
+    <p class="modal-sub">Enter a new register URL. A new APK will be built and your existing download link is replaced.</p>
+    <div class="form-group"><label><svg class="i sm"><use href="#ic-globe"/></svg>New Register URL</label>
+      <input type="url" id="dcNewUrl" placeholder="https://newsite.com/#/register?invitationCode=..." inputmode="url"></div>
+    <div class="cost-bar">
+      <span class="cb"><span class="k">Cost</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="dcPrice" style="color:var(--gold)">?</b></span>
+      <span class="cb"><span class="k">Balance</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="dcBalance" style="color:var(--cyan)">?</b></span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('domainModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitDomainChange(this)"><svg class="i sm"><use href="#ic-bolt"/></svg>Regenerate APK</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="lightbox" onclick="closeLightbox()">
+  <button class="lb-close" type="button" aria-label="Close" onclick="closeLightbox()">&times;</button>
+  <div class="lb-inner" id="lbInner" onclick="event.stopPropagation()"></div>
+</div>
+
+<!-- ══ BOTTOM NAV ══ -->
+<nav class="bottom-nav" id="bottomNav" aria-label="Main navigation">
+  <button class="nav-item active" data-page="home" onclick="showPage('home')"><svg><use href="#ic-home"/></svg>Home</button>
+  <button class="nav-item" data-page="orders" onclick="showPage('orders')"><svg><use href="#ic-box"/></svg>Orders</button>
+  <button class="nav-item" data-page="wallet" onclick="showPage('wallet')">
+<svg><use href="#ic-wallet"/></svg>Wallet</button>
+  <button class="nav-item" data-page="profile" onclick="showPage('profile')"><svg><use href="#ic-user"/></svg>Profile</button>
+</nav>
+
+<script>
+let currentUser=null,currentDesign=null;
+let fakeAddonPrice=5,domainChangePrice=10,coinRate=1;
+let buildStepIdx=0,buildTimeouts=[],buildPollTimer=null,buildStepTimer=null;
+let buildFinished=false,buildToken=0,buildRunning=false;
+const STEP_COUNT=5,STEP_DELAYS=[0,8000,20000,35000,52000];
+const BUILD_TIMEOUT_MS=8*60*1000;
+const AMOUNTS=[10,25,50,100,250,500];
+
+const icon=(id,cls='i sm')=>`<svg class="${cls}"><use href="#${id}"/></svg>`;
+const coin=(size=15)=>`<svg class="coin-i" style="width:${size}px;height:${size}px"><use href="#ic-coin"/></svg>`;
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $=id=>document.getElementById(id);
+
+function setLoading(btn,loading,text='Loading...'){
+  if(!btn)return;
+  if(loading){btn.disabled=true;btn.dataset.orig=btn.innerHTML;btn.innerHTML='<span class="spinner"></span>'+text;}
+  else{btn.disabled=false;if(btn.dataset.orig)btn.innerHTML=btn.dataset.orig;}
+}
+
+async function api(url,method='GET',body=null,isForm=false){
+  const opts={method,headers:{}};
+  if(body){if(isForm)opts.body=body;else{opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(body);}}
+  try{
+    const r=await fetch(url,opts);
+    const text=await r.text();
+    let data={};try{data=text?JSON.parse(text):{};}catch(e){data={};}
+    if(!r.ok)return{...data,error:data.error||data.message||('Request failed ('+r.status+')')};
+    return data;
+  }catch(e){return{error:'Network error'};}
+}
+
+let toastTimer=null;
+function toast(msg,isErr=false){
+  const t=$('toast');
+  t.className='show '+(isErr?'err':'ok');
+  t.innerHTML=icon(isErr?'ic-alert':'ic-check','i sm')+'<span>'+esc(msg)+'</span>';
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.className='';},3400);
+}
+
+/* ── Pages ── */
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const el=$('page-'+name); if(!el)return;
+  el.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===name));
+  if(name==='orders')loadOrders();
+  if(name==='wallet')loadWalletPage();
+  if(name==='profile')renderProfile();
+  window.scrollTo({top:0,behavior:'instant'in document.documentElement.style?'instant':'auto'});
+}
+function scrollToDesigns(){$('designsHead').scrollIntoView({behavior:'smooth',block:'start'});}
+
+/* ── Modals (locked modal can't be dismissed) ── */
+function isLocked(id){const m=$(id);return m&&m.dataset.locked==='true'&&buildRunning;}
+function openModal(id){$(id).classList.add('show');document.body.style.overflow='hidden';}
+function closeModal(id,force){
+  if(!force&&isLocked(id)){toast('Build is running — please wait',true);return;}
+  $(id).classList.remove('show');
+  if(!document.querySelector('.modal-overlay.show'))document.body.style.overflow='';
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  document.querySelectorAll('.modal-overlay.show').forEach(m=>{if(!isLocked(m.id))closeModal(m.id);});
+  closeLightbox();
+});
+document.querySelectorAll('.modal-overlay').forEach(o=>{
+  o.addEventListener('click',e=>{if(e.target===o)closeModal(o.id);});
+});
+window.addEventListener('beforeunload',e=>{
+  if(buildRunning){e.preventDefault();e.returnValue='';}
+});
+
+/* ── Auth ── */
+function openAuth(){openModal('authModal');}
+function switchAuthTab(tab){
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='register')));
+  $('loginForm').style.display=tab==='login'?'block':'none';
+  $('registerForm').style.display=tab==='register'?'block':'none';
+}
+function togglePassword(inputId,eyeId){
+  const inp=$(inputId),eye=$(eyeId),hidden=inp.type==='password';
+  inp.type=hidden?'text':'password';
+  eye.innerHTML=hidden?'<use href="#ic-eye"/>':'<use href="#ic-eye-off"/>';
+}
+async function doLogin(btn){
+  setLoading(btn,true,'Logging in...');
+  const d=await api('/api/login','POST',{username:$('loginUser').value,password:$('loginPass').value});
+  setLoading(btn,false);
+  if(d.error)return toast(d.error,true);
+  closeModal('authModal');
+  if(d.isAdmin){window.location.href='/admin/';return;}
+  await loadMe();toast('Logged in!');
+}
+async function doRegister(btn){
+  setLoading(btn,true,'Registering...');
+  const d=await api('/api/register','POST',{username:$('regUser').value,email:$('regEmail').value,password:$('regPass').value});
+  setLoading(btn,false);
+  if(d.error)return toast(d.error,true);
+  closeModal('authModal');await loadMe();toast('Registered!');
+}
+async function logout(){
+  await api('/api/logout','POST');
+  currentUser=null;updateNav(null);showPage('home');toast('Logged out');
+}
+async function loadMe(){
+  const d=await api('/api/me');
+  if(d.error){updateNav(null);return;}
+  currentUser=d;updateNav(d);
+  try{
+    const tgUser=window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if(tgUser?.id&&!d.telegram_id){
+      window.Telegram.WebApp.ready();window.Telegram.WebApp.expand();
+      await api('/api/me/telegram','POST',{telegram_id:tgUser.id});
+      const updated=await api('/api/me');
+      if(!updated.error){currentUser=updated;updateNav(updated);}
+    }
+  }catch(e){}
+}
+function updateNav(user){
+  const on=!!user;
+  $('topLoginBtn').style.display=on?'none':'inline-flex';
+  $('topCoins').style.display=on?'inline-flex':'none';
+  if(on)$('topCoinBal').textContent=user.coins;
+  if($('page-profile').classList.contains('active'))renderProfile();
+}
+
+/* ── Designs ── */
+async function loadDesigns(){
+  const designs=await api('/api/designs');
+  const grid=$('designsGrid'),cnt=$('designCount');
+  if(!Array.isArray(designs)||!designs.length){
+    cnt.textContent='';
+    grid.innerHTML=`<div style="grid-column:1/-1"><div class="empty-state"><div class="ico">${icon('ic-layers','i')}</div>
+      <h4>No designs available yet</h4><p>Check back soon — new templates drop regularly.</p></div></div>`;
+    return;
+  }
+  cnt.textContent=designs.length+' template'+(designs.length>1?'s':'');
+  grid.innerHTML=designs.map(d=>{
+    const disc=(d.original_price_coins&&d.original_price_coins>d.price_coins)?Math.round((1-d.price_coins/d.original_price_coins)*100):0;
+    const media=d.preview_video
+      ?`<video class="preview" src="/uploads/${esc(d.preview_video)}" autoplay muted loop playsinline onerror="mediaFallback(this)"></video>`
+      :d.preview_image
+        ?`<img class="preview" src="/uploads/${esc(d.preview_image)}" alt="${esc(d.name)} preview" loading="lazy" onerror="mediaFallback(this)">`
+        :`<div class="no-preview">${icon('ic-image','i lg')}No Preview</div>`;
+    const src=d.preview_video?'/uploads/'+esc(d.preview_video):(d.preview_image?'/uploads/'+esc(d.preview_image):'');
+    const kind=d.preview_video?'video':'image';
+    return `<article class="design-card">
+      ${disc>0?`<div class="disc-badge">${disc}% OFF</div>`:''}
+      <div class="media" onclick="${src?`openLightbox('${src}','${kind}')`:''}">${media}${src?`<span class="zoom-hint">${icon('ic-image','i sm')}</span>`:''}</div>
+      <div class="info">
+        <div class="type-badge">${icon('ic-layers','i sm')}${esc(d.type)} • ${d.java_type==='dhani'?'Dhani':'Standard'}</div>
+        <h3>${esc(d.name)}</h3>
+        <div class="price-row">
+          <span style="display:inline-flex;align-items:center;min-width:0">
+            ${disc>0?`<span class="original-price">${d.original_price_coins}</span>`:''}
+            <span class="price-coins">${coin(15)}${d.price_coins}</span>
+          </span>
+          <button class="btn btn-primary btn-sm" onclick="selectDesign(${d.id})">${icon('ic-rocket')}Build</button>
+        </div>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+async function selectDesign(id){
+  if(!currentUser){openAuth();return;}
+  const d=await api('/api/designs/'+id);
+  if(d.error)return toast(d.error,true);
+  currentDesign=d;
+  $('orderDesignId').value=id;
+  $('orderModalTitle').textContent='Build: '+d.name;
+  $('orderCost').textContent=d.price_coins;
+  $('orderBalance').textContent=currentUser.coins;
+  fakeAddonPrice=d.fake_price_coins>0?d.fake_price_coins:5;
+  $('fakeAddonPriceTag').innerHTML=coin(13)+'+'+fakeAddonPrice;
+  $('fakeAddonCheck').checked=false;
+  $('fakeUrlBox').style.display='none';
+  $('fakeAddonBox').classList.remove('active');
+  ['orderAppName','orderRegUrl','orderIcon','fakeRegUrl'].forEach(i=>$(i).value='');
+  $('orderMinDeposit').value='300';
+  $('orderFormView').style.display='block';
+  $('orderConfirmView').style.display='none';
+  openModal('orderModal');
+}
+function toggleFakeAddon(){
+  const checked=$('fakeAddonCheck').checked;
+  $('fakeUrlBox').style.display=checked?'block':'none';
+  $('fakeAddonBox').classList.toggle('active',checked);
+  const base=currentDesign?currentDesign.price_coins:0;
+  $('orderCost').textContent=base+(checked?fakeAddonPrice:0);
+}
+function previewOrder(){
+  const appName=$('orderAppName').value.trim(),regUrl=$('orderRegUrl').value.trim();
+  const minDep=$('orderMinDeposit').value,fakeAddon=$('fakeAddonCheck').checked,fakeUrl=$('fakeRegUrl').value.trim();
+  if(!currentUser){closeModal('orderModal');openAuth();return;}
+  if(!appName)return toast('App name is required',true);
+  if(!regUrl)return toast('Register URL is required',true);
+  if(fakeAddon&&!fakeUrl)return toast('Fake site register URL is required',true);
+  const total=currentDesign.price_coins+(fakeAddon?fakeAddonPrice:0);
+  if(currentUser.coins<total){
+    closeModal('orderModal');
+    toast(`Need ${total} coins, you have ${currentUser.coins}. Add coins first.`,true);
+    setTimeout(()=>showPage('wallet'),1500);
+    return;
+  }
+  $('cnfAppName').textContent=appName;
+  $('cnfUrl').textContent=regUrl;
+  $('cnfDeposit').textContent='₹'+minDep;
+  $('cnfFake').textContent=fakeAddon?`Yes (+${fakeAddonPrice}) — ${fakeUrl}`:'No';
+  $('cnfCost').textContent=total;
+  $('cnfAfter').textContent=(currentUser.coins-total)+' coins';
+  $('orderFormView').style.display='none';
+  $('orderConfirmView').style.display='block';
+  $('orderModal').querySelector('.modal').scrollTop=0;
+}
+function backToForm(){$('orderFormView').style.display='block';$('orderConfirmView').style.display='none';}
+
+async function submitOrder(){
+  if(!currentUser)return openAuth();
+  const btn=$('confirmBuildBtn');
+  const fd=new FormData();
+  fd.append('design_id',$('orderDesignId').value);
+  fd.append('app_name',$('orderAppName').value.trim());
+  fd.append('brand_title',$('orderAppName').value.trim());
+  fd.append('register_url',$('orderRegUrl').value.trim());
+  fd.append('min_deposit',$('orderMinDeposit').value);
+  const fakeAddon=$('fakeAddonCheck').checked;
+  fd.append('fake_addon',fakeAddon?'true':'false');
+  if(fakeAddon)fd.append('fake_register_url',$('fakeRegUrl').value.trim());
+  const iconFile=$('orderIcon').files[0];
+  if(iconFile)fd.append('icon',iconFile);
+  setLoading(btn,true,'Building...');
+  const d=await api('/api/order','POST',fd,true);
+  setLoading(btn,false);
+  if(d.error)return toast(d.error,true);
+  closeModal('orderModal',true);
+  startBuildProgress(d.orderId,fakeAddon);
+  await loadMe();
+}
+
+/* ── Build Progress ── */
+function clearBuildTimers(){
+  buildTimeouts.forEach(t=>clearTimeout(t));buildTimeouts=[];
+  if(buildPollTimer){clearTimeout(buildPollTimer);buildPollTimer=null;}
+  if(buildStepTimer){clearInterval(buildStepTimer);buildStepTimer=null;}
+}
+function startBuildProgress(orderId,hasFake){
+  clearBuildTimers();
+  buildFinished=false;buildRunning=true;
+  const token=++buildToken;
+  $('progressTitle').innerHTML='<span class="loader"></span> BUILDING APK...';
+  $('progressSub').textContent='Please keep this screen open until the build finishes.';
+  $('buildLog').textContent='Starting build...';
+  $('buildWarn').style.display='flex';
+  $('downloadArea').style.display='none';
+  $('downloadFakeBtn').style.display='none';
+  const dlBtn=$('downloadBtn');if(dlBtn)dlBtn.style.display='inline-flex';
+  const glow=document.querySelector('#downloadArea .success-glow');if(glow)glow.style.display='';
+  for(let i=0;i<STEP_COUNT;i++)setStep(i,i===0?'active':'');
+  openModal('progressModal');
+  buildStepIdx=0;
+  STEP_DELAYS.forEach((delay,i)=>{
+    if(i===0)return;
+    buildTimeouts.push(setTimeout(()=>{
+      if(buildFinished||token!==buildToken)return;
+      if(buildStepIdx<i){buildStepIdx=i;setStep(i,'active');setStep(i-1,'done');}
+    },delay));
+  });
+  pollBuildStatus(orderId,hasFake,token);
+}
+function setStep(idx,state){const el=$('bstep-'+idx);if(el)el.className='term-line'+(state?' '+state:'');}
+function finishSteps(success){
+  buildFinished=true;buildRunning=false;
+  clearBuildTimers();
+  buildStepIdx=STEP_COUNT-1;
+  for(let i=0;i<STEP_COUNT;i++)setStep(i,success?'done':'');
+  if(!success)setStep(STEP_COUNT-1,'failed');
+  $('buildWarn').style.display='none';
+  $('progressSub').textContent=success?'Your APK is ready to download.':'Something went wrong during the build.';
+}
+const isDoneStatus=s=>['done','success','successful','completed','complete','ready','finished','built','generated'].includes(String(s||'').toLowerCase());
+const isFailStatus=s=>['failed','fail','error','cancelled','canceled'].includes(String(s||'').toLowerCase());
+function normalizeBuildResult(payload){
+  const root=payload&&typeof payload==='object'?payload:{};
+  const value=(root.order&&typeof root.order==='object'&&root.order)||(root.data&&typeof root.data==='object'&&root.data)||root;
+  return{...value,
+    status:value.status||value.build_status||value.buildStatus||value.state||root.status,
+    apk_file:value.apk_file||value.apkFile||value.apk_path||value.file||value.output_file,
+    download_url:value.download_url||value.downloadUrl||value.apk_url||value.url,
+    fake_apk_file:value.fake_apk_file||value.fakeApkFile,
+    build_log:value.build_log||value.buildLog||value.log||''};
+}
+async function pollBuildStatus(orderId,hasFake,token){
+  const log=$('buildLog');
+  const startedAt=Date.now();
+  let netFails=0,pollCount=0;
+
+  const showDone=async(s)=>{
+    finishSteps(true);
+    $('progressTitle').innerHTML=icon('ic-check','i')+' APK READY!';
+    $('downloadArea').style.display='flex';
+    $('downloadBtn').onclick=function(){
+      const btn=this;if(btn.disabled)return;
+      setLoading(btn,true,'Preparing...');
+      setTimeout(()=>{window.location.href='/api/orders/'+orderId+'/download';setTimeout(()=>setLoading(btn,false),2500);},1200);
+    };
+    if(hasFake&&s&&s.fake_apk_file){
+      const fb=$('downloadFakeBtn');fb.style.display='inline-flex';
+      fb.onclick=()=>window.location.href='/api/orders/'+orderId+'/download-fake';
+    }
+    toast('APK Ready!');await loadMe();
+  };
+  const showFail=async(msg)=>{
+    finishSteps(false);
+    $('progressTitle').innerHTML=icon('ic-alert','i')+' BUILD FAILED';
+    log.textContent+=(log.textContent?'\n':'')+(msg||'Build failed.');
+    log.scrollTop=log.scrollHeight;
+    $('downloadArea').style.display='flex';
+    $('downloadBtn').style.display='none';
+    const glow=document.querySelector('#downloadArea .success-glow');if(glow)glow.style.display='none';
+    toast(msg||'Build failed',true);await loadMe();
+  };
+
+  const poll=async()=>{
+    if(buildFinished||token!==buildToken)return;
+    pollCount++;
+    let response=await api('/api/orders/'+orderId+'/status');
+    if(pollCount===1||pollCount%3===0){
+      const orders=await api('/api/orders');
+      if(Array.isArray(orders)){
+        const o=orders.find(x=>String(x.id)===String(orderId));
+        if(o&&(isDoneStatus(o.status)||isFailStatus(o.status)||o.apk_file||o.download_url))response=o;
+      }
+    }
+    if(!response||response.error){
+      netFails++;
+      if(netFails>=8){await showFail('Connection lost. Check "Orders" — build may still finish.');return;}
+      buildPollTimer=setTimeout(poll,3000);return;
+    }
+    netFails=0;
+    const s=normalizeBuildResult(response);
+    if(s.build_log){log.textContent=s.build_log;log.scrollTop=log.scrollHeight;}
+    if(isDoneStatus(s.status)||s.apk_file||s.download_url){await showDone(s);return;}
+    if(isFailStatus(s.status)){await showFail(s.message||'Build failed.');return;}
+    if(Date.now()-startedAt>BUILD_TIMEOUT_MS){await showFail('Build is taking too long. Check "Orders" in a minute.');return;}
+    buildPollTimer=setTimeout(poll,2500);
+  };
+  poll();
+}
+
+/* ── Orders ── */
+async function loadOrders(){
+  const c=$('ordersContainer');
+  if(!currentUser){
+    c.innerHTML=`<div class="empty-state"><div class="ico">${icon('ic-login','i')}</div><h4>Login required</h4>
+      <p>Login to see your builds.</p><button class="btn btn-primary" onclick="openAuth()">${icon('ic-login')}Login</button></div>`;
+    return;
+  }
+  c.innerHTML=`<div class="empty-state"><span class="loader"></span></div>`;
+  const orders=await api('/api/orders');
+  if(!Array.isArray(orders)||!orders.length){
+    c.innerHTML=`<div class="empty-state"><div class="ico">${icon('ic-box','i')}</div><h4>No orders yet</h4>
+      <p>Build your first APK — it takes about a minute.</p>
+      <button class="btn btn-primary" onclick="showPage('home')">${icon('ic-rocket')}Browse Templates</button></div>`;
+    return;
+  }
+  const label={building:'Building',done:'Done',failed:'Failed'};
+  const sIcon={building:'ic-clock',done:'ic-check',failed:'ic-alert'};
+  const item=o=>`<div class="order-item">
+    <div class="order-top">
+      <div style="min-width:0">
+        <h4>${esc(o.app_name)}</h4>
+        <span class="pkg">${esc(o.package_name||'')}</span>
+      </div>
+      <span class="status-badge ${esc(o.status)}">${icon(sIcon[o.status]||'ic-clock','i sm')}${label[o.status]||'Pending'}</span>
+    </div>
+    <div class="order-meta">#${o.id} • ${esc(o.design_name||'Template')}</div>
+    <div class="order-actions">${
+      o.status==='done'
+        ?`<a href="/api/orders/${o.id}/download" class="btn btn-primary btn-sm">${icon('ic-download')}APK</a>
+          ${o.fake_apk_file?`<a href="/api/orders/${o.id}/download-fake" class="btn btn-gold btn-sm">${icon('ic-download')}Fake</a>`:''}
+          <button class="btn btn-outline btn-sm" onclick="openChangeDomain(${o.id})">${icon('ic-edit')}Domain</button>`
+        :o.status==='building'
+          ?`<span style="color:var(--cyan);font-size:12px;display:inline-flex;align-items:center;gap:7px"><span class="spinner"></span>Building...</span>`
+          :`<span style="color:var(--dim);font-size:12px">No actions</span>`}</div>
+  </div>`;
+  const active=orders.filter(o=>o.status!=='failed'),failed=orders.filter(o=>o.status==='failed');
+  const recent=active.slice(0,5),older=active.slice(5);
+  let html='';
+  html+=recent.length?recent.map(item).join(''):`<div class="empty-state"><div class="ico">${icon('ic-box','i')}</div><h4>No active orders</h4></div>`;
+  if(older.length)html+=`<div style="text-align:center;margin:6px 0 12px"><button class="btn btn-outline btn-sm" id="olderBtn" onclick="toggleBlock('olderOrders','olderBtn','${older.length} older order${older.length>1?'s':''}')">${icon('ic-clock')} Show ${older.length} older order${older.length>1?'s':''}</button></div><div id="olderOrders" style="display:none">${older.map(item).join('')}</div>`;
+  if(failed.length)html+=`<div style="margin-top:8px"><button class="btn btn-danger btn-sm btn-block" id="failedBtn" onclick="toggleBlock('failedOrders','failedBtn','${failed.length} failed order${failed.length>1?'s':''}')">${icon('ic-alert')} ${failed.length} Failed order${failed.length>1?'s':''}</button><div id="failedOrders" style="display:none;margin-top:10px">${failed.map(item).join('')}</div></div>`;
+  c.innerHTML=html;
+}
+function toggleBlock(blockId,btnId,labelText){
+  const el=$(blockId),btn=$(btnId),shown=el.style.display!=='none';
+  el.style.display=shown?'none':'block';
+  btn.innerHTML=(shown?icon('ic-clock')+' Show '+labelText:icon('ic-x')+' Hide '+labelText);
+}
+
+/* ── Domain Change ── */
+async function openChangeDomain(orderId){
+  $('dcOrderId').value=orderId;$('dcNewUrl').value='';
+  const s=await api('/api/settings/payment');
+  domainChangePrice=parseInt(s.domain_change_price||10);
+  $('dcPrice').textContent=domainChangePrice;
+  $('dcBalance').textContent=currentUser?currentUser.coins:0;
+  openModal('domainModal');
+}
+async function submitDomainChange(btn){
+  const orderId=$('dcOrderId').value,newUrl=$('dcNewUrl').value.trim();
+  if(!newUrl)return toast('Enter new register URL',true);
+  setLoading(btn,true,'Processing...');
+  const d=await api('/api/orders/'+orderId+'/change-domain','POST',{new_register_url:newUrl});
+  setLoading(btn,false);
+  if(d.error)return toast(d.error,true);
+  closeModal('domainModal');
+  toast('Rebuilding APK with new domain...');
+  startBuildProgress(d.orderId,false);
+  await loadMe();
+}
+
+/* ── Wallet ── */
+function renderAmountChips(){
+  $('amtGrid').innerHTML=AMOUNTS.map(a=>`<button type="button" class="amt-chip" data-amt="${a}" onclick="pickAmount(${a})">
+    <b>${a}</b><span>₹${(a*coinRate).toFixed(0)}</span></button>`).join('');
+  syncAmountUI();
+}
+function pickAmount(a){$('buyCoins').value=a;syncAmountUI();}
+function syncAmountUI(){
+  const v=parseFloat($('buyCoins').value||0);
+  const total=(v*coinRate)||0;
+  $('payTotal').textContent='₹'+total.toFixed(total%1?2:0);
+  $('coinRateHint').textContent=`₹${coinRate}/coin → Total: ₹${total.toFixed(2)}`;
+  document.querySelectorAll('.amt-chip').forEach(c=>c.classList.toggle('active',parseFloat(c.dataset.amt)===v));
+  const upi=$('upiId').textContent.trim();
+  const link=$('upiPayBtn');
+  if(upi&&upi!=='Loading...'&&upi!=='Contact admin'){
+    link.style.display='inline-flex';
+  }else{link.style.display='none';}
+}
+function tgApp(){try{const t=window.Telegram&&window.Telegram.WebApp;return (t&&t.initData!==undefined)?t:null;}catch(e){return null;}}
+function payAmountInr(){const coins=parseFloat($('buyCoins').value||0);const t=coins*coinRate;return Number.isFinite(t)&&t>0?t:0;}
+function makeUpiLink(scheme){
+  const upi=$('upiId').textContent.trim();
+  const coins=parseFloat($('buyCoins').value||0);
+  const total=payAmountInr();
+  if(!upi||upi==='Loading...'||upi==='Contact admin')return null;
+  if(!total)return null;
+  const params=new URLSearchParams({pa:upi,pn:'Zayro Mod Builder',am:total.toFixed(2),cu:'INR',tn:`Zayro ${coins} coins`});
+  if(scheme==='intent')return `intent://pay?${params.toString()}#Intent;scheme=upi;action=android.intent.action.VIEW;end`;
+  return `upi://pay?${params.toString()}`;
+}
+function copyAmount(){
+  const t=payAmountInr();
+  if(!t)return toast('Pehle amount select karein',true);
+  const v=t.toFixed(2);
+  navigator.clipboard?.writeText(v).then(()=>toast('Amount ₹'+v+' copied!'),()=>toast('Copy failed',true));
+}
+function openUpiApp(){
+  const upiLink=makeUpiLink();
+  if(!upiLink)return toast('Select a valid amount and wait for the UPI ID to load',true);
+  const tg=tgApp();
+  const isAndroid=/Android/i.test(navigator.userAgent);
+  const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  // Telegram / in-app webview: upi:// scheme blocked (ERR_UNKNOWN_URL_SCHEME)
+  if(tg){
+    copyUpi();
+    toast('UPI ID copy ho gayi — apni UPI app me paste karein ya QR scan karein',true);
+    return;
+  }
+  if(!isAndroid&&!isIOS){
+    copyUpi();
+    toast('UPI apps phone par khulte hain. UPI ID copy kar di gayi hai.');
+    return;
+  }
+  toast('Opening your UPI app...');
+  let left=false;
+  const mark=()=>{left=true;};
+  document.addEventListener('visibilitychange',mark,{once:true});
+  window.addEventListener('blur',mark,{once:true});
+  const go=(url)=>{const a=document.createElement('a');a.href=url;a.rel='noopener';document.body.appendChild(a);a.click();a.remove();};
+  go(upiLink);
+  if(isAndroid)setTimeout(()=>{if(!left&&!document.hidden){try{go(makeUpiLink('intent'));}catch(e){}}},900);
+  setTimeout(()=>{
+    if(!left&&!document.hidden){copyUpi();toast('UPI app nahi khula? QR scan karein ya UPI ID paste karein.',true);}
+  },2400);
+}
+function focusDeposit(){
+  $('depositCard').scrollIntoView({behavior:'smooth',block:'start'});
+  setTimeout(()=>$('buyCoins').focus({preventScroll:true}),400);
+}
+async function loadWalletPage(){
+  const [s,me]=await Promise.all([api('/api/settings/payment'),api('/api/me')]);
+  if(!me.error){currentUser=me;updateNav(me);}
+  const coins=me.coins||0;
+  $('coinBalance').textContent=coins;
+  coinRate=parseFloat(s.coin_rate||1)||1;
+  $('balanceInr').textContent=`≈ ₹${(coins*coinRate).toFixed(0)} worth of build credits`;
+  $('upiId').textContent=s.upi_id||'Contact admin';
+  if(s.upi_qr_image){$('qrImage').src='/uploads/'+s.upi_qr_image;$('qrFrame').style.display='block';}
+  renderAmountChips();
+}
+$('buyCoins').addEventListener('input',syncAmountUI);
+function mediaFallback(el){
+  const m=el.closest('.media');if(!m)return;
+  m.innerHTML='<div class="no-preview"><svg class="i lg"><use href="#ic-image"/></svg>No Preview</div>';
+  m.onclick=null;m.style.cursor='default';
+}
+function copyUpi(){
+  const v=$('upiId').textContent.trim();
+  if(!v||v==='Loading...')return;
+  navigator.clipboard?.writeText(v).then(()=>toast('UPI ID copied!'),()=>toast('Copy failed',true));
+}
+async function submitCoinRequest(){
+  if(!currentUser)return openAuth();
+  const btn=event.currentTarget;
+  const coins=$('buyCoins').value,utr=$('buyUtr').value.trim();
+  if(!coins||parseFloat(coins)<1)return toast('Enter a valid coin amount',true);
+  if(!utr)return toast('Enter the UTR / reference number',true);
+  const fd=new FormData();
+  fd.append('coins',coins);fd.append('utr',utr);
+  const shot=$('buyScreenshot')?.files[0];
+  if(shot)fd.append('screenshot',shot);
+  setLoading(btn,true,'Submitting...');
+  const d=await api('/api/coins/request','POST',fd,true);
+  setLoading(btn,false);
+  if(d.error)return toast(d.error,true);
+  toast(d.message||'Request submitted!');
+  $('buyUtr').value='';
+  const si=$('buyScreenshot');if(si)si.value='';
+}
+
+/* ── Profile ── */
+function renderProfile(){
+  const b=$('profileBody');
+  if(!currentUser){
+    b.innerHTML=`<div class="empty-state"><div class="ico">${icon('ic-user','i')}</div><h4>You're not logged in</h4>
+      <p>Login to see your profile, coins and orders.</p>
+      <button class="btn btn-primary" onclick="openAuth()">${icon('ic-login')}Login / Register</button></div>`;
+    return;
+  }
+  const u=currentUser;
+  const initial=esc((u.username||'U').charAt(0).toUpperCase());
+  b.innerHTML=`
+    <div class="prof-head">
+      <div class="avatar">${initial}</div>
+      <div class="who">
+        <h3>${esc(u.username||'User')}</h3>
+        <p>${esc(u.email||'No email added')}</p>
+      </div>
+    </div>
+    <div class="stat-duo">
+      <div class="s"><b>${coin(20)}${u.coins ?? 0}</b><span>Coin Balance</span></div>
+      <div class="s"><b>#${esc(u.id ?? '—')}</b><span>User ID</span></div>
+    </div>
+    <div class="menu-list">
+      <button onclick="showPage('wallet')">${icon('ic-wallet','i')} Wallet &amp; Deposit <span class="chev">${icon('ic-chev','i sm')}</span></button>
+      <button onclick="showPage('orders')">${icon('ic-box','i')} My Orders <span class="chev">${icon('ic-chev','i sm')}</span></button>
+      <button onclick="showPage('home')">${icon('ic-rocket','i')} Build New APK <span class="chev">${icon('ic-chev','i sm')}</span></button>
+      <button onclick="loadMe().then(()=>{renderProfile();toast('Refreshed')})">${icon('ic-refresh','i')} Refresh Account <span class="chev">${icon('ic-chev','i sm')}</span></button>
+      <button onclick="logout()" style="color:var(--danger)">${icon('ic-logout','i')} Logout</button>
+    </div>
+    <div class="note" style="margin-top:14px"><svg class="i sm"><use href="#ic-shield"/></svg>
+      <span>Every APK is signed with our keystore. Never share your login with anyone.</span></div>`;
+}
+
+/* ── Lightbox ── */
+function openLightbox(src,kind){
+  const box=$('lightbox'),inner=$('lbInner');
+  inner.innerHTML=kind==='video'
+    ?`<video src="${src}" controls autoplay loop playsinline></video>`
+    :`<img src="${src}" alt="Design preview">`;
+  box.classList.add('open');document.body.style.overflow='hidden';
+}
+function closeLightbox(){
+  const box=$('lightbox');
+  if(!box.classList.contains('open'))return;
+  box.classList.remove('open');$('lbInner').innerHTML='';
+  if(!document.querySelector('.modal-overlay.show'))document.body.style.overflow='';
+}
+
+/* ── Init ── */
+window.addEventListener('load',async()=>{
+  try{window.Telegram?.WebApp?.ready();window.Telegram?.WebApp?.expand();}catch(e){}
+  if(tgApp()){
+    document.body.classList.add('in-telegram');
+  }
+  await loadMe();
+  await loadDesigns();
+  syncAmountUI();
+});
+</script>
+</body>
+</html>
