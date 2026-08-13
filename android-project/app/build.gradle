@@ -1,0 +1,48 @@
+plugins {
+	id 'com.android.application'
+}
+
+android {
+	compileSdk 34
+	
+	useLibrary 'org.apache.http.legacy'
+	
+	defaultConfig {
+		applicationId "com.zayro.wingsyttt"
+		namespace "com.zayro.wingsyttt"
+		minSdkVersion 21
+		targetSdkVersion 34
+		versionCode 1
+		versionName "1.0"
+		ndk {
+			abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+		}
+		externalNativeBuild {
+			cmake {
+				cppFlags "-std=c++14 -O3 -fvisibility=hidden"
+			}
+		}
+	}
+
+	externalNativeBuild {
+		cmake {
+			path "src/main/cpp/CMakeLists.txt"
+			version "3.18.1"
+		}
+	}
+	
+	buildTypes {
+		release {
+			minifyEnabled true
+			shrinkResources true
+			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+		}
+	}
+	buildFeatures {
+		viewBinding true
+	}
+}
+
+dependencies {
+	implementation fileTree(dir: 'libs', include: ['*.jar'])
+}

@@ -1,0 +1,105 @@
+const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
+
+const DB_PATH = path.join(__dirname, 'apkbuilder.db');
+const db = new Database(DB_PATH);
+
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    coins INTEGER DEFAULT 0,
+    telegram_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS designs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    price_coins INTEGER NOT NULL DEFAULT 10,
+    type TEXT NOT NULL DEFAULT 'normal',
+    popup_html_file TEXT NOT NULL,
+    java_type TEXT NOT NULL DEFAULT 'normal',
+    preview_image TEXT,
+    preview_video TEXT,
+    active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    design_id INTEGER NOT NULL,
+    app_name TEXT NOT NULL,
+    package_name TEXT NOT NULL,
+    register_url TEXT NOT NULL,
+    deposit_url TEXT NOT NULL,
+    wingo_url TEXT NOT NULL,
+    domain TEXT NOT NULL,
+    firebase_path TEXT NOT NULL,
+    min_deposit INTEGER NOT NULL DEFAULT 300,
+    brand_title TEXT NOT NULL,
+    icon_file TEXT,
+    status TEXT DEFAULT 'pending',
+    apk_file TEXT,
+    fake_register_url TEXT,
+    fake_apk_file TEXT,
+    build_log TEXT,
+    coins_spent INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    FOREIGN KEY(design_id) REFERENCES designs(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS coin_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    coins_requested INTEGER NOT NULL,
+    amount_paid REAL NOT NULL,
+    utr TEXT NOT NULL,
+    telegram_msg_id INTEGER,
+    status TEXT DEFAULT 'pending',
+    approved_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
+  INSERT OR IGNORE INTO settings(key,value) VALUES
+    ('upi_qr_image',''),
+    ('upi_id',''),
+    ('coin_rate','1'),
+    ('site_name','APK Builder'),
+    ('telegram_bot_token',''),
+    ('telegram_admin_id',''),
+    ('loading_html_file','loading.html'),
+    ('addon_fake_price','5');
+`);
+
+// Migrations — safe on existing DB
+  try { db.exec("ALTER TABLE designs ADD COLUMN fake_popup_html_file TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE designs ADD COLUMN original_price_coins INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE designs ADD COLUMN fake_price_coins INTEGER DEFAULT 5"); } catch(e) {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN domain_change_count INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('domain_change_price','10')"); } catch(e) {}
+  try { db.exec("ALTER TABLE coin_requests ADD COLUMN screenshot_file TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('site_url','')"); } catch(e) {}
+  // New columns for design category/variant
+  try { db.exec("ALTER TABLE designs ADD COLUMN category TEXT DEFAULT 'normal'"); } catch(e) {}
+  try { db.exec("ALTER TABLE designs ADD COLUMN variant TEXT DEFAULT 'real'"); } catch(e) {}
+  // New column for order variant tracking
+  try { db.exec("ALTER TABLE orders ADD COLUMN design_variant TEXT DEFAULT 'real'"); } catch(e) {}
+
+module.exports = db;
