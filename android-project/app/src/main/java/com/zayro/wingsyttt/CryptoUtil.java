@@ -52,7 +52,12 @@ public class CryptoUtil {
         Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
         c.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"),
                 new GCMParameterSpec(TAG_LEN * 8, nonce));
-        return c.doFinal(enc, 0, enc.length, tag);
+        // GCM authenticates when ciphertext+tag are passed together in one
+        // doFinal() call. Append the 16-byte tag to the ciphertext first.
+        byte[] combined = new byte[enc.length + tag.length];
+        System.arraycopy(enc, 0, combined, 0, enc.length);
+        System.arraycopy(tag, 0, combined, enc.length, tag.length);
+        return c.doFinal(combined);
     }
 
     public static byte[] readAll(InputStream is) throws Exception {
