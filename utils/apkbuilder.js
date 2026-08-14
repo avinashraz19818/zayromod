@@ -130,8 +130,19 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     log('Replacing assets (encrypted)...');
     const assetsDir = path.join(projectDir, 'app', 'src', 'main', 'assets');
     fs.mkdirSync(assetsDir, { recursive: true });
+    // Wipe stale template .bin blobs — they were encrypted with an old fixed
+    // key and would fail to decrypt against the per-build key at runtime.
+    for (const f of fs.readdirSync(assetsDir)) {
+      if (f.toLowerCase().endsWith('.bin')) {
+        try { fs.unlinkSync(path.join(assetsDir, f)); } catch (_) {}
+      }
+    }
     fs.copyFileSync(zayrobin,   path.join(assetsDir, 'zayro.bin'));
     fs.copyFileSync(loadingbin, path.join(assetsDir, loadingBinName));
+    // MainActivity always opens loading.bin (and some designs expect lodale.bin).
+    // Write the same per-build encrypted blob under both names so the loading
+    // screen decrypts correctly for zayro AND dhani builds.
+    if (isDhani) fs.copyFileSync(loadingbin, path.join(assetsDir, 'loading.bin'));
 
     const sharedAssetsDir = path.join(TEMPLATES_DIR, 'assets');
     if (fs.existsSync(sharedAssetsDir)) {
