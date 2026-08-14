@@ -449,6 +449,16 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
     </div>
   </section>
 
+  <section class="hero" style="padding:16px;margin-top:12px">
+    <span class="hero-pill"><svg class="i sm"><use href="#ic-bolt"/></svg>CLIENT GROWTH FEATURES</span>
+    <h2 style="font-size:22px;margin:8px 0">Premium APK marketplace with Telegram delivery.</h2>
+    <div class="hero-stats">
+      <div class="stat"><b>Live Link</b><span>DOMAIN / INVITE UPDATE</span></div>
+      <div class="stat"><b>Telegram</b><span>READY APK ALERT</span></div>
+      <div class="stat"><b>Backup</b><span>SAFE DATA</span></div>
+    </div>
+  </section>
+
   <div class="sec-head" id="designsHead">
     <h2 class="sec-title"><svg class="i"><use href="#ic-layers"/></svg>Templates</h2>
     <div class="sec-sub" id="designCount"></div>
@@ -635,6 +645,14 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
             <input type="url" id="fakeRegUrl" placeholder="https://fakesite.com/#/register?..." inputmode="url"></div>
         </div>
       </div>
+      <div class="form-group">
+        <label><svg class="i sm"><use href="#ic-tag"/></svg>Coupon Code <small>(optional)</small></label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="couponCode" placeholder="WELCOME10" style="text-transform:uppercase">
+          <button class="btn btn-outline btn-sm" type="button" onclick="applyCoupon(this)">Apply</button>
+        </div>
+        <div class="hint" id="couponHint">Discount coupons are set by admin.</div>
+      </div>
       <div class="cost-bar">
         <span class="cb"><span class="k">Cost</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="orderCost" style="color:var(--gold)">—</b></span>
         <span class="cb"><span class="k">Balance</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="orderBalance" style="color:var(--cyan)">—</b></span>
@@ -653,6 +671,7 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
         <div class="confirm-row"><span class="label">Register URL</span><span class="val" id="cnfUrl" style="font-size:12px;color:var(--dim)">—</span></div>
         <div class="confirm-row"><span class="label">Min Deposit</span><span class="val" id="cnfDeposit">—</span></div>
         <div class="confirm-row"><span class="label">Fake APK</span><span class="val" id="cnfFake">—</span></div>
+        <div class="confirm-row"><span class="label">Coupon Discount</span><span class="val" id="cnfDiscount">—</span></div>
       </div>
       <div class="confirm-cost-row">
         <span class="lbl">Total Cost</span>
@@ -738,6 +757,7 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
 let currentUser=null,currentDesign=null,currentPreviewDesign=null;
 let designCatalog=new Map();
 let fakeAddonPrice=5,domainChangePrice=10,inviteCodeChangePrice=10,coinRate=1;
+let appliedCoupon={code:'',discount:0,total:null};
 let buildStepIdx=0,buildTimeouts=[],buildPollTimer=null,buildStepTimer=null;
 let buildFinished=false,buildToken=0,buildRunning=false;
 const STEP_COUNT=5,STEP_DELAYS=[0,8000,20000,35000,52000];
@@ -988,18 +1008,43 @@ async function selectDesign(id,designData=null){
   $('fakeAddonCheck').checked=false;
   $('fakeUrlBox').style.display='none';
   $('fakeAddonBox').classList.remove('active');
-  ['orderAppName','orderRegUrl','orderIcon','fakeRegUrl'].forEach(i=>$(i).value='');
+  ['orderAppName','orderRegUrl','orderIcon','fakeRegUrl','couponCode'].forEach(i=>$(i).value='');
+  appliedCoupon={code:'',discount:0,total:null};
+  $('couponHint').textContent='Discount coupons are set by admin.';
   $('orderMinDeposit').value='300';
   $('orderFormView').style.display='block';
   $('orderConfirmView').style.display='none';
   openModal('orderModal');
 }
+function resetCouponHint(msg='Discount coupons are set by admin.'){
+  appliedCoupon={code:'',discount:0,total:null};
+  $('couponHint').textContent=msg;
+}
+function currentSubtotal(){return (currentDesign?Number(currentDesign.price_coins)||0:0)+($('fakeAddonCheck').checked?fakeAddonPrice:0);}
+function updateOrderCost(){
+  const total=appliedCoupon.total!==null?appliedCoupon.total:currentSubtotal();
+  $('orderCost').textContent=total;
+}
 function toggleFakeAddon(){
   const checked=$('fakeAddonCheck').checked;
   $('fakeUrlBox').style.display=checked?'block':'none';
   $('fakeAddonBox').classList.toggle('active',checked);
-  const base=currentDesign?currentDesign.price_coins:0;
-  $('orderCost').textContent=base+(checked?fakeAddonPrice:0);
+  resetCouponHint('Coupon reset. Apply again after changing add-ons.');
+  updateOrderCost();
+}
+async function applyCoupon(btn){
+  const code=$('couponCode').value.trim().toUpperCase();
+  if(!code)return toast('Enter coupon code',true);
+  const subtotal=currentSubtotal();
+  setLoading(btn,true,'Checking...');
+  const d=await api('/api/coupons/validate','POST',{code,subtotal});
+  setLoading(btn,false);
+  if(d.error){appliedCoupon={code:'',discount:0,total:null};$('couponHint').textContent=d.error;return toast(d.error,true);}
+  appliedCoupon={code:d.code,discount:Number(d.discount)||0,total:Number(d.total)};
+  $('couponCode').value=d.code;
+  $('orderCost').textContent=d.total;
+  $('couponHint').innerHTML=`Applied ${esc(d.code)} — saved ${d.discount} coins`;
+  toast('Coupon applied!');
 }
 function previewOrder(){
   const appName=$('orderAppName').value.trim(),regUrl=$('orderRegUrl').value.trim();
@@ -1008,7 +1053,8 @@ function previewOrder(){
   if(!appName)return toast('App name is required',true);
   if(!regUrl)return toast('Register URL is required',true);
   if(fakeAddon&&!fakeUrl)return toast('Fake site register URL is required',true);
-  const total=currentDesign.price_coins+(fakeAddon?fakeAddonPrice:0);
+  const subtotal=currentSubtotal();
+  const total=appliedCoupon.total!==null?appliedCoupon.total:subtotal;
   if(currentUser.coins<total){
     closeModal('orderModal');
     toast(`Need ${total} coins, you have ${currentUser.coins}. Add coins first.`,true);
@@ -1019,6 +1065,7 @@ function previewOrder(){
   $('cnfUrl').textContent=regUrl;
   $('cnfDeposit').textContent='₹'+minDep;
   $('cnfFake').textContent=fakeAddon?`Yes (+${fakeAddonPrice}) — ${fakeUrl}`:'No';
+  $('cnfDiscount').textContent=appliedCoupon.discount>0?`${appliedCoupon.code} (-${appliedCoupon.discount} coins)`:'No coupon';
   $('cnfCost').textContent=total;
   $('cnfAfter').textContent=(currentUser.coins-total)+' coins';
   $('orderFormView').style.display='none';
@@ -1039,6 +1086,7 @@ async function submitOrder(){
   const fakeAddon=$('fakeAddonCheck').checked;
   fd.append('fake_addon',fakeAddon?'true':'false');
   if(fakeAddon)fd.append('fake_register_url',$('fakeRegUrl').value.trim());
+  if(appliedCoupon.code)fd.append('coupon_code',appliedCoupon.code);
   const iconFile=$('orderIcon').files[0];
   if(iconFile)fd.append('icon',iconFile);
   setLoading(btn,true,'Building...');
@@ -1088,7 +1136,7 @@ function finishSteps(success){
   for(let i=0;i<STEP_COUNT;i++)setStep(i,success?'done':'');
   if(!success)setStep(STEP_COUNT-1,'failed');
   $('buildWarn').style.display='none';
-  $('progressSub').textContent=success?'Your APK is ready to download.':'Something went wrong during the build.';
+  $('progressSub').textContent=success?'Your APK is ready to download.':'Build failed. If coins were deducted, they are refunded automatically.';
 }
 const isDoneStatus=s=>['done','success','successful','completed','complete','ready','finished','built','generated'].includes(String(s||'').toLowerCase());
 const isFailStatus=s=>['failed','fail','error','cancelled','canceled'].includes(String(s||'').toLowerCase());

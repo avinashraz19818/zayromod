@@ -29,6 +29,35 @@ async function resizeIcon(inputBuffer) {
   return result;
 }
 
+function findReferencedMp3Assets(...htmlValues) {
+  const refs = new Set();
+  const re = /["']([^"']+\.mp3)["']/gi;
+  for (const html of htmlValues) {
+    if (!html) continue;
+    let match;
+    while ((match = re.exec(html))) refs.add(path.basename(match[1]));
+  }
+  return refs;
+}
+
+function isVirtualOrAliasedMp3(name) {
+  const n = String(name || '').toLowerCase();
+  // big/small result sounds are intentionally spoken by Android TTS, not MP3.
+  // loginw.mp3 is intentionally routed to bypass.mp3 in MainActivity.
+  return n === 'big.mp3' || n === 'small.mp3' || n === 'loginw.mp3';
+}
+
+function logMissingReferencedMp3Assets(htmlValues, assetsDir, log) {
+  const missing = [];
+  for (const name of findReferencedMp3Assets(...htmlValues)) {
+    if (isVirtualOrAliasedMp3(name)) continue;
+    if (!fs.existsSync(path.join(assetsDir, name))) missing.push(name);
+  }
+  if (missing.length) {
+    log(`WARNING: Missing MP3 asset(s): ${missing.join(', ')}. Related sounds will not play in the APK.`);
+  }
+}
+
 // ── APK build implementation ──
 // This implementation intentionally runs inside apkbuilder-worker.js. It uses
 // synchronous filesystem/Gradle commands, which are safe in the isolated
@@ -152,6 +181,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
           fs.copyFileSync(src, path.join(assetsDir, f));
       }
     }
+    logMissingReferencedMp3Assets([processedPopup, processedLoading], assetsDir, log);
 
     // ── App icon replacement ──
     if (iconBuffer) {
