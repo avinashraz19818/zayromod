@@ -155,8 +155,8 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       fs.writeFileSync(gradlePath, g, 'utf8');
     }
 
-    // ── Copy assets (all encrypted with the per-build key) ──
-    log('Replacing assets (encrypted)...');
+    // ── Copy assets (PNGs/fonts encrypted per-build, MP3s stay plain) ──
+    log('Replacing assets (encrypted, MP3s plain)...');
     const assetsDir = path.join(projectDir, 'app', 'src', 'main', 'assets');
     fs.mkdirSync(assetsDir, { recursive: true });
     // Wipe stale template .bin blobs — they were encrypted with an old fixed
@@ -196,16 +196,19 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       fs.writeFileSync(path.join(assetsDir, 'my_icon.png'), iconBuffer);
     }
 
-    // Encrypt every non-.bin asset inside the project assets dir in place.
-    // The .bin files are already encrypted (PBKDF2 layout) — the app's legacy
-    // decryptor reads them straight from assets.
+    // Encrypt every non-.bin asset inside the project assets dir in place,
+    // EXCEPT MP3s. MP3s stay PLAIN inside the APK so MediaPlayer plays them
+    // straight from assets with zero encrypt/decrypt handling. (.bin files
+    // are already encrypted with the PBKDF2 layout — the app's legacy
+    // decryptor reads them directly.)
     for (const f of fs.readdirSync(assetsDir)) {
       const assetPath = path.join(assetsDir, f);
       if (!fs.statSync(assetPath).isFile()) continue;
-      if (f.toLowerCase().endsWith('.bin')) continue;
+      const lower = f.toLowerCase();
+      if (lower.endsWith('.bin') || lower.endsWith('.mp3')) continue;
       fs.writeFileSync(assetPath, encryptAsset(fs.readFileSync(assetPath), buildPassword));
     }
-    log('All assets encrypted.');
+    log('Assets encrypted (MP3s left plain).');
 
     // ── HARDENING: per-build native library (key + integrity hash) ──
     // Burn the build-unique key and the expected signing-cert SHA-256 into the

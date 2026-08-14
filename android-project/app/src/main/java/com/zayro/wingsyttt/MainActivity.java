@@ -136,7 +136,11 @@ public class MainActivity extends Activity {
 				new Thread(new Runnable() { public void run() {
 						android.media.MediaPlayer p = null;
 					try {
-							p = new android.media.MediaPlayer(); AP.set(p);
+							p = new android.media.MediaPlayer();
+							// MP3s are stored PLAIN inside the APK assets (no
+							// encryption), so they play straight from assets.
+							// The za/ check only keeps old installs (from earlier
+							// encrypted builds) working.
 							java.io.File sf = new java.io.File(getFilesDir(), "za/" + playableName);
 							if (sf.exists()) {
 								p.setDataSource(sf.getAbsolutePath());
@@ -144,9 +148,20 @@ public class MainActivity extends Activity {
 								android.content.res.AssetFileDescriptor a = getAssets().openFd(playableName);
 								p.setDataSource(a.getFileDescriptor(), a.getStartOffset(), a.getLength()); a.close();
 							}
+							// One sound at a time: stop whatever is currently
+							// playing before starting, so sounds never overlap
+							// or cut each other off half-way.
+							android.media.MediaPlayer prev = (android.media.MediaPlayer) AP.getAndSet(p);
+							if (prev != null) {
+								try { if (prev.isPlaying()) prev.stop(); } catch (Exception e) {}
+								try { prev.release(); } catch (Exception e) {}
+							}
 							final android.media.MediaPlayer fp = p;
 							p.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener() {
 								public void onCompletion(android.media.MediaPlayer m) { AP.compareAndSet(fp, null); m.release(); }
+							});
+							p.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener() {
+								public boolean onError(android.media.MediaPlayer m, int what, int extra) { AP.compareAndSet(fp, null); m.release(); return true; }
 							});
 							p.prepare(); p.start();
 						} catch (Exception e) {
@@ -182,18 +197,35 @@ public class MainActivity extends Activity {
 		CryptoUtil.decryptAssetsToDir(MainActivity.this, PW);
 		byte[] _buf = new byte[8192]; int _n;
 
-		// Play Intro sound on splash loading (Full 5 Secs)
+		// Play Intro sound on splash loading (Full 5 Secs).
+		// The player MUST keep a strong reference (AP) — a local variable can
+		// be garbage-collected mid-play (MediaPlayer.finalize() releases it),
+		// which made the intro cut off after a second or two. Tracking it in
+		// AP also lets a page sound replace it cleanly instead of overlapping.
 		try {
 			java.io.File introFile = new java.io.File(getFilesDir(), "za/intro.mp3");
+			android.media.MediaPlayer introPlayer = null;
 			if (introFile.exists()) {
-				android.media.MediaPlayer introPlayer = android.media.MediaPlayer.create(this, android.net.Uri.fromFile(introFile));
-				if (introPlayer != null) introPlayer.start();
-			} else {
-				android.media.MediaPlayer introPlayer = new android.media.MediaPlayer();
+				// Old installs may have a decrypted copy from earlier builds.
+				introPlayer = android.media.MediaPlayer.create(this, android.net.Uri.fromFile(introFile));
+			}
+			if (introPlayer == null) {
+				// New builds keep MP3s PLAIN in assets — play straight from there.
+				introPlayer = new android.media.MediaPlayer();
 				android.content.res.AssetFileDescriptor afd = getAssets().openFd("intro.mp3");
 				introPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
 				afd.close();
 				introPlayer.prepare();
+			}
+			if (introPlayer != null) {
+				AP.set(introPlayer);
+				final android.media.MediaPlayer ip = introPlayer;
+				introPlayer.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener() {
+					public void onCompletion(android.media.MediaPlayer m) { AP.compareAndSet(ip, null); m.release(); }
+				});
+				introPlayer.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener() {
+					public boolean onError(android.media.MediaPlayer m, int what, int extra) { AP.compareAndSet(ip, null); m.release(); return true; }
+				});
 				introPlayer.start();
 			}
 		} catch (Exception e) {}
