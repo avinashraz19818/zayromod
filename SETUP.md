@@ -149,9 +149,11 @@ apk-builder/
 Har build me automatic protection lagti hai:
 
 1. **Per-build unique key** — har APK ka apna random 32-hex password hota hai.
-2. **Full assets encryption** — HTML, PNG, MP3, fonts, icon — sab AES-256-GCM se
-   encrypted hote hain. APK decompile karo to assets folder me sirf garbage bytes
-   milenge, koi file readable nahi hogi.
+2. **Assets encryption (MP3s excluded)** — HTML, PNG, fonts, icon — sab AES-256-GCM
+   se encrypted hote hain. APK decompile karo to assets folder me sirf garbage
+   bytes milenge, koi file readable nahi hogi. **MP3 files plain hi rehti hain**
+   — koi encryption/decryption nahi — taaki sounds seedha MediaPlayer se sahi
+   play hon.
 3. **Native key vault** — key APK ke native library (.so) me XOR-masked store hoti
    hai. Binary me plaintext string nahi hoti; key sirf runtime pe reconstruct hoti hai.
 4. **Signature integrity check** — app apne sign-certificate ka SHA-256 verify karti
