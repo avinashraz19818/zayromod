@@ -3,7 +3,7 @@ const path = require('path');
 const { execFileSync, fork } = require('child_process');
 const sharp = require('sharp');
 const { encryptHtmlToBin, encryptAsset, generateBuildPassword, generateNativeLib, getKeystoreCertHash } = require('./encrypt');
-const { extractDomain, buildUrls, injectParams } = require('./htmlprocessor');
+const { extractDomain, buildUrls, injectParams, injectThemeCss } = require('./htmlprocessor');
 
 const BUILDS_DIR        = path.join(__dirname, '..', 'builds');
 const TEMPLATE_PROJECT  = path.join(__dirname, '..', 'android-project');
@@ -27,6 +27,35 @@ async function resizeIcon(inputBuffer) {
     result[dir] = await sharp(inputBuffer).resize(size, size).png().toBuffer();
   }
   return result;
+}
+
+function findReferencedMp3Assets(...htmlValues) {
+  const refs = new Set();
+  const re = /["']([^"']+\.mp3)["']/gi;
+  for (const html of htmlValues) {
+    if (!html) continue;
+    let match;
+    while ((match = re.exec(html))) refs.add(path.basename(match[1]));
+  }
+  return refs;
+}
+
+function isVirtualOrAliasedMp3(name) {
+  const n = String(name || '').toLowerCase();
+  // big/small result sounds are intentionally spoken by Android TTS, not MP3.
+  // loginw.mp3 is intentionally routed to bypass.mp3 in MainActivity.
+  return n === 'big.mp3' || n === 'small.mp3' || n === 'loginw.mp3';
+}
+
+function logMissingReferencedMp3Assets(htmlValues, assetsDir, log) {
+  const missing = [];
+  for (const name of findReferencedMp3Assets(...htmlValues)) {
+    if (isVirtualOrAliasedMp3(name)) continue;
+    if (!fs.existsSync(path.join(assetsDir, name))) missing.push(name);
+  }
+  if (missing.length) {
+    log(`WARNING: Missing MP3 asset(s): ${missing.join(', ')}. Related sounds will not play in the APK.`);
+  }
 }
 
 // ── APK build implementation ──
@@ -82,8 +111,8 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     };
 
     log('Injecting parameters into HTML...');
-    const processedPopup   = injectParams(popupHtml,   params);
-    const processedLoading = injectParams(loadingHtml, params);
+    const processedPopup   = injectThemeCss(injectParams(popupHtml, params), order.theme_color);
+    const processedLoading = injectThemeCss(injectParams(loadingHtml, params), order.theme_color);
 
     // ── HARDENING: per-build unique key ──
     // Every APK gets its own random password. It protects both the HTML blobs
@@ -152,6 +181,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
           fs.copyFileSync(src, path.join(assetsDir, f));
       }
     }
+    logMissingReferencedMp3Assets([processedPopup, processedLoading], assetsDir, log);
 
     // ── App icon replacement ──
     if (iconBuffer) {

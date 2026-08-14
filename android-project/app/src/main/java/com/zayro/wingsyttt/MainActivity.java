@@ -123,15 +123,25 @@ public class MainActivity extends Activity {
 			
 			@android.webkit.JavascriptInterface
 			public void playSound(final String f) {
+				if (f == null) return;
+				String rawName = f.trim();
+				if (rawName.length() == 0) return;
+				final String soundName = new java.io.File(rawName).getName();
+				String lowerName = soundName.toLowerCase(java.util.Locale.US);
+				if (lowerName.equals("big.mp3") || lowerName.equals("small.mp3")) {
+					if (T[0] != null) T[0].speak(lowerName.equals("big.mp3") ? "Big" : "Small", android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "zayro_result");
+					return;
+				}
+				final String playableName = lowerName.equals("loginw.mp3") ? "bypass.mp3" : soundName;
 				new Thread(new Runnable() { public void run() {
 						android.media.MediaPlayer p = null;
 					try {
 							p = new android.media.MediaPlayer(); AP.set(p);
-							java.io.File sf = new java.io.File(getFilesDir(), "za/" + f);
+							java.io.File sf = new java.io.File(getFilesDir(), "za/" + playableName);
 							if (sf.exists()) {
 								p.setDataSource(sf.getAbsolutePath());
 							} else {
-								android.content.res.AssetFileDescriptor a = getAssets().openFd(f);
+								android.content.res.AssetFileDescriptor a = getAssets().openFd(playableName);
 								p.setDataSource(a.getFileDescriptor(), a.getStartOffset(), a.getLength()); a.close();
 							}
 							final android.media.MediaPlayer fp = p;
@@ -144,9 +154,10 @@ public class MainActivity extends Activity {
 						}
 					}}).start();
 			}
-			
+
 			@android.webkit.JavascriptInterface
 			public void stopSound() {
+				if (T[0] != null) { try { T[0].stop(); } catch (Exception e) {} }
 				Object o = AP.getAndSet(null);
 				if (o != null) {
 					android.media.MediaPlayer p = (android.media.MediaPlayer) o;
@@ -158,6 +169,19 @@ public class MainActivity extends Activity {
 		
 		wP.addJavascriptInterface(BR, "ZAYRO");
 		
+		// ── CRYPTO FILE LOADER DECRYPTORS ──
+		final SecurityUtil sec = new SecurityUtil();
+		final byte[] MK = sec.getMarker();
+		final String PW = sec.getDecryptKey();
+
+		// ── HARDENING: decrypt all encrypted assets into app-private storage ──
+		// PNGs/MP3s/fonts/icon live in the APK as AES-256-GCM ciphertext; they
+		// are restored to getFilesDir()/za/ here so the WebView and MediaPlayer
+		// can use them. Outside this app nothing can read that folder.
+		final String ZD = new java.io.File(getFilesDir(), "za").getAbsolutePath();
+		CryptoUtil.decryptAssetsToDir(MainActivity.this, PW);
+		byte[] _buf = new byte[8192]; int _n;
+
 		// Play Intro sound on splash loading (Full 5 Secs)
 		try {
 			java.io.File introFile = new java.io.File(getFilesDir(), "za/intro.mp3");
@@ -173,19 +197,6 @@ public class MainActivity extends Activity {
 				introPlayer.start();
 			}
 		} catch (Exception e) {}
-		
-		// ── CRYPTO FILE LOADER DECRYPTORS ──
-		final SecurityUtil sec = new SecurityUtil();
-		final byte[] MK = sec.getMarker();
-		final String PW = sec.getDecryptKey();
-
-		// ── HARDENING: decrypt all encrypted assets into app-private storage ──
-		// PNGs/MP3s/fonts/icon live in the APK as AES-256-GCM ciphertext; they
-		// are restored to getFilesDir()/za/ here so the WebView and MediaPlayer
-		// can use them. Outside this app nothing can read that folder.
-		final String ZD = new java.io.File(getFilesDir(), "za").getAbsolutePath();
-		CryptoUtil.decryptAssetsToDir(MainActivity.this, PW);
-		byte[] _buf = new byte[8192]; int _n;
 		
 		try {
 			java.io.InputStream is = getAssets().open("zayro.bin");
