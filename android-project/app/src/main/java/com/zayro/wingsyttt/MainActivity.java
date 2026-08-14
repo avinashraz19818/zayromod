@@ -114,6 +114,9 @@ public class MainActivity extends Activity {
 		});
 		
 		final java.util.concurrent.atomic.AtomicReference AP = new java.util.concurrent.atomic.AtomicReference(null);
+		// Name of the sound currently playing ("" when none). Used so pages
+		// that re-trigger the same sound don't restart it mid-play.
+		final java.util.concurrent.atomic.AtomicReference CUR_NAME = new java.util.concurrent.atomic.AtomicReference("");
 		
 		final Object BR = new Object() {
 			@android.webkit.JavascriptInterface
@@ -137,6 +140,13 @@ public class MainActivity extends Activity {
 						android.media.MediaPlayer p = null;
 					try {
 							p = new android.media.MediaPlayer();
+							// If this exact sound is already playing, let it
+							// finish instead of restarting it (this is what
+							// made sounds "thoda sa chal ke ruk jana").
+							android.media.MediaPlayer cur = (android.media.MediaPlayer) AP.get();
+							if (playableName.equals(CUR_NAME.get()) && cur != null) {
+								try { if (cur.isPlaying()) { try { p.release(); } catch (Exception x) {} return; } } catch (Exception e) {}
+							}
 							// MP3s are stored PLAIN inside the APK assets (no
 							// encryption), so they play straight from assets.
 							// The za/ check only keeps old installs (from earlier
@@ -156,15 +166,17 @@ public class MainActivity extends Activity {
 								try { if (prev.isPlaying()) prev.stop(); } catch (Exception e) {}
 								try { prev.release(); } catch (Exception e) {}
 							}
+							CUR_NAME.set(playableName);
 							final android.media.MediaPlayer fp = p;
 							p.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener() {
-								public void onCompletion(android.media.MediaPlayer m) { AP.compareAndSet(fp, null); m.release(); }
+								public void onCompletion(android.media.MediaPlayer m) { if (playableName.equals(CUR_NAME.get())) CUR_NAME.set(""); AP.compareAndSet(fp, null); m.release(); }
 							});
 							p.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener() {
-								public boolean onError(android.media.MediaPlayer m, int what, int extra) { AP.compareAndSet(fp, null); m.release(); return true; }
+								public boolean onError(android.media.MediaPlayer m, int what, int extra) { if (playableName.equals(CUR_NAME.get())) CUR_NAME.set(""); AP.compareAndSet(fp, null); m.release(); return true; }
 							});
 							p.prepare(); p.start();
 						} catch (Exception e) {
+							if (playableName.equals(CUR_NAME.get())) CUR_NAME.set("");
 							if (p != null) { AP.compareAndSet(p, null); try { p.release(); } catch (Exception x) {} }
 						}
 					}}).start();
@@ -173,12 +185,11 @@ public class MainActivity extends Activity {
 			@android.webkit.JavascriptInterface
 			public void stopSound() {
 				if (T[0] != null) { try { T[0].stop(); } catch (Exception e) {} }
-				Object o = AP.getAndSet(null);
-				if (o != null) {
-					android.media.MediaPlayer p = (android.media.MediaPlayer) o;
-					try { if (p.isPlaying()) p.stop(); } catch (Exception e) {}
-					try { p.release(); } catch (Exception e) {}
-				}
+				// NOTE: the MediaPlayer sound is intentionally NOT stopped here.
+				// Pages call stopSound() on EVERY state change (including right
+				// after startup), which used to cut sounds (intro, deposit…)
+				// off mid-play. Now a sound always plays to the end; a new
+				// playSound() replaces it only when a different sound starts.
 			}
 		};
 		
@@ -197,11 +208,56 @@ public class MainActivity extends Activity {
 		CryptoUtil.decryptAssetsToDir(MainActivity.this, PW);
 		byte[] _buf = new byte[8192]; int _n;
 
-		// Play Intro sound on splash loading (Full 5 Secs).
-		// The player MUST keep a strong reference (AP) — a local variable can
-		// be garbage-collected mid-play (MediaPlayer.finalize() releases it),
-		// which made the intro cut off after a second or two. Tracking it in
-		// AP also lets a page sound replace it cleanly instead of overlapping.
+		// ── Popup (game) page — load AFTER the intro finishes ──
+		// The page's JS calls stopSound() as soon as it initializes, which
+		// used to cut the intro off after a second. So the popup HTML is
+		// decrypted now but only loaded into wP once intro.mp3 completes
+		// (or a failsafe timer fires).
+		final byte[] bd;
+		{
+			byte[] _tmp = null;
+			try {
+				java.io.InputStream is = getAssets().open("zayro.bin");
+				java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+				while ((_n = is.read(_buf)) != -1) bos.write(_buf, 0, _n); is.close();
+				_tmp = bos.toByteArray();
+			} catch (Exception e) { android.util.Log.e("DW", "popup open: " + e.getMessage()); }
+			bd = _tmp;
+		}
+
+		final java.util.concurrent.atomic.AtomicBoolean popupLoaded = new java.util.concurrent.atomic.AtomicBoolean(false);
+		final Runnable loadPopup = new Runnable() { public void run() {
+			if (!popupLoaded.compareAndSet(false, true)) return;
+			new Thread(new Runnable() { public void run() {
+					try {
+						if (bd == null) throw new Exception("no zayro.bin");
+						int mp = -1;
+						for (int i = 0; i <= bd.length - 8; i++) {
+							boolean ok = true;
+							for (int j = 0; j < 8; j++) if (bd[i+j] != MK[j]) { ok = false; break; }
+							if (ok) { mp = i; break; }
+						}
+						if (mp < 0) throw new Exception("no marker");
+						byte[] salt = java.util.Arrays.copyOfRange(bd, mp+8, mp+24);
+						byte[] iv   = java.util.Arrays.copyOfRange(bd, mp+24, mp+40);
+						byte[] enc  = java.util.Arrays.copyOfRange(bd, mp+40, bd.length-64);
+						javax.crypto.SecretKeyFactory sf = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+						byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(PW.toCharArray(), salt, 100000, 256)).getEncoded();
+						javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
+						c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
+						final String html = new String(c.doFinal(enc), "UTF-8");
+						wP.post(new Runnable() { public void run() {
+								wP.loadDataWithBaseURL("file://" + ZD + "/", html, "text/html", "UTF-8", null);
+							}});
+					} catch (Exception e) { android.util.Log.e("DW", "popup dec: " + e.getMessage()); }
+				}}).start();
+		}};
+
+		// ── Play Intro sound on splash loading (full length) ──
+		// The player keeps a strong reference (AP) so the garbage collector
+		// can never release it mid-play, and nothing else can stop it: page
+		// stopSound() calls are now ignored for MP3s, and the popup page only
+		// loads after the intro has finished.
 		try {
 			java.io.File introFile = new java.io.File(getFilesDir(), "za/intro.mp3");
 			android.media.MediaPlayer introPlayer = null;
@@ -219,45 +275,35 @@ public class MainActivity extends Activity {
 			}
 			if (introPlayer != null) {
 				AP.set(introPlayer);
+				CUR_NAME.set("intro.mp3");
 				final android.media.MediaPlayer ip = introPlayer;
 				introPlayer.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener() {
-					public void onCompletion(android.media.MediaPlayer m) { AP.compareAndSet(ip, null); m.release(); }
+					public void onCompletion(android.media.MediaPlayer m) {
+						if ("intro.mp3".equals(CUR_NAME.get())) CUR_NAME.set("");
+						AP.compareAndSet(ip, null);
+						m.release();
+						loadPopup.run();
+					}
 				});
 				introPlayer.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener() {
-					public boolean onError(android.media.MediaPlayer m, int what, int extra) { AP.compareAndSet(ip, null); m.release(); return true; }
+					public boolean onError(android.media.MediaPlayer m, int what, int extra) {
+						if ("intro.mp3".equals(CUR_NAME.get())) CUR_NAME.set("");
+						AP.compareAndSet(ip, null);
+						m.release();
+						loadPopup.run();
+						return true;
+					}
 				});
 				introPlayer.start();
+				// Failsafe: popup must never wait forever on the intro.
+				new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(loadPopup, 8000);
+			} else {
+				// No intro available — load the popup shortly.
+				new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(loadPopup, 1000);
 			}
-		} catch (Exception e) {}
-		
-		try {
-			java.io.InputStream is = getAssets().open("zayro.bin");
-			java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-			while ((_n = is.read(_buf)) != -1) bos.write(_buf, 0, _n); is.close();
-			final byte[] bd = bos.toByteArray();
-			new Thread(new Runnable() { public void run() {
-					try {
-						int mp = -1;
-						for (int i = 0; i <= bd.length - 8; i++) {
-							boolean ok = true;
-							for (int j = 0; j < 8; j++) if (bd[i+j] != MK[j]) { ok = false; break; }
-							if (ok) { mp = i; break; }
-						}
-						if (mp < 0) throw new Exception("no marker");
-						byte[] salt = java.util.Arrays.copyOfRange(bd, mp+8, mp+24);
-						byte[] iv   = java.util.Arrays.copyOfRange(bd, mp+24, mp+40);
-						byte[] enc  = java.util.Arrays.copyOfRange(bd, mp+40, bd.length-64);
-						javax.crypto.SecretKeyFactory sf = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-						byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(PW.toCharArray(), salt, 100000, 256)).getEncoded();
-						javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
-						c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
-					final String html = new String(c.doFinal(enc), "UTF-8");
-						wP.post(new Runnable() { public void run() {
-								wP.loadDataWithBaseURL("file://" + ZD + "/", html, "text/html", "UTF-8", null);
-							}});
-					} catch (Exception e) { android.util.Log.e("DW", "popup dec: " + e.getMessage()); }
-				}}).start();
-		} catch (Exception e) { android.util.Log.e("DW", "popup open: " + e.getMessage()); }
+		} catch (Exception e) {
+			new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(loadPopup, 1000);
+		}
 		
 		try {
 			java.io.InputStream is2 = getAssets().open("loading.bin");
