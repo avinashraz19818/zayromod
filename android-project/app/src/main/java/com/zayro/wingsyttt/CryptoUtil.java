@@ -20,6 +20,10 @@ import javax.crypto.spec.SecretKeySpec;
  * native library). At startup all assets are decrypted into the app-private
  * directory (getFilesDir()), which no other app can read without root.
  *
+ * MP3 files are intentionally NOT encrypted at build time (they are stored
+ * plain in assets and played directly by MediaPlayer), so they are skipped
+ * here as well — no encrypt/decrypt handling for sounds at all.
+ *
  * If any asset fails to decrypt, the raw blob is copied as a fallback so the
  * app can never brick itself — worst case that single asset is unencrypted.
  */
@@ -83,7 +87,10 @@ public class CryptoUtil {
             if (names == null) return;
 
             for (String name : names) {
-                if (name.toLowerCase().endsWith(".bin")) continue;
+                String lower = name.toLowerCase();
+                // .bin files (HTML blobs) are decrypted in memory by
+                // MainActivity. MP3s are plain assets — never encrypted.
+                if (lower.endsWith(".bin") || lower.endsWith(".mp3")) continue;
                 byte[] blob = null;
                 try {
                     InputStream is = ctx.getAssets().open(name);
