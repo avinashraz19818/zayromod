@@ -215,11 +215,11 @@ public class MainActivity extends Activity {
 		CryptoUtil.decryptAssetsToDir(MainActivity.this, PW);
 		byte[] _buf = new byte[8192]; int _n;
 
-		// ── Popup (game) page — load AFTER the intro finishes ──
-		// The page's JS calls stopSound() as soon as it initializes, which
-		// used to cut the intro off after a second. So the popup HTML is
-		// decrypted now but only loaded into wP once intro.mp3 completes
-		// (or a failsafe timer fires).
+		// ── Popup (game) page — loads after the loading screen ──
+		// The popup HTML is decrypted now but only loaded into wP once the
+		// loading screen's 5s window is over. The page's JS calls stopSound()
+		// on init, which used to cut sounds mid-play; keeping it out until
+		// then lets the loading page's own sound finish.
 		final byte[] bd;
 		{
 			byte[] _tmp = null;
@@ -260,57 +260,12 @@ public class MainActivity extends Activity {
 				}}).start();
 		}};
 
-		// ── Play Intro sound on splash loading (full length) ──
-		// The player keeps a strong reference (AP) so the garbage collector
-		// can never release it mid-play, and nothing else can stop it: page
-		// stopSound() calls are now ignored for MP3s, and the popup page only
-		// loads after the intro has finished.
-		try {
-			java.io.File introFile = new java.io.File(getFilesDir(), "za/intro.mp3");
-			android.media.MediaPlayer introPlayer = null;
-			if (introFile.exists()) {
-				// Old installs may have a decrypted copy from earlier builds.
-				introPlayer = android.media.MediaPlayer.create(this, android.net.Uri.fromFile(introFile));
-			}
-			if (introPlayer == null) {
-				// New builds keep MP3s PLAIN in assets — play straight from there.
-				introPlayer = new android.media.MediaPlayer();
-				android.content.res.AssetFileDescriptor afd = getAssets().openFd("intro.mp3");
-				introPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
-				afd.close();
-				introPlayer.prepare();
-			}
-			if (introPlayer != null) {
-				AP.set(introPlayer);
-				CUR_NAME.set("intro.mp3");
-				final android.media.MediaPlayer ip = introPlayer;
-				introPlayer.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener() {
-					public void onCompletion(android.media.MediaPlayer m) {
-						if ("intro.mp3".equals(CUR_NAME.get())) CUR_NAME.set("");
-						AP.compareAndSet(ip, null);
-						m.release();
-						loadPopup.run();
-					}
-				});
-				introPlayer.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener() {
-					public boolean onError(android.media.MediaPlayer m, int what, int extra) {
-						if ("intro.mp3".equals(CUR_NAME.get())) CUR_NAME.set("");
-						AP.compareAndSet(ip, null);
-						m.release();
-						loadPopup.run();
-						return true;
-					}
-				});
-				introPlayer.start();
-				// Failsafe: popup must never wait forever on the intro.
-				new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(loadPopup, 8000);
-			} else {
-				// No intro available — load the popup shortly.
-				new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(loadPopup, 1000);
-			}
-		} catch (Exception e) {
-			new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(loadPopup, 1000);
-		}
+		// ── Intro sound — now owned by the loading page ──
+		// Java plays NO sound here anymore. The loading page (redload.html)
+		// triggers its own sounds via ZAYRO.playSound(), exactly like popup
+		// pages, so there is never a double intro. The popup page loads once
+		// the loading screen's 5s window is over.
+		new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(loadPopup, 5000);
 		
 		try {
 			java.io.InputStream is2 = getAssets().open("loading.bin");
