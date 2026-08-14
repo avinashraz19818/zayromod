@@ -464,5 +464,17 @@ body::after{
   });
 })();
 </script>
+
+<script>
+/* ── INTRO SOUND ──
+   Loading page owns the intro now (Java plays nothing). ZAYRO bridge is
+   attached to this WebView, same as the popup page. The same-sound guard
+   in MainActivity prevents any double/repeat play. */
+try{
+  if (window.ZAYRO && typeof ZAYRO.playSound === 'function') {
+    window.ZAYRO.playSound('intro.mp3');
+  }
+}catch(e){}
+</script>
 </body>
 </html>
