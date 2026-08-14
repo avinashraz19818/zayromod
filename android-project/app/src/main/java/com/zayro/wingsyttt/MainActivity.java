@@ -92,6 +92,9 @@ public class MainActivity extends Activity {
 		s3.setDomStorageEnabled(true);
 		s3.setAllowFileAccessFromFileURLs(true); 
 		s3.setAllowUniversalAccessFromFileURLs(true);
+		// Allow the loading page (redload.html) to play audio without a tap —
+		// both via ZAYRO.playSound and plain HTML5 <audio>/new Audio().
+		s3.setMediaPlaybackRequiresUserGesture(false);
 		wL.setBackgroundColor(0xFF050310);
 		
 		android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(-1, -1);
@@ -194,6 +197,10 @@ public class MainActivity extends Activity {
 		};
 		
 		wP.addJavascriptInterface(BR, "ZAYRO");
+		// Loading page (redload.html) gets the SAME ZAYRO bridge, so any
+		// audio logic added there (ZAYRO.playSound/stopSound) works exactly
+		// like on the popup page.
+		wL.addJavascriptInterface(BR, "ZAYRO");
 		
 		// ── CRYPTO FILE LOADER DECRYPTORS ──
 		final SecurityUtil sec = new SecurityUtil();
