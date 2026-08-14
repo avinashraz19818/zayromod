@@ -10,7 +10,7 @@ const bcrypt = require('bcryptjs');
 const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
 const { initBot, sendCoinRequest, sendApkReady } = require('./utils/telegram');
-const { injectParams: injectHtmlParams, injectThemeCss, sanitizeThemeColor } = require('./utils/htmlprocessor');
+const { injectParams: injectHtmlParams } = require('./utils/htmlprocessor');
 const {
   normalizeHttpUrl,
   replaceUrlDomain,
@@ -55,7 +55,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/builds', express.static(path.join(__dirname, 'builds')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/theme-assets', express.static(path.join(__dirname, 'templates', 'assets')));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'zayro_secret',
@@ -191,35 +190,6 @@ app.get('/api/designs/:id', (req, res) => {
   res.json(withPreviewImages(d));
 });
 
-app.get('/api/designs/:id/theme-preview', (req, res) => {
-  const d = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(req.params.id);
-  if (!d) return res.status(404).send('Design not found');
-  const color = sanitizeThemeColor(req.query.color);
-  const tpl = path.join(__dirname, 'templates', d.popup_html_file || '');
-  if (!fs.existsSync(tpl)) return res.status(404).send('Template not found');
-  const isDhani = d.category === 'dhani' || d.java_type === 'dhani' || d.java_type === 'premium';
-  const sampleRegister = isDhani ? 'https://demo.example.com/register?inviteCode=PREVIEW' : 'https://demo.example.com/#/register?invitationCode=PREVIEW';
-  const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
-  const urls = buildUrls(sampleRegister, isDhani);
-  let html = injectHtmlParams(fs.readFileSync(tpl, 'utf8'), {
-    registerUrl: sampleRegister,
-    depositUrl: urls.deposit,
-    wingoUrl: urls.wingo,
-    domain: extractDomain(sampleRegister),
-    firebasePath: 'zayropreview',
-    minDeposit: 300,
-    brandTitle: req.query.app_name || 'Preview App',
-    appIconBase64: null,
-    isDhani
-  });
-  html = injectThemeCss(html, color);
-  const baseTag = '<base href="/theme-assets/">';
-  if (/<head\b[^>]*>/i.test(html)) html = html.replace(/<head\b[^>]*>/i, m => m + baseTag);
-  else html = baseTag + html;
-  if (color) html = html.replace(/<\/body>/i, `<div id="zayro-theme-preview-ribbon">Theme ${color}</div></body>`);
-  res.set('Content-Type', 'text/html; charset=utf-8').send(html);
-});
-
 // ═══════════════════════════════════════════
 // ORDER / BUILD ROUTES
 // ═══════════════════════════════════════════
@@ -273,11 +243,7 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
 
   const fakeAddonEnabled = fake_addon === 'true' || fake_addon === true;
   const fakePrice = design.fake_price_coins > 0 ? design.fake_price_coins : parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('addon_fake_price')?.value || '5');
-  const rawThemeColor = String(req.body.theme_color || '').trim();
-  const themeColor = sanitizeThemeColor(rawThemeColor);
-  if (rawThemeColor && rawThemeColor.toLowerCase() !== 'default' && !themeColor) return res.json({ error: 'Invalid theme color' });
-  const themePrice = themeColor ? Math.max(0, parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('theme_color_price')?.value || '10', 10) || 0) : 0;
-  const subtotalCoins = design.price_coins + (fakeAddonEnabled ? fakePrice : 0) + themePrice;
+  const subtotalCoins = design.price_coins + (fakeAddonEnabled ? fakePrice : 0);
   let couponResult = { code: '', discount: 0 };
   try {
     couponResult = calculateCouponDiscount(req.body.coupon_code, subtotalCoins);
@@ -322,9 +288,9 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   db.prepare('UPDATE users SET coins = coins - ? WHERE id=?').run(totalCoins, user.id);
 
   const orderResult = db.prepare(`
-    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,status,coins_spent,design_variant,coupon_code,discount_coins,theme_color,theme_price)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'building',?,?,?,?,?,?)
-  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath, totalCoins, 'real', couponResult.code, couponResult.discount, themeColor, themePrice);
+    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,status,coins_spent,design_variant,coupon_code,discount_coins)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'building',?,?,?,?)
+  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath, totalCoins, 'real', couponResult.code, couponResult.discount);
   if (couponResult.code && couponResult.discount > 0) {
     db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=?').run(couponResult.coupon.id);
   }
@@ -619,7 +585,7 @@ app.post('/api/orders/:id/change-domain', requireAuth, async (req, res) => {
 // ═══════════════════════════════════════════
 
 app.get('/api/settings/payment', (req, res) => {
-  const s = db.prepare('SELECT key,value FROM settings WHERE key IN (?,?,?,?,?,?,?)').all('upi_qr_image','upi_id','coin_rate','addon_fake_price','domain_change_price','invite_code_change_price','theme_color_price');
+  const s = db.prepare('SELECT key,value FROM settings WHERE key IN (?,?,?,?,?,?)').all('upi_qr_image','upi_id','coin_rate','addon_fake_price','domain_change_price','invite_code_change_price');
   const result = {};
   s.forEach(r => result[r.key] = r.value);
   res.json(result);
@@ -1342,7 +1308,7 @@ app.post('/api/admin/settings', requireAdmin, adminUpload.fields([
   { name: 'upi_qr_image', maxCount: 1 },
   { name: 'loading_html', maxCount: 1 }
 ]), (req, res) => {
-  const allowed = ['upi_id','coin_rate','site_name','telegram_bot_token','telegram_admin_id','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count','theme_color_price'];
+  const allowed = ['upi_id','coin_rate','site_name','telegram_bot_token','telegram_admin_id','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count'];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
       db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run(key, req.body[key]);

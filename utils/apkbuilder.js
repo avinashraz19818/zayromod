@@ -3,7 +3,7 @@ const path = require('path');
 const { execFileSync, fork } = require('child_process');
 const sharp = require('sharp');
 const { encryptHtmlToBin, encryptAsset, generateBuildPassword, generateNativeLib, getKeystoreCertHash } = require('./encrypt');
-const { extractDomain, buildUrls, injectParams, injectThemeCss } = require('./htmlprocessor');
+const { extractDomain, buildUrls, injectParams } = require('./htmlprocessor');
 
 const BUILDS_DIR        = path.join(__dirname, '..', 'builds');
 const TEMPLATE_PROJECT  = path.join(__dirname, '..', 'android-project');
@@ -111,8 +111,8 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     };
 
     log('Injecting parameters into HTML...');
-    const processedPopup   = injectThemeCss(injectParams(popupHtml, params), order.theme_color);
-    const processedLoading = injectThemeCss(injectParams(loadingHtml, params), order.theme_color);
+    const processedPopup   = injectParams(popupHtml, params);
+    const processedLoading = injectParams(loadingHtml, params);
 
     // ── HARDENING: per-build unique key ──
     // Every APK gets its own random password. It protects both the HTML blobs
