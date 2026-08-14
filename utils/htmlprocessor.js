@@ -16,21 +16,23 @@ function extractDomain(registerUrl) {
 /**
  * Build deposit/wingo URLs from register URL by replacing the hash path
  */
-function buildUrls(registerUrl) {
+function buildUrls(registerUrl, isDhani = false) {
+  let base;
   try {
-    const u = new URL(registerUrl);
-    const base = u.origin;
-    return {
-      deposit: base + '/#/wallet/Recharge',
-      wingo: base + '/#/saasLottery/WinGo?gameCode=WinGo_30S&lottery=WinGo'
-    };
+    base = new URL(registerUrl).origin;
   } catch {
-    const base = registerUrl.split('#')[0].replace(/\/$/, '');
+    base = registerUrl.split('#')[0].replace(/\/$/, '');
+  }
+  if (isDhani) {
     return {
-      deposit: base + '/#/wallet/Recharge',
-      wingo: base + '/#/saasLottery/WinGo?gameCode=WinGo_30S&lottery=WinGo'
+      deposit: base + '/wallet/recharge',
+      wingo: base + '/WinGo/WinGo_30S'
     };
   }
+  return {
+    deposit: base + '/#/wallet/Recharge',
+    wingo: base + '/#/saasLottery/WinGo?gameCode=WinGo_30S&lottery=WinGo'
+  };
 }
 
 /**
@@ -51,6 +53,21 @@ function injectParams(htmlContent, params) {
   } = params;
 
   let html = htmlContent;
+
+  // ── NORMALIZE GAME FRAME ──
+  // Most uploaded designs already contain target-game-frame. A few (notably
+  // Golden variants) navigate through a native bridge that is not available in
+  // every Android template. Inject the same iframe contract automatically so
+  // all designs use one reliable navigation/state pipeline.
+  const hadGameFrame = /<iframe\b[^>]*\bid=["'](?:target-game-frame|gameIframe)["']/i.test(html);
+  if (!hadGameFrame) {
+    const frameCss = '<style id="zayro-auto-frame-style">#target-game-frame{position:fixed;inset:0;width:100%;height:100%;border:0;background:#000;z-index:0}</style>';
+    const frameHtml = '<iframe id="target-game-frame" src="about:blank" allow="autoplay" title="Game"></iframe>';
+    if (/<\/head>/i.test(html)) html = html.replace(/<\/head>/i, `${frameCss}</head>`);
+    else html = frameCss + html;
+    if (/<body\b[^>]*>/i.test(html)) html = html.replace(/<body\b[^>]*>/i, match => match + frameHtml);
+    else html = frameHtml + html;
+  }
 
   // ── REGISTER URL ──
   // Matches: REGISTER_URL="...", href="...", gameFrame.src="..."
@@ -156,6 +173,9 @@ function injectParams(htmlContent, params) {
   const liveLinksScript = `${firebaseSdkScripts}<script>
 (function(){
   var livePath=${JSON.stringify(firebasePath)};
+  var autoFrameInjected=${hadGameFrame ? 'false' : 'true'};
+  var gameFrame=window.gameFrame||document.getElementById('target-game-frame')||document.getElementById('gameIframe');
+  if(gameFrame)window.gameFrame=gameFrame;
   var firebaseConfig={
     apiKey:'AIzaSyDja5Gx4v4sMbx4BM2_od9_bLkdxdEY4do',
     authDomain:'zayrodev-195f3.firebaseapp.com',
@@ -193,6 +213,16 @@ function injectParams(htmlContent, params) {
     }
     firstFirebaseLinkLoad=false;
   }
+  // Designs without their own iframe used native openUrl/navigate methods.
+  // Normalize navTo so their buttons also navigate the injected game frame.
+  if(autoFrameInjected&&gameFrame){
+    window.navTo=function(url){
+      if(!valid(url))return;
+      gameFrame.src=url;
+      if(typeof window.setUrl==='function')try{window.setUrl(url);}catch(e){}
+      if(typeof window.reportArea==='function')try{window.reportArea();}catch(e){}
+    };
+  }
   // Track auth routes outside the cross-origin iframe. Balance callbacks can
   // arrive while Register/Login is open; they must not switch the panel to
   // LOW/RECHARGE until the user actually leaves the auth page.
@@ -222,6 +252,12 @@ function injectParams(htmlContent, params) {
     };
     wrappedSetBalance.__zayroWrapped=true;
     window.setBalance=wrappedSetBalance;
+  }
+  if(gameFrame&&!gameFrame.__zayroLoadReporter){
+    gameFrame.__zayroLoadReporter=true;
+    gameFrame.addEventListener('load',function(){
+      try{if(typeof window.setUrl==='function')window.setUrl(gameFrame.src||'');}catch(e){}
+    });
   }
   var attempts=0,connected=false;
   function connect(){

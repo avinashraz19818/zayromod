@@ -68,14 +68,13 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       }
     }
 
-    const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(order.register_url);
+    const isDhani = design.java_type === 'dhani' || design.java_type === 'premium' || design.category === 'dhani';
+    const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(order.register_url, isDhani);
     const domain = extractDomain(order.register_url);
     // This path is embedded once and remains stable. URL values under
     // <firebasePath>/config can then change without rebuilding the APK.
     const firebasePath = order.firebase_path
       || `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
-
-    const isDhani = design.java_type === 'dhani' || design.java_type === 'premium' || design.category === 'dhani';
     const params = {
       registerUrl: order.register_url, depositUrl, wingoUrl, domain, firebasePath,
       minDeposit: order.min_deposit, brandTitle: order.brand_title,
