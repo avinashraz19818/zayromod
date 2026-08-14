@@ -39,49 +39,6 @@ function buildUrls(registerUrl, isDhani = false) {
  * Inject all user params into HTML template
  * Handles both normal (zayro/wings) and dhani type HTMLs
  */
-function sanitizeThemeColor(value) {
-  const color = String(value || '').trim();
-  if (!color || color.toLowerCase() === 'default') return '';
-  return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toUpperCase() : '';
-}
-
-function hexToRgb(hex) {
-  const clean = sanitizeThemeColor(hex).slice(1);
-  if (!clean) return null;
-  return {
-    r: parseInt(clean.slice(0, 2), 16),
-    g: parseInt(clean.slice(2, 4), 16),
-    b: parseInt(clean.slice(4, 6), 16)
-  };
-}
-
-function injectThemeCss(htmlContent, themeColor) {
-  const color = sanitizeThemeColor(themeColor);
-  if (!color) return htmlContent;
-  const rgb = hexToRgb(color);
-  const rgbText = `${rgb.r}, ${rgb.g}, ${rgb.b}`;
-  const css = `<style id="zayro-theme-customizer">
-:root{
-  --zayro-theme:${color};--zayro-theme-rgb:${rgbText};
-  --primary:${color}!important;--accent:${color}!important;--hot:${color}!important;--red:${color}!important;
-  --red-main:${color}!important;--red-light:${color}!important;--crimson:${color}!important;--cyan:${color}!important;
-  --neon:${color}!important;--a:${color}!important;--blue:${color}!important;--lime:${color}!important;
-  --red-glow:rgba(${rgbText},.48)!important;--neon-glow:rgba(${rgbText},.55)!important;
-  --grad-red:linear-gradient(135deg,${color},rgba(${rgbText},.72))!important;
-  --grad-cyan:linear-gradient(135deg,${color},rgba(${rgbText},.72))!important;
-  --grad-crimson:linear-gradient(135deg,${color},rgba(${rgbText},.72))!important;
-}
-#zayro-theme-preview-ribbon{position:fixed;left:8px;bottom:8px;z-index:2147483647;padding:5px 9px;border-radius:999px;background:rgba(0,0,0,.55);color:${color};border:1px solid rgba(${rgbText},.55);font:700 10px/1 sans-serif;letter-spacing:.5px;pointer-events:none}
-button,.btn,[class*="btn"],.card,.panel,[class*="panel"],[class*="card"],#miniBtn,#panel{border-color:rgba(${rgbText},.55)!important;box-shadow:0 0 18px rgba(${rgbText},.28)!important}
-[class*="title"],[class*="brand"],[class*="live"],[class*="status"],.wo-head-title,.brand-name{color:${color}!important;text-shadow:0 0 12px rgba(${rgbText},.45)!important}
-svg,path{stroke-color:${color}}
-</style>`;
-  let html = htmlContent;
-  if (/<\/head>/i.test(html)) html = html.replace(/<\/head>/i, `${css}</head>`);
-  else html = css + html;
-  return html;
-}
-
 function injectParams(htmlContent, params) {
   const {
     registerUrl,
@@ -329,4 +286,4 @@ function injectParams(htmlContent, params) {
   return html;
 }
 
-module.exports = { extractDomain, buildUrls, injectParams, injectThemeCss, sanitizeThemeColor };
+module.exports = { extractDomain, buildUrls, injectParams };

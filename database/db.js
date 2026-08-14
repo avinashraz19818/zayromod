@@ -113,7 +113,6 @@ db.exec(`
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('domain_change_price','10')"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('invite_code_change_price','10')"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('backup_keep_count','10')"); } catch(e) {}
-  try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('theme_color_price','10')"); } catch(e) {}
   try { db.exec("ALTER TABLE coin_requests ADD COLUMN screenshot_file TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('site_url','')"); } catch(e) {}
@@ -139,8 +138,6 @@ db.exec(`
   try { db.exec("ALTER TABLE orders ADD COLUMN design_variant TEXT DEFAULT 'real'"); } catch(e) {}
   try { db.exec("ALTER TABLE orders ADD COLUMN coupon_code TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE orders ADD COLUMN discount_coins INTEGER DEFAULT 0"); } catch(e) {}
-  try { db.exec("ALTER TABLE orders ADD COLUMN theme_color TEXT DEFAULT ''"); } catch(e) {}
-  try { db.exec("ALTER TABLE orders ADD COLUMN theme_price INTEGER DEFAULT 0"); } catch(e) {}
 
   try {
     db.exec(`
