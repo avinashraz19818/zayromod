@@ -511,6 +511,8 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
   <a class="nav-link" data-sec="coin-requests" onclick="showSec('coin-requests',this)"><svg class="ni"><use href="#i-coin"/></svg> Coin Requests <span id="navPendingBadge" class="badge-mini" style="display:none">0</span></a>
   <a class="nav-link" data-sec="users" onclick="showSec('users',this)"><svg class="ni"><use href="#i-users"/></svg> Users</a>
   <a class="nav-link" data-sec="base-apk" onclick="showSec('base-apk',this)"><svg class="ni"><use href="#i-android"/></svg> Android Project</a>
+  <a class="nav-link" data-sec="coupons" onclick="showSec('coupons',this)"><svg class="ni"><use href="#i-coin"/></svg> Coupons</a>
+  <a class="nav-link" data-sec="backups" onclick="showSec('backups',this)"><svg class="ni"><use href="#i-file"/></svg> Backups</a>
   <a class="nav-link" data-sec="settings" onclick="showSec('settings',this)"><svg class="ni"><use href="#i-settings"/></svg> Settings</a>
   <div class="nav-foot">
     <a class="nav-link" href="/" target="_blank"><svg class="ni"><use href="#i-home"/></svg> Main Site</a>
@@ -694,6 +696,32 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
     </div>
   </div>
 
+  <!-- COUPONS -->
+  <div id="sec-coupons" class="section">
+    <div class="topbar"><h1>Coupons<small>Create offers to convert more clients</small></h1></div>
+    <div class="card" style="max-width:760px">
+      <div class="card-hd"><span class="accent"></span><h3>Create Coupon</h3></div>
+      <div class="grid2">
+        <div class="form-group"><label>Code</label><input id="cpCode" placeholder="WELCOME10"></div>
+        <div class="form-group"><label>Type</label><select id="cpType"><option value="fixed">Fixed Coins</option><option value="percent">Percent</option></select></div>
+        <div class="form-group"><label>Value</label><input id="cpValue" type="number" value="5" min="1"></div>
+        <div class="form-group"><label>Max Uses <small>(0 = unlimited)</small></label><input id="cpMax" type="number" value="0" min="0"></div>
+      </div>
+      <button class="btn btn-primary" onclick="createCoupon()"><svg><use href="#i-plus"/></svg> Create Coupon</button>
+    </div>
+    <div class="card"><div class="card-hd"><span class="accent"></span><h3>All Coupons</h3></div><div id="couponsList" style="color:var(--dim)">Loading…</div></div>
+  </div>
+
+  <!-- BACKUPS -->
+  <div id="sec-backups" class="section">
+    <div class="topbar"><h1>Backups<small>Database safety copies</small></h1></div>
+    <div class="card">
+      <div class="card-hd"><span class="accent"></span><h3>Database Backups</h3><span class="hint">Startup + manual backups</span></div>
+      <button class="btn btn-primary" onclick="createBackup()"><svg><use href="#i-plus"/></svg> Create Backup Now</button>
+      <div id="backupsList" style="color:var(--dim);margin-top:16px">Loading…</div>
+    </div>
+  </div>
+
   <!-- SETTINGS -->
   <div id="sec-settings" class="section">
     <div class="topbar"><h1>Settings<small>Configure platform & integrations</small></h1></div>
@@ -708,8 +736,10 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
       <div class="grid2">
         <div class="form-group"><label>Domain Change Price <small>(coins)</small></label><input type="number" id="sDomainPrice" value="10" min="0"></div>
         <div class="form-group"><label>Invitation Code Change Price <small>(coins)</small></label><input type="number" id="sInvitePrice" value="10" min="0"></div>
+        <div class="form-group"><label>Theme Color Change Price <small>(coins)</small></label><input type="number" id="sThemePrice" value="10" min="0"></div>
       </div>
       <div class="form-group"><label>Site Name</label><input type="text" id="sSiteName" value="Zayro Mod Builder"></div>
+      <div class="form-group"><label>Keep Last Backups</label><input type="number" id="sBackupKeep" value="10" min="1"><div class="hint">Automatic startup backups are stored in /backups. Old backups are cleaned by this limit.</div></div>
     </div>
     <div class="card" style="max-width:640px">
       <div class="card-hd"><span class="accent"></span><h3>Telegram Alerts</h3></div>
@@ -905,6 +935,8 @@ function loadSection(name) {
   else if (name==='users') loadUsers();
   else if (name==='settings') loadSettings();
   else if (name==='base-apk') loadBaseApkStatus();
+  else if (name==='coupons') loadCoupons();
+  else if (name==='backups') loadBackups();
 }
 
 // ── Dashboard ──
@@ -1199,6 +1231,7 @@ async function fetchOrders(status, search, sort, page, limit) {
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
                   ${o.apk_file ? `<a href="/api/orders/${o.id}/download" class="btn btn-sm btn-primary" target="_blank" title="Download APK"><svg><use href="#i-download"/></svg></a>` : ''}
                   ${o.fake_apk_file ? `<a href="/api/orders/${o.id}/download-fake" class="btn btn-sm btn-gold" target="_blank" title="Download Fake APK"><svg><use href="#i-download"/></svg> Fake</a>` : ''}
+                  <button class="btn btn-sm btn-ok" onclick="rebuildOrder(${o.id})" title="One-click rebuild"><svg><use href="#i-settings"/></svg> Rebuild</button>
                   <button class="btn btn-sm btn-danger" onclick="deleteOrder(${o.id})" title="Delete Order"><svg><use href="#i-x"/></svg></button>
                 </div>
               </td>
@@ -1461,6 +1494,7 @@ async function loadUserOrders(userId) {
           ${o.apk_file ? `<a href="/api/orders/${o.id}/download" class="btn btn-sm btn-primary" target="_blank" title="Download APK"><svg><use href="#i-download"/></svg></a>` : ''}
           ${o.fake_apk_file ? `<a href="/api/orders/${o.id}/download-fake" class="btn btn-sm btn-gold" target="_blank" title="Download Fake APK"><svg><use href="#i-download"/></svg> Fake</a>` : ''}
           <button class="btn btn-sm btn-ok" onclick="openFirebaseManager(${o.id})" title="Manage Firebase"><svg><use href="#i-settings"/></svg> Firebase</button>
+          <button class="btn btn-sm btn-primary" onclick="rebuildOrder(${o.id})" title="One-click rebuild"><svg><use href="#i-settings"/></svg> Rebuild</button>
           <button class="btn btn-sm btn-danger" onclick="deleteOrder(${o.id})" title="Delete Order"><svg><use href="#i-x"/></svg></button>
         </div>
       </td>
@@ -1637,6 +1671,38 @@ async function bulkDeleteUserOrders() {
   loadOrders();
 }
 
+async function rebuildOrder(id) {
+  if (!confirm('Rebuild this APK now? Existing download file will be replaced after build completes.')) return;
+  const d = await api('/api/admin/orders/' + id + '/rebuild', 'POST', { rebuild_fake: true });
+  if (d.error) return toast(d.error, true);
+  toast('Rebuild started');
+  loadOrders();
+}
+
+// ── Coupons ──
+async function loadCoupons() {
+  const rows = await api('/api/admin/coupons');
+  const c = document.getElementById('couponsList');
+  if (!Array.isArray(rows) || !rows.length) { c.innerHTML = '<div style="color:var(--dim)">No coupons yet.</div>'; return; }
+  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Uses</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map(r=>`
+    <tr><td><b>${r.code}</b></td><td>${r.type}</td><td>${r.value}${r.type==='percent'?'%':' coins'}</td><td>${r.used_count}/${r.max_uses||'∞'}</td><td><span class="badge ${r.active?'badge-ok':'badge-danger'}">${r.active?'Active':'Off'}</span></td><td><button class="btn btn-sm" onclick="toggleCoupon(${r.id},${r.active?0:1})">${r.active?'Disable':'Enable'}</button><button class="btn btn-sm btn-danger" onclick="deleteCoupon(${r.id})"><svg><use href="#i-x"/></svg></button></td></tr>`).join('')}</tbody></table></div>`;
+}
+async function createCoupon(){
+  const d=await api('/api/admin/coupons','POST',{code:document.getElementById('cpCode').value,type:document.getElementById('cpType').value,value:document.getElementById('cpValue').value,max_uses:document.getElementById('cpMax').value});
+  if(d.error)return toast(d.error,true);toast('Coupon created');document.getElementById('cpCode').value='';loadCoupons();
+}
+async function toggleCoupon(id,active){const d=await api('/api/admin/coupons/'+id,'PATCH',{active});if(d.error)return toast(d.error,true);loadCoupons();}
+async function deleteCoupon(id){if(!confirm('Delete coupon?'))return;await api('/api/admin/coupons/'+id,'DELETE');loadCoupons();}
+
+// ── Backups ──
+async function loadBackups(){
+  const rows=await api('/api/admin/backups');
+  const c=document.getElementById('backupsList');
+  if(!Array.isArray(rows)||!rows.length){c.innerHTML='<div style="color:var(--dim)">No backups yet.</div>';return;}
+  c.innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>File</th><th>Size</th><th>Date</th><th>Download</th></tr></thead><tbody>${rows.map(b=>`<tr><td>${b.file}</td><td>${Math.round(b.size/1024)} KB</td><td>${new Date(b.created_at).toLocaleString()}</td><td><a class="btn btn-sm btn-primary" href="/api/admin/backups/${encodeURIComponent(b.file)}/download" target="_blank"><svg><use href="#i-download"/></svg></a></td></tr>`).join('')}</tbody></table></div>`;
+}
+async function createBackup(){const d=await api('/api/admin/backups','POST');if(d.error)return toast(d.error,true);toast('Backup created');loadBackups();}
+
 // ── Settings ──
 async function loadSettings() {
   const s = await api('/api/admin/settings');
@@ -1645,6 +1711,8 @@ async function loadSettings() {
   document.getElementById('sFakePrice').value = s.addon_fake_price || '5';
   document.getElementById('sDomainPrice').value = s.domain_change_price || '10';
   document.getElementById('sInvitePrice').value = s.invite_code_change_price || '10';
+  document.getElementById('sThemePrice').value = s.theme_color_price || '10';
+  document.getElementById('sBackupKeep').value = s.backup_keep_count || '10';
   document.getElementById('sSiteName').value = s.site_name || '';
   document.getElementById('sTgToken').value = s.telegram_bot_token || '';
   document.getElementById('sTgAdminId').value = s.telegram_admin_id || '';
@@ -1663,6 +1731,8 @@ async function saveSettings() {
   fd.append('addon_fake_price', document.getElementById('sFakePrice').value);
   fd.append('domain_change_price', document.getElementById('sDomainPrice').value);
   fd.append('invite_code_change_price', document.getElementById('sInvitePrice').value);
+  fd.append('theme_color_price', document.getElementById('sThemePrice').value);
+  fd.append('backup_keep_count', document.getElementById('sBackupKeep').value);
   fd.append('site_name', document.getElementById('sSiteName').value);
   fd.append('telegram_bot_token', document.getElementById('sTgToken').value);
   fd.append('telegram_admin_id', document.getElementById('sTgAdminId').value);

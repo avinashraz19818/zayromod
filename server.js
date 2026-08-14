@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
 const { initBot, sendCoinRequest, sendApkReady } = require('./utils/telegram');
+const { injectParams: injectHtmlParams, injectThemeCss, sanitizeThemeColor } = require('./utils/htmlprocessor');
 const {
   normalizeHttpUrl,
   replaceUrlDomain,
@@ -24,15 +25,37 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Dirs ──
-['builds','uploads','templates/assets','base-apks','keystore'].forEach(d => {
+['builds','uploads','templates/assets','base-apks','keystore','backups'].forEach(d => {
   fs.mkdirSync(path.join(__dirname, d), { recursive: true });
 });
+
+function createDatabaseBackup(reason = 'manual') {
+  const backupDir = path.join(__dirname, 'backups');
+  fs.mkdirSync(backupDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const file = `apkbuilder_${reason}_${stamp}.db`;
+  const dest = path.join(backupDir, file);
+  try { db.pragma('wal_checkpoint(FULL)'); } catch (_) {}
+  fs.copyFileSync(path.join(__dirname, 'database', 'apkbuilder.db'), dest);
+  const keep = Math.max(1, parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('backup_keep_count')?.value || '10', 10) || 10);
+  const files = fs.readdirSync(backupDir)
+    .filter(f => /^apkbuilder_.*\.db$/.test(f))
+    .map(f => ({ f, t: fs.statSync(path.join(backupDir, f)).mtimeMs }))
+    .sort((a, b) => b.t - a.t);
+  for (const old of files.slice(keep)) {
+    try { fs.unlinkSync(path.join(backupDir, old.f)); } catch (_) {}
+  }
+  return { file, path: dest, size: fs.statSync(dest).size, created_at: new Date().toISOString() };
+}
+
+try { createDatabaseBackup('startup'); } catch (error) { console.error('Startup backup failed:', error.message); }
 
 // ── Middleware ──
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/builds', express.static(path.join(__dirname, 'builds')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/theme-assets', express.static(path.join(__dirname, 'templates', 'assets')));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'zayro_secret',
@@ -168,12 +191,65 @@ app.get('/api/designs/:id', (req, res) => {
   res.json(withPreviewImages(d));
 });
 
+app.get('/api/designs/:id/theme-preview', (req, res) => {
+  const d = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(req.params.id);
+  if (!d) return res.status(404).send('Design not found');
+  const color = sanitizeThemeColor(req.query.color);
+  const tpl = path.join(__dirname, 'templates', d.popup_html_file || '');
+  if (!fs.existsSync(tpl)) return res.status(404).send('Template not found');
+  const isDhani = d.category === 'dhani' || d.java_type === 'dhani' || d.java_type === 'premium';
+  const sampleRegister = isDhani ? 'https://demo.example.com/register?inviteCode=PREVIEW' : 'https://demo.example.com/#/register?invitationCode=PREVIEW';
+  const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+  const urls = buildUrls(sampleRegister, isDhani);
+  let html = injectHtmlParams(fs.readFileSync(tpl, 'utf8'), {
+    registerUrl: sampleRegister,
+    depositUrl: urls.deposit,
+    wingoUrl: urls.wingo,
+    domain: extractDomain(sampleRegister),
+    firebasePath: 'zayropreview',
+    minDeposit: 300,
+    brandTitle: req.query.app_name || 'Preview App',
+    appIconBase64: null,
+    isDhani
+  });
+  html = injectThemeCss(html, color);
+  const baseTag = '<base href="/theme-assets/">';
+  if (/<head\b[^>]*>/i.test(html)) html = html.replace(/<head\b[^>]*>/i, m => m + baseTag);
+  else html = baseTag + html;
+  if (color) html = html.replace(/<\/body>/i, `<div id="zayro-theme-preview-ribbon">Theme ${color}</div></body>`);
+  res.set('Content-Type', 'text/html; charset=utf-8').send(html);
+});
+
 // ═══════════════════════════════════════════
 // ORDER / BUILD ROUTES
 // ═══════════════════════════════════════════
 
 // Counter for package name uniqueness
 let _pkgCounter = db.prepare('SELECT MAX(id) as m FROM orders').get()?.m || 0;
+
+function calculateCouponDiscount(code, subtotal) {
+  const clean = String(code || '').trim().toUpperCase();
+  if (!clean) return { code: '', discount: 0 };
+  const c = db.prepare('SELECT * FROM coupons WHERE UPPER(code)=? AND active=1').get(clean);
+  if (!c) throw new Error('Invalid coupon code');
+  if (c.expires_at && new Date(c.expires_at).getTime() < Date.now()) throw new Error('Coupon expired');
+  if (c.max_uses > 0 && c.used_count >= c.max_uses) throw new Error('Coupon usage limit reached');
+  let discount = c.type === 'percent'
+    ? Math.floor((subtotal * Math.max(0, c.value)) / 100)
+    : Math.max(0, parseInt(c.value, 10) || 0);
+  discount = Math.min(subtotal, discount);
+  return { code: c.code, discount, coupon: c };
+}
+
+app.post('/api/coupons/validate', requireAuth, (req, res) => {
+  try {
+    const subtotal = Math.max(0, parseInt(req.body.subtotal, 10) || 0);
+    const result = calculateCouponDiscount(req.body.code, subtotal);
+    res.json({ success: true, code: result.code, discount: result.discount, total: Math.max(0, subtotal - result.discount) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
 
 app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) => {
   const { design_id, app_name, register_url, min_deposit, brand_title, fake_addon, fake_register_url } = req.body;
@@ -197,7 +273,18 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
 
   const fakeAddonEnabled = fake_addon === 'true' || fake_addon === true;
   const fakePrice = design.fake_price_coins > 0 ? design.fake_price_coins : parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('addon_fake_price')?.value || '5');
-  const totalCoins = design.price_coins + (fakeAddonEnabled ? fakePrice : 0);
+  const rawThemeColor = String(req.body.theme_color || '').trim();
+  const themeColor = sanitizeThemeColor(rawThemeColor);
+  if (rawThemeColor && rawThemeColor.toLowerCase() !== 'default' && !themeColor) return res.json({ error: 'Invalid theme color' });
+  const themePrice = themeColor ? Math.max(0, parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('theme_color_price')?.value || '10', 10) || 0) : 0;
+  const subtotalCoins = design.price_coins + (fakeAddonEnabled ? fakePrice : 0) + themePrice;
+  let couponResult = { code: '', discount: 0 };
+  try {
+    couponResult = calculateCouponDiscount(req.body.coupon_code, subtotalCoins);
+  } catch (error) {
+    return res.json({ error: error.message });
+  }
+  const totalCoins = Math.max(0, subtotalCoins - couponResult.discount);
 
   if (fakeAddonEnabled && !cleanFakeRegisterUrl) return res.json({ error: 'Fake site register URL required' });
   if (user.coins < totalCoins) return res.json({ error: `Not enough coins. Need ${totalCoins}, have ${user.coins}` });
@@ -235,9 +322,12 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   db.prepare('UPDATE users SET coins = coins - ? WHERE id=?').run(totalCoins, user.id);
 
   const orderResult = db.prepare(`
-    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,status,coins_spent,design_variant)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'building',?,?)
-  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath, totalCoins, 'real');
+    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,status,coins_spent,design_variant,coupon_code,discount_coins,theme_color,theme_price)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'building',?,?,?,?,?,?)
+  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath, totalCoins, 'real', couponResult.code, couponResult.discount, themeColor, themePrice);
+  if (couponResult.code && couponResult.discount > 0) {
+    db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=?').run(couponResult.coupon.id);
+  }
 
   const orderId = orderResult.lastInsertRowid;
   const buildId = `build_${orderId}_${Date.now()}`;
@@ -287,10 +377,12 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
     } else {
       db.prepare('UPDATE orders SET status=? WHERE id=?').run('failed', orderId);
       db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(totalCoins, user.id);
+      if (couponResult.code && couponResult.discount > 0) db.prepare('UPDATE coupons SET used_count=MAX(0,used_count-1) WHERE id=?').run(couponResult.coupon.id);
     }
   }).catch(err => {
     db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('failed', err.message, orderId);
     db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(totalCoins, user.id);
+    if (couponResult.code && couponResult.discount > 0) db.prepare('UPDATE coupons SET used_count=MAX(0,used_count-1) WHERE id=?').run(couponResult.coupon.id);
   });
 });
 
@@ -311,30 +403,47 @@ app.get('/api/orders/:id/status', requireAuth, (req, res) => {
   res.json(o);
 });
 
-app.get('/api/orders/:id/download', requireAuth, (req, res) => {
-  const o = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
-  if (!o || o.status !== 'done' || !o.apk_file) return res.status(404).json({ error: 'APK not ready' });
-  const buildsDir = path.join(__dirname, 'builds');
-  let apkPath = null;
-  for (const dir of fs.readdirSync(buildsDir)) {
-    const p = path.join(buildsDir, dir, o.apk_file);
-    if (fs.existsSync(p)) { apkPath = p; break; }
+function getDownloadableOrder(req) {
+  // Normal users can download only their own APKs. Admin dashboard buttons use
+  // the same download endpoints, so admin sessions must be allowed to fetch any
+  // order by id; otherwise the route used to return the misleading "APK not ready".
+  if (req.session.isAdmin) {
+    return db.prepare('SELECT * FROM orders WHERE id=?').get(req.params.id);
   }
+  return db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+}
+
+function findBuiltApk(fileName) {
+  if (!fileName) return null;
+  const safeFileName = path.basename(fileName);
+  const buildsDir = path.join(__dirname, 'builds');
+  if (!fs.existsSync(buildsDir)) return null;
+
+  for (const dir of fs.readdirSync(buildsDir)) {
+    const dirPath = path.join(buildsDir, dir);
+    if (!fs.statSync(dirPath).isDirectory()) continue;
+    const apkPath = path.join(dirPath, safeFileName);
+    if (fs.existsSync(apkPath)) return apkPath;
+  }
+  return null;
+}
+
+app.get('/api/orders/:id/download', requireAuth, (req, res) => {
+  const o = getDownloadableOrder(req);
+  // If apk_file is already written, the real APK is ready even while an optional
+  // Fake APK is still building. Do not block real downloads on status === 'done'.
+  if (!o || !o.apk_file) return res.status(404).json({ error: 'APK not ready' });
+  const apkPath = findBuiltApk(o.apk_file);
   if (!apkPath) return res.status(404).json({ error: 'File not found' });
-  res.download(apkPath, o.apk_file);
+  res.download(apkPath, path.basename(o.apk_file));
 });
 
 app.get('/api/orders/:id/download-fake', requireAuth, (req, res) => {
-  const o = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
-  if (!o || o.status !== 'done' || !o.fake_apk_file) return res.status(404).json({ error: 'Fake APK not ready' });
-  const buildsDir = path.join(__dirname, 'builds');
-  let apkPath = null;
-  for (const dir of fs.readdirSync(buildsDir)) {
-    const p = path.join(buildsDir, dir, o.fake_apk_file);
-    if (fs.existsSync(p)) { apkPath = p; break; }
-  }
+  const o = getDownloadableOrder(req);
+  if (!o || !o.fake_apk_file) return res.status(404).json({ error: 'Fake APK not ready' });
+  const apkPath = findBuiltApk(o.fake_apk_file);
   if (!apkPath) return res.status(404).json({ error: 'File not found' });
-  res.download(apkPath, o.fake_apk_file);
+  res.download(apkPath, path.basename(o.fake_apk_file));
 });
 
 function isDhaniOrder(order) {
@@ -510,7 +619,7 @@ app.post('/api/orders/:id/change-domain', requireAuth, async (req, res) => {
 // ═══════════════════════════════════════════
 
 app.get('/api/settings/payment', (req, res) => {
-  const s = db.prepare('SELECT key,value FROM settings WHERE key IN (?,?,?,?,?,?)').all('upi_qr_image','upi_id','coin_rate','addon_fake_price','domain_change_price','invite_code_change_price');
+  const s = db.prepare('SELECT key,value FROM settings WHERE key IN (?,?,?,?,?,?,?)').all('upi_qr_image','upi_id','coin_rate','addon_fake_price','domain_change_price','invite_code_change_price','theme_color_price');
   const result = {};
   s.forEach(r => result[r.key] = r.value);
   res.json(result);
@@ -975,6 +1084,65 @@ function getAdminOrder(orderId) {
   `).get(orderId);
 }
 
+function rebuildOrderInBackground(orderId, rebuildFake = true) {
+  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
+  const design = order ? db.prepare('SELECT * FROM designs WHERE id=?').get(order.design_id) : null;
+  const user = order ? db.prepare('SELECT * FROM users WHERE id=?').get(order.user_id) : null;
+  if (!order || !design || !user) throw new Error('Order, design or user not found');
+  const buildId = `build_${order.id}_rebuild_${Date.now()}`;
+  const logs = ['Admin one-click rebuild started...'];
+  const logPush = msg => { logs.push(msg); db.prepare('UPDATE orders SET build_log=? WHERE id=?').run(logs.join('\n'), order.id); };
+  db.prepare("UPDATE orders SET status='building',apk_file=NULL,fake_apk_file=CASE WHEN fake_register_url IS NOT NULL AND fake_register_url<>'' THEN NULL ELSE fake_apk_file END,build_log=? WHERE id=?")
+    .run(logs.join('\n'), order.id);
+
+  buildApk(order, design, buildId, logPush).then(async result => {
+    if (!result.success) {
+      db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('failed', logs.concat('Rebuild failed: ' + (result.error || 'Build failed')).join('\n'), order.id);
+      return;
+    }
+    db.prepare('UPDATE orders SET apk_file=? WHERE id=?').run(result.apkFile, order.id);
+    const apkPaths = [result.apkPath];
+    let fakeResult = null;
+    if (rebuildFake && order.fake_register_url) {
+      const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+      const fakeUrls = buildUrls(order.fake_register_url, isDhaniOrder({ ...order, design_category: design.category, design_java_type: design.java_type }));
+      const fakeOrder = {
+        ...order,
+        is_fake: true,
+        app_name: order.app_name + ' Fake',
+        package_name: 'com.zayrof.' + String(order.package_name || '').split('.').pop(),
+        register_url: order.fake_register_url,
+        deposit_url: fakeUrls.deposit,
+        wingo_url: fakeUrls.wingo,
+        domain: extractDomain(order.fake_register_url),
+        firebase_path: order.fake_firebase_path || `zayrof${extractDomain(order.fake_register_url).replace(/[^a-z0-9]/gi,'').substring(0,8)}`
+      };
+      logPush('\n--- Rebuilding Fake APK ---');
+      fakeResult = await buildApk(fakeOrder, design, buildId + '_fake', logPush);
+      if (fakeResult.success) {
+        db.prepare('UPDATE orders SET fake_apk_file=? WHERE id=?').run(fakeResult.apkFile, order.id);
+        apkPaths.push(fakeResult.apkPath);
+      } else {
+        logPush('Fake APK rebuild failed: ' + (fakeResult.error || 'Build failed'));
+      }
+    }
+    db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('done', logs.concat('Admin rebuild complete!').join('\n'), order.id);
+    sendApkReady(user, db.prepare('SELECT * FROM orders WHERE id=?').get(order.id), apkPaths, []).catch(() => {});
+  }).catch(error => {
+    db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('failed', logs.concat('Rebuild crashed: ' + error.message).join('\n'), order.id);
+  });
+  return { buildId };
+}
+
+app.post('/api/admin/orders/:id/rebuild', requireAdmin, (req, res) => {
+  try {
+    const result = rebuildOrderInBackground(req.params.id, req.body.rebuild_fake !== false);
+    res.json({ success: true, message: 'Rebuild started', ...result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Complete Firebase manager for each APK from Admin > Users > APKs.
 app.get('/api/admin/orders/:id/firebase', requireAdmin, async (req, res) => {
   const order = getAdminOrder(req.params.id);
@@ -1102,6 +1270,66 @@ app.get('/api/admin/users/stats', requireAdmin, (req, res) => {
   res.json(users);
 });
 
+// Coupons
+app.get('/api/admin/coupons', requireAdmin, (req, res) => {
+  res.json(db.prepare('SELECT * FROM coupons ORDER BY id DESC').all());
+});
+
+app.post('/api/admin/coupons', requireAdmin, (req, res) => {
+  const code = String(req.body.code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  const type = req.body.type === 'percent' ? 'percent' : 'fixed';
+  const value = Math.max(0, parseInt(req.body.value, 10) || 0);
+  const maxUses = Math.max(0, parseInt(req.body.max_uses, 10) || 0);
+  const expiresAt = String(req.body.expires_at || '').trim() || null;
+  if (!code) return res.status(400).json({ error: 'Coupon code required' });
+  if (!value) return res.status(400).json({ error: 'Coupon value required' });
+  try {
+    const result = db.prepare('INSERT INTO coupons(code,type,value,max_uses,expires_at,active) VALUES(?,?,?,?,?,1)')
+      .run(code, type, value, maxUses, expiresAt);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (error) {
+    res.status(400).json({ error: 'Coupon code already exists' });
+  }
+});
+
+app.patch('/api/admin/coupons/:id', requireAdmin, (req, res) => {
+  const active = req.body.active === true || req.body.active === '1' || req.body.active === 1 ? 1 : 0;
+  const info = db.prepare('UPDATE coupons SET active=? WHERE id=?').run(active, req.params.id);
+  if (!info.changes) return res.status(404).json({ error: 'Coupon not found' });
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/coupons/:id', requireAdmin, (req, res) => {
+  db.prepare('DELETE FROM coupons WHERE id=?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// Backups
+app.get('/api/admin/backups', requireAdmin, (req, res) => {
+  const backupDir = path.join(__dirname, 'backups');
+  fs.mkdirSync(backupDir, { recursive: true });
+  const backups = fs.readdirSync(backupDir)
+    .filter(f => /^apkbuilder_.*\.db$/.test(f))
+    .map(f => {
+      const st = fs.statSync(path.join(backupDir, f));
+      return { file: f, size: st.size, created_at: st.mtime };
+    })
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  res.json(backups);
+});
+
+app.post('/api/admin/backups', requireAdmin, (req, res) => {
+  try { res.json({ success: true, backup: createDatabaseBackup('manual') }); }
+  catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.get('/api/admin/backups/:file/download', requireAdmin, (req, res) => {
+  const file = path.basename(req.params.file);
+  const p = path.join(__dirname, 'backups', file);
+  if (!/^apkbuilder_.*\.db$/.test(file) || !fs.existsSync(p)) return res.status(404).json({ error: 'Backup not found' });
+  res.download(p, file);
+});
+
 // Settings
 app.get('/api/admin/settings', requireAdmin, (req, res) => {
   const rows = db.prepare('SELECT key,value FROM settings').all();
@@ -1114,7 +1342,7 @@ app.post('/api/admin/settings', requireAdmin, adminUpload.fields([
   { name: 'upi_qr_image', maxCount: 1 },
   { name: 'loading_html', maxCount: 1 }
 ]), (req, res) => {
-  const allowed = ['upi_id','coin_rate','site_name','telegram_bot_token','telegram_admin_id','addon_fake_price','domain_change_price','invite_code_change_price'];
+  const allowed = ['upi_id','coin_rate','site_name','telegram_bot_token','telegram_admin_id','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count','theme_color_price'];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
       db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run(key, req.body[key]);
