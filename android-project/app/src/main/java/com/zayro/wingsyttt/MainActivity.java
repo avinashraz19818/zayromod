@@ -125,10 +125,15 @@ public class MainActivity extends Activity {
 			public void playSound(final String f) {
 				new Thread(new Runnable() { public void run() {
 						android.media.MediaPlayer p = null;
-						try {
+					try {
 							p = new android.media.MediaPlayer(); AP.set(p);
-							android.content.res.AssetFileDescriptor a = getAssets().openFd(f);
-							p.setDataSource(a.getFileDescriptor(), a.getStartOffset(), a.getLength()); a.close();
+							java.io.File sf = new java.io.File(getFilesDir(), "za/" + f);
+							if (sf.exists()) {
+								p.setDataSource(sf.getAbsolutePath());
+							} else {
+								android.content.res.AssetFileDescriptor a = getAssets().openFd(f);
+								p.setDataSource(a.getFileDescriptor(), a.getStartOffset(), a.getLength()); a.close();
+							}
 							final android.media.MediaPlayer fp = p;
 							p.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener() {
 								public void onCompletion(android.media.MediaPlayer m) { AP.compareAndSet(fp, null); m.release(); }
@@ -155,18 +160,31 @@ public class MainActivity extends Activity {
 		
 		// Play Intro sound on splash loading (Full 5 Secs)
 		try {
-			android.media.MediaPlayer introPlayer = new android.media.MediaPlayer();
-			android.content.res.AssetFileDescriptor afd = getAssets().openFd("intro.mp3");
-			introPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
-			afd.close();
-			introPlayer.prepare();
-			introPlayer.start();
+			java.io.File introFile = new java.io.File(getFilesDir(), "za/intro.mp3");
+			if (introFile.exists()) {
+				android.media.MediaPlayer introPlayer = android.media.MediaPlayer.create(this, android.net.Uri.fromFile(introFile));
+				if (introPlayer != null) introPlayer.start();
+			} else {
+				android.media.MediaPlayer introPlayer = new android.media.MediaPlayer();
+				android.content.res.AssetFileDescriptor afd = getAssets().openFd("intro.mp3");
+				introPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+				afd.close();
+				introPlayer.prepare();
+				introPlayer.start();
+			}
 		} catch (Exception e) {}
 		
 		// ── CRYPTO FILE LOADER DECRYPTORS ──
 		final SecurityUtil sec = new SecurityUtil();
 		final byte[] MK = sec.getMarker();
 		final String PW = sec.getDecryptKey();
+
+		// ── HARDENING: decrypt all encrypted assets into app-private storage ──
+		// PNGs/MP3s/fonts/icon live in the APK as AES-256-GCM ciphertext; they
+		// are restored to getFilesDir()/za/ here so the WebView and MediaPlayer
+		// can use them. Outside this app nothing can read that folder.
+		final String ZD = new java.io.File(getFilesDir(), "za").getAbsolutePath();
+		CryptoUtil.decryptAssetsToDir(MainActivity.this, PW);
 		byte[] _buf = new byte[8192]; int _n;
 		
 		try {
@@ -190,9 +208,9 @@ public class MainActivity extends Activity {
 						byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(PW.toCharArray(), salt, 100000, 256)).getEncoded();
 						javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
 						c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
-						final String html = new String(c.doFinal(enc), "UTF-8");
+					final String html = new String(c.doFinal(enc), "UTF-8");
 						wP.post(new Runnable() { public void run() {
-								wP.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null);
+								wP.loadDataWithBaseURL("file://" + ZD + "/", html, "text/html", "UTF-8", null);
 							}});
 					} catch (Exception e) { android.util.Log.e("DW", "popup dec: " + e.getMessage()); }
 				}}).start();
@@ -219,9 +237,9 @@ public class MainActivity extends Activity {
 						byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(PW.toCharArray(), salt, 100000, 256)).getEncoded();
 						javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
 						c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
-						final String html = new String(c.doFinal(enc), "UTF-8");
+					final String html = new String(c.doFinal(enc), "UTF-8");
 						wL.post(new Runnable() { public void run() {
-								wL.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null);
+								wL.loadDataWithBaseURL("file://" + ZD + "/", html, "text/html", "UTF-8", null);
 							}});
 					} catch (Exception e) { android.util.Log.e("DW", "lodale dec: " + e.getMessage()); }
 				}}).start();

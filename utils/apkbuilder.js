@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync, fork } = require('child_process');
 const sharp = require('sharp');
-const { encryptHtmlToBin } = require('./encrypt');
+const { encryptHtmlToBin, encryptAsset, generateBuildPassword, generateNativeLib, getKeystoreCertHash } = require('./encrypt');
 const { extractDomain, buildUrls, injectParams } = require('./htmlprocessor');
 
 const BUILDS_DIR        = path.join(__dirname, '..', 'builds');
@@ -85,12 +85,18 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     const processedPopup   = injectParams(popupHtml,   params);
     const processedLoading = injectParams(loadingHtml, params);
 
+    // ── HARDENING: per-build unique key ──
+    // Every APK gets its own random password. It protects both the HTML blobs
+    // (PBKDF2) and every other asset (AES-256-GCM). The key is embedded XOR-
+    // masked in the native library, never as a plain string.
+    const buildPassword = generateBuildPassword();
+
     log('Encrypting HTML to .bin files...');
     const zayrobin      = path.join(buildDir, 'zayro.bin');
     const loadingBinName = isDhani ? 'lodale.bin' : 'loading.bin';
     const loadingbin    = path.join(buildDir, loadingBinName);
-    await encryptHtmlToBin(processedPopup,   zayrobin);
-    await encryptHtmlToBin(processedLoading, loadingbin);
+    await encryptHtmlToBin(processedPopup,   zayrobin, buildPassword);
+    await encryptHtmlToBin(processedLoading, loadingbin, buildPassword);
     log('Bin files created.');
 
     // ── Check template project exists ──
@@ -120,8 +126,8 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       fs.writeFileSync(gradlePath, g, 'utf8');
     }
 
-    // ── Copy assets ──
-    log('Replacing assets...');
+    // ── Copy assets (all encrypted with the per-build key) ──
+    log('Replacing assets (encrypted)...');
     const assetsDir = path.join(projectDir, 'app', 'src', 'main', 'assets');
     fs.mkdirSync(assetsDir, { recursive: true });
     fs.copyFileSync(zayrobin,   path.join(assetsDir, 'zayro.bin'));
@@ -129,8 +135,11 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
 
     const sharedAssetsDir = path.join(TEMPLATES_DIR, 'assets');
     if (fs.existsSync(sharedAssetsDir)) {
-      for (const f of fs.readdirSync(sharedAssetsDir))
-        fs.copyFileSync(path.join(sharedAssetsDir, f), path.join(assetsDir, f));
+      for (const f of fs.readdirSync(sharedAssetsDir)) {
+        const src = path.join(sharedAssetsDir, f);
+        if (fs.statSync(src).isFile())
+          fs.copyFileSync(src, path.join(assetsDir, f));
+      }
     }
 
     // ── App icon replacement ──
@@ -145,6 +154,31 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       }
       fs.writeFileSync(path.join(assetsDir, 'my_icon.png'), iconBuffer);
     }
+
+    // Encrypt every non-.bin asset inside the project assets dir in place.
+    // The .bin files are already encrypted (PBKDF2 layout) — the app's legacy
+    // decryptor reads them straight from assets.
+    for (const f of fs.readdirSync(assetsDir)) {
+      const assetPath = path.join(assetsDir, f);
+      if (!fs.statSync(assetPath).isFile()) continue;
+      if (f.toLowerCase().endsWith('.bin')) continue;
+      fs.writeFileSync(assetPath, encryptAsset(fs.readFileSync(assetPath), buildPassword));
+    }
+    log('All assets encrypted.');
+
+    // ── HARDENING: per-build native library (key + integrity hash) ──
+    // Burn the build-unique key and the expected signing-cert SHA-256 into the
+    // native lib. If keytool is unavailable the cert hash is omitted and the
+    // runtime integrity check is skipped (build never fails because of it).
+    const keystorePath = path.join(__dirname, '..', 'keystore', 'release.keystore');
+    const certHashHex = fs.existsSync(keystorePath)
+      ? getKeystoreCertHash(keystorePath, 'zayro@123')
+      : null;
+    const nativeSrc = generateNativeLib({ password: buildPassword, certHashHex });
+    const nativeLibPath = path.join(projectDir, 'app', 'src', 'main', 'cpp', 'native-lib.cpp');
+    fs.mkdirSync(path.dirname(nativeLibPath), { recursive: true });
+    fs.writeFileSync(nativeLibPath, nativeSrc, 'utf8');
+    log(certHashHex ? 'Native hardening + integrity check embedded.' : 'Native hardening embedded (integrity check skipped — keytool unavailable).');
 
     // ── Gradle build ──
     log('Compiling APK package...');
@@ -166,7 +200,6 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
 
     // ── Sign APK ──
     log('Signing with keystore...');
-    const keystorePath = path.join(__dirname, '..', 'keystore', 'release.keystore');
     const signedApk    = path.join(buildDir, `${order.app_name.replace(/\s+/g, '_')}.apk`);
 
     if (fs.existsSync(keystorePath)) {
