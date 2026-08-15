@@ -1,2 +1,4 @@
 backups/*.db
 backups/*.sqlite
+database/*.db-shm
+database/*.db-wal
