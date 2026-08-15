@@ -212,6 +212,17 @@ function ensureAudioGate(html) {
   return html + snippet;
 }
 
+// ── Register delay normalizer (future templates ke liye bhi) ──
+// Naye upload hone wale templates me bhi register.mp3 ka 3-5 sec delay ho
+// sakta hai. Build time pe hi har pattern ko 1000ms kar dete hain, taaki
+// admin ko har naye design ke liye khud patch na karna pade. (Gate v3 khud
+// bhi 1 sec pe register.mp3 bajata hai; ye fallback path ke liye hai.)
+function normalizeRegisterDelay(html) {
+  if (!html) return html;
+  // ; } ke beech space/newline kuch bhi ho — \s* sab cover karta hai
+  return html.replace(/(playAudio\(['"]register\.mp3['"]\);\s*\},)\s*(?:5000|3000)\s*\);/g, '$1 1000);');
+}
+
 // ── APK build implementation ──
 // This implementation intentionally runs inside apkbuilder-worker.js. It uses
 // synchronous filesystem/Gradle commands, which are safe in the isolated
@@ -265,7 +276,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     };
 
     log('Injecting parameters into HTML...');
-    const processedPopup   = ensureAudioGate(injectParams(popupHtml, params));
+    const processedPopup   = normalizeRegisterDelay(ensureAudioGate(injectParams(popupHtml, params)));
     const processedLoading = ensureIntroSnippet(injectParams(loadingHtml, params));
 
     // ── HARDENING: per-build unique key ──
