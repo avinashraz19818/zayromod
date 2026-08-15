@@ -977,7 +977,7 @@ window.setUrl=function(url){
     window.setState('wait');
   }
   else {
-    if(wasAuthFlowActive){
+    if(wasAuthFlowActive && currentPhone){
       wasAuthFlowActive = false;
       playAudio('successful.mp3');
     }
