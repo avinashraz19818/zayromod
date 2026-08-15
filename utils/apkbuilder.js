@@ -84,72 +84,113 @@ function ensureIntroSnippet(html) {
   return html + snippet;
 }
 
-// ── Home-page audio gate (template-agnostic, auto-injected) ──
-// Koi bhi design template upload karo — ye snippet build time pe popup HTML
-// me inject hota hai, isliye har design (purana ya naya upload) covered hai.
-// Rule: jab tak asli login/registration detect nahi hota, tab tak home page
-// wale mp3 (successful / lowbalance / deposit / low_deposit) BLOCK rahenge.
-// Login/registration detect hone ke baad sab normal chalega.
-// - register.mp3, bypass.mp3, intro.mp3 pe koi rok nahi (unka apna flow hai)
-// - Agar template me pehle se isLoggedIn flag hai (newer templates) to wo
-//   bhi respect hota hai.
+// ── Home-page audio gate v2 (template-agnostic, auto-injected) ──
+// Koi bhi design upload karo — ye snippet build time pe popup HTML me inject
+// hota hai. v1 URL/phone heuristics use karta tha jisse false positive aata
+// tha (number type karke wapas home jaane par bhi audio bajta tha) aur real
+// login miss ho jata tha.
+// v2 ab SITE ke andar ka actual logged-in state check karta hai:
+//   1) iframe ke localStorage me token/auth/user wali keys
+//   2) balance elements (site ye sirf logged-in user ko dikhati hai)
+//   3) header/user-info me 10-digit phone number
+// Jab tak logged-in confirm nahi hota, home wale mp3 (successful /
+// lowbalance / deposit / low_deposit) BLOCK rehte hain. Confirm hote hi
+// successful.mp3 ek baar apne aap bajta hai (template ne na bajaya ho to bhi).
 function ensureAudioGate(html) {
   if (!html) return html;
-  // Pehle se gate injected hai (e.g. purane build se nikla template) to skip
-  if (html.indexOf('ZAYRO AUDIO GATE') !== -1) return html;
+  // Purana gate version (v1 ya purana build se nikla hua) hata do
+  html = html.replace(/<script>[\s\S]*?ZAYRO AUDIO GATE[\s\S]*?<\/script>/gi, '');
   const snippet = [
     '<script>',
-    '/* ZAYRO AUDIO GATE — auto-injected at build time (template-agnostic) */',
+    '/* ZAYRO AUDIO GATE V2 — auto-injected at build time (template-agnostic) */',
     '(function(){',
-    '  var __loggedIn=false, __sawAuth=false, __sawPhone=false;',
-    '  function __isAllowed(f){',
+    '  var __g={on:false, played:false};',
+    '  function __blocked(f){',
     '    var n=String(f||"").toLowerCase();',
-    '    var blocked=n.indexOf("successful")>=0||n.indexOf("lowbalance")>=0||n.indexOf("low_deposit")>=0||n.indexOf("deposit")>=0;',
-    '    if(!blocked) return true;',
-    '    try{ if(window.isLoggedIn===true) return true; }catch(e){}',
-    '    return __loggedIn;',
+    '    return n.indexOf("successful")>=0||n.indexOf("lowbalance")>=0||n.indexOf("low_deposit")>=0||n.indexOf("deposit")>=0;',
     '  }',
+    '  function __ok(f){ return !__blocked(f) || __g.on; }',
+    '  var __origZ=null;',
+    '  try{',
+    '    if(window.ZAYRO&&typeof window.ZAYRO.playSound==="function"){',
+    '      __origZ=window.ZAYRO.playSound;',
+    '      window.ZAYRO.playSound=function(f){ if(!__ok(f))return; return __origZ.apply(window.ZAYRO,arguments); };',
+    '    }',
+    '  }catch(e){}',
     '  try{',
     '    if(typeof playAudio==="function"){',
-    '      var __origPlay=playAudio;',
-    '      window.playAudio=function(f){',
-    '        if(!__isAllowed(f)) return;',
-    '        return __origPlay.apply(this, arguments);',
-    '      };',
+    '      var __op=playAudio;',
+    '      window.playAudio=function(f){ if(!__ok(f))return; return __op.apply(this,arguments); };',
     '    }',
     '  }catch(e){}',
-    '  try{',
-    '    if(window.ZAYRO && typeof window.ZAYRO.playSound==="function"){',
-    '      var __origZ=window.ZAYRO.playSound;',
-    '      window.ZAYRO.playSound=function(f){',
-    '        if(!__isAllowed(f)) return;',
-    '        return __origZ.apply(window.ZAYRO, arguments);',
-    '      };',
-    '    }',
-    '  }catch(e){}',
+    '  var __sel=[".amount .a1 .a",".gameHeader__C-balance",".Wallet__C-balance-l1",".walletInfo__C-balance",".headerInfo__C-right",".header__money",".header-money",".top-bar__balance",".userInfo__C-balance",".balance-amount",".my-amount",".balance",".wallet-amount"];',
+    '  function __hasDigits(t){ return /[0-9]/.test(String(t||"")); }',
+    '  function __hasAuthButton(doc){',
+    '    try{',
+    '      var btns=doc.querySelectorAll("button,a");',
+    '      for(var i=0;i<btns.length;i++){',
+    '        var b=btns[i];',
+    '        if(b.offsetWidth===0&&b.offsetHeight===0) continue;',
+    '        var t=(b.innerText||b.textContent||"").trim().toLowerCase();',
+    '        if(t.length<=12&&(t==="login"||t==="register"||t==="sign in"||t==="sign up"||t==="log in"||t==="register/login")) return true;',
+    '      }',
+    '    }catch(e){}',
+    '    return false;',
+    '  }',
+    '  function __loggedIn(doc,win){',
+    '    // 1) localStorage me token/auth/user keys (sabse strong signal)',
+    '    try{',
+    '      var ls=win.localStorage;',
+    '      if(ls&&ls.length){',
+    '        for(var i=0;i<ls.length;i++){',
+    '          var k=""; try{k=ls.key(i);}catch(e){}',
+    '          if(/token|auth|user|login|account|session|member/i.test(k)) return true;',
+    '        }',
+    '      }',
+    '    }catch(e){}',
+    '    // 2) balance elements — site ye sirf logged-in user ko dikhati hai',
+    '    try{',
+    '      for(var j=0;j<__sel.length;j++){',
+    '        var el=doc.querySelector(__sel[j]);',
+    '        if(el){',
+    '          var t=(el.innerText||el.textContent||el.getAttribute("data-amount")||el.getAttribute("data-balance")||"");',
+    '          if(__hasDigits(t)) return true;',
+    '        }',
+    '      }',
+    '    }catch(e){}',
+    '    // 3) user-info/header me 10-digit phone number',
+    '    try{',
+    '      var h=doc.querySelector(".userInfo, .user-info, .headerInfo, [class*=user-info], [class*=userInfo], [class*=avatar], .my__info");',
+    '      if(h){ var ht=(h.innerText||h.textContent||""); if(/\b[6-9][0-9]{9}\b/.test(ht)) return true; }',
+    '    }catch(e){}',
+    '    return false;',
+    '  }',
     '  setInterval(function(){',
     '    try{',
     '      var fr=document.getElementById("target-game-frame");',
-    '      if(!fr){ var fs=document.getElementsByTagName("iframe"); if(fs.length) fr=fs[0]; }',
-    '      if(!fr || !fr.contentWindow) return;',
+    '      if(!fr){var fs=document.getElementsByTagName("iframe"); if(fs.length)fr=fs[0];}',
+    '      if(!fr||!fr.contentWindow) return;',
+    '      var win=fr.contentWindow, doc=null;',
+    '      try{ doc=fr.contentDocument||win.document; }catch(e){ return; }',
+    '      if(!doc) return;',
     '      var href="";',
-    '      try{ href=fr.contentWindow.location.href; }catch(e){ return; }',
-    '      if(!href || href==="about:blank") return;',
-    '      var hash=href.split("#")[1]||"";',
-    '      var isReg=hash.indexOf("/register")>=0||href.indexOf("register")>=0||hash.indexOf("invitationcode")>=0;',
-    '      var isLogin=hash.indexOf("/login")>=0||href.indexOf("login")>=0;',
-    '      if(isReg||isLogin){',
-    '        __sawAuth=true;',
-    '        try{',
-    '          var doc=fr.contentDocument||fr.contentWindow.document;',
-    '          var inp=doc.querySelector("input[type=tel],input[placeholder*=phone],input[placeholder*=Phone],input[placeholder*=mobile],input[placeholder*=Mobile],input[placeholder*=user]");',
-    '          if(inp){ var v=(inp.value||"").replace(/[^0-9]/g,""); if(v.length>=10) __sawPhone=true; }',
-    '        }catch(e2){}',
-    '      } else if(__sawAuth && __sawPhone){',
-    '        __loggedIn=true;',
+    '      try{ href=win.location.href; }catch(e){ return; }',
+    '      var hash=(href.split("#")[1]||"").toLowerCase();',
+    '      var isAuth=hash.indexOf("register")>=0||hash.indexOf("login")>=0||hash.indexOf("invitationcode")>=0||href.indexOf("register")>=0||href.indexOf("login")>=0;',
+    '      if(isAuth) return; // auth pages par logged-in check nahi karte',
+    '      if(__loggedIn(doc,win)){',
+    '        if(!__g.on){',
+    '          __g.on=true;',
+    '          // Login confirm — successful ek baar bajao (template ne na bajaya',
+    '          // ho to bhi). Java ka same-sound guard duplicate rok leta hai.',
+    '          if(!__g.played){',
+    '            __g.played=true;',
+    '            try{ if(__origZ) __origZ.apply(window.ZAYRO,["successful.mp3"]); }catch(e){}',
+    '          }',
+    '        }',
     '      }',
     '    }catch(e){}',
-    '  },700);',
+    '  },800);',
     '})();',
     '</script>',
     ''
