@@ -399,6 +399,12 @@ input:focus,select:focus,textarea:focus{border-color:rgba(103,232,255,.55);box-s
 .lb-close{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;width:40px;height:40px;border-radius:14px;
   cursor:pointer;font-size:24px;line-height:1;color:#fff;background:rgba(255,255,255,.08);border:1px solid var(--border)}
 footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:var(--dim);font-size:11px;letter-spacing:.4px}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.google-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:#fff !important;color:#3c4043 !important;border:1px solid rgba(0,0,0,.14) !important;box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:600;font-size:13.5px}
+.google-btn:hover{background:#f7f9fc !important}
+.google-btn:active{transform:scale(.98)}
+.google-btn .g-logo{width:16px;height:16px;flex:none}
 </style>
 </head>
 <body>
@@ -585,6 +591,11 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
         <button class="btn btn-outline" onclick="closeModal('authModal')">Cancel</button>
         <button class="btn btn-primary" onclick="doLogin(this)"><svg class="i sm"><use href="#ic-login"/></svg>Login</button>
       </div>
+      <div class="auth-divider"><span>or</span></div>
+      <button type="button" class="btn google-btn" onclick="location.href='/auth/google'">
+        <svg class="g-logo" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>
+        Continue with Google
+      </button>
     </div>
     <div id="registerForm" style="display:none">
       <div class="form-group"><label><svg class="i sm"><use href="#ic-user"/></svg>Username</label>
@@ -601,6 +612,11 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
         <button class="btn btn-outline" onclick="closeModal('authModal')">Cancel</button>
         <button class="btn btn-primary" onclick="doRegister(this)"><svg class="i sm"><use href="#ic-check"/></svg>Register</button>
       </div>
+      <div class="auth-divider"><span>or</span></div>
+      <button type="button" class="btn google-btn" onclick="location.href='/auth/google'">
+        <svg class="g-logo" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>
+        Continue with Google
+      </button>
     </div>
   </div>
 </div>
@@ -1494,6 +1510,13 @@ window.addEventListener('load',async()=>{
   await loadMe();
   await loadDesigns();
   syncAmountUI();
+
+  /* Google login result (redirect ke baad) */
+  const q=new URLSearchParams(location.search);
+  if(q.get('google')==='1'){ toast('Google se logged in!'); }
+  else if(q.get('google')==='error'){ toast('Google login fail hua — dobara try karein', true); }
+  else if(q.get('google')==='disabled'){ toast('Google login configure nahi hua hai — admin se baat karein', true); }
+  if(q.has('google')){ history.replaceState(null,'',location.pathname); }
 });
 </script>
 </body>

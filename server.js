@@ -6,6 +6,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const https = require('https');
 
 const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
@@ -132,6 +134,144 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/logout', (req, res) => {
   req.session.destroy();
   res.json({ success: true });
+});
+
+// ═══════════════════════════════════════════
+// GOOGLE OAuth LOGIN — "Continue with Google"
+// ═══════════════════════════════════════════
+// Koi naya npm package nahi chahiye — native https se token exchange + user
+// info fetch hota hai. .env me bas ye bharna hai:
+//   GOOGLE_CLIENT_ID=...
+//   GOOGLE_CLIENT_SECRET=...
+//   GOOGLE_REDIRECT_URI=https://yourdomain.com/auth/google/callback
+//     (khali chhoda to BASE_URL se khud ban jata hai)
+// Google Cloud Console ke OAuth client me EXACTLY wahi redirect URI
+// authorized hona chahiye.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI
+  || (process.env.BASE_URL ? process.env.BASE_URL.replace(/\/+$/, '') + '/auth/google/callback' : '');
+
+function googleAuthEnabled() {
+  return !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI);
+}
+
+function httpsPostForm(url, params) {
+  return new Promise((resolve, reject) => {
+    const data = new URLSearchParams(params).toString();
+    const u = new URL(url);
+    const rq = https.request(u, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(data)
+      }
+    }, (res) => {
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(new Error('bad json: ' + body.slice(0, 200))); }
+      });
+    });
+    rq.on('error', reject);
+    rq.write(data);
+    rq.end();
+  });
+}
+
+function httpsGetJson(url, accessToken) {
+  return new Promise((resolve, reject) => {
+    https.get(new URL(url), { headers: { Authorization: 'Bearer ' + accessToken } }, (res) => {
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(new Error('bad json')); }
+      });
+    }).on('error', reject);
+  });
+}
+
+// Step 1: user ko Google ke consent screen pe bhejo
+app.get('/auth/google', (req, res) => {
+  if (!googleAuthEnabled()) return res.redirect('/?google=disabled');
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.googleState = state;
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: GOOGLE_REDIRECT_URI,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    prompt: 'select_account'
+  });
+  res.redirect('https://accounts.google.com/o/oauth2/v2/auth?' + params.toString());
+});
+
+// Step 2: Google wapas code bhejta hai → login ya account create
+app.get('/auth/google/callback', async (req, res) => {
+  const fail = (msg) => {
+    if (msg) console.error('Google auth error:', msg);
+    return res.redirect('/?google=error');
+  };
+  if (!googleAuthEnabled()) return fail('not configured');
+  const { code, state, error } = req.query;
+  if (error) return fail('google returned: ' + error);
+  if (!code) return fail('no code');
+  if (!state || state !== req.session.googleState) return fail('state mismatch');
+  delete req.session.googleState;
+
+  try {
+    // 1) code → access token
+    const tokenRes = await httpsPostForm('https://oauth2.googleapis.com/token', {
+      code,
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: GOOGLE_REDIRECT_URI,
+      grant_type: 'authorization_code'
+    });
+    if (!tokenRes || !tokenRes.access_token) return fail('token exchange failed: ' + JSON.stringify(tokenRes).slice(0, 150));
+
+    // 2) access token → user info (google id, name, email)
+    const info = await httpsGetJson('https://www.googleapis.com/oauth2/v3/userinfo', tokenRes.access_token);
+    if (!info || !info.email) return fail('userinfo failed');
+    const googleId = String(info.sub || '');
+    const email = String(info.email).trim().toLowerCase();
+    const name = String(info.name || '').trim();
+
+    // 3) Existing user? google_id → email → naya banao
+    let user = googleId ? db.prepare('SELECT * FROM users WHERE google_id=?').get(googleId) : null;
+    if (!user) user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+
+    if (!user) {
+      // Naya account — username Google ke naam se, conflict par email prefix
+      let base = name.toLowerCase().replace(/[^a-z0-9._]/g, '').substring(0, 15);
+      if (!base) base = email.split('@')[0].replace(/[^a-z0-9._]/g, '').substring(0, 15);
+      let username = base || 'user';
+      let n = 1;
+      while (db.prepare('SELECT 1 FROM users WHERE username=?').get(username)) {
+        username = base + n++;
+      }
+      // Google users ka password hota nahi — random hash (kabhi use nahi hoga)
+      const randomHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+      const ins = db.prepare('INSERT INTO users(username,email,password,plain_password,google_id) VALUES(?,?,?,?,?)');
+      const r = ins.run(username, email, randomHash, '', googleId || null);
+      user = db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid);
+    } else if (googleId && !user.google_id) {
+      // Email se pehle se account hai → usko Google se link kar do
+      db.prepare('UPDATE users SET google_id=? WHERE id=?').run(googleId, user.id);
+      user.google_id = googleId;
+    }
+
+    // 4) Session set — bilkul /api/login jaisa
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    req.session.isAdmin = false;
+    res.redirect('/?google=1');
+  } catch (e) {
+    return fail(e.message);
+  }
 });
 
 app.get('/api/me', requireAuth, (req, res) => {
