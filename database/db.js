@@ -115,6 +115,10 @@ db.exec(`
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('backup_keep_count','10')"); } catch(e) {}
   try { db.exec("ALTER TABLE coin_requests ADD COLUMN screenshot_file TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''"); } catch(e) {}
+  // Google login: NULL default zaroori hai — UNIQUE index multiple NULLs
+  // allow karta hai (normal registrations me google_id khali/NA rahega).
+  try { db.exec("ALTER TABLE users ADD COLUMN google_id TEXT"); } catch(e) {}
+  try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('site_url','')"); } catch(e) {}
   // Canonical design category. Legacy type/java_type/variant columns remain for
   // build compatibility, but the admin now manages one clear category only.
