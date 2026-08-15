@@ -932,27 +932,55 @@ app.get('/api/admin/orders', requireAdmin, (req, res) => {
   });
 });
 
+// ── Helpers: remove order build folders completely ──
+// Delete karte waqt sirf .apk file nahi — pura build folder hatate hain,
+// taaki .idsig files aur khali folders bhi na bachhein.
+
+function deleteOrderBuildFolders(order) {
+  const buildsDir = path.join(__dirname, 'builds');
+  const names = [order.apk_file, order.fake_apk_file].filter(Boolean);
+  if (!names.length || !fs.existsSync(buildsDir)) return;
+  for (const dir of fs.readdirSync(buildsDir)) {
+    const dirPath = path.join(buildsDir, dir);
+    let stat;
+    try { stat = fs.statSync(dirPath); } catch (_) { continue; }
+    if (!stat.isDirectory()) continue;
+    let has = false;
+    try { has = fs.readdirSync(dirPath).some(f => names.includes(f)); } catch (_) {}
+    if (has) {
+      try { fs.rmSync(dirPath, { recursive: true, force: true }); } catch (_) {}
+    }
+  }
+}
+
+// Purane deletes se bache hue folders (sirf .idsig wale ya bilkul khali)
+// bhi saaf kar dete hain.
+function cleanupOrphanBuildFolders() {
+  const buildsDir = path.join(__dirname, 'builds');
+  if (!fs.existsSync(buildsDir)) return;
+  for (const dir of fs.readdirSync(buildsDir)) {
+    const dirPath = path.join(buildsDir, dir);
+    let stat;
+    try { stat = fs.statSync(dirPath); } catch (_) { continue; }
+    if (!stat.isDirectory()) continue;
+    let files = [];
+    try { files = fs.readdirSync(dirPath); } catch (_) { continue; }
+    const junkOnly = files.every(f => f.toLowerCase().endsWith('.idsig'));
+    if (files.length === 0 || junkOnly) {
+      try { fs.rmSync(dirPath, { recursive: true, force: true }); } catch (_) {}
+    }
+  }
+}
+
 // Delete single order
 app.delete('/api/admin/orders/:id', requireAdmin, (req, res) => {
   try {
     const order = db.prepare('SELECT * FROM orders WHERE id=?').get(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    // Delete APK files if exist
-    const buildsDir = path.join(__dirname, 'builds');
-    if (order.apk_file || order.fake_apk_file) {
-      for (const dir of fs.readdirSync(buildsDir)) {
-        const dirPath = path.join(buildsDir, dir);
-        if (order.apk_file) {
-          const apkPath = path.join(dirPath, order.apk_file);
-          if (fs.existsSync(apkPath)) fs.unlinkSync(apkPath);
-        }
-        if (order.fake_apk_file) {
-          const fakeApkPath = path.join(dirPath, order.fake_apk_file);
-          if (fs.existsSync(fakeApkPath)) fs.unlinkSync(fakeApkPath);
-        }
-      }
-    }
+    // Pura build folder + bache hue junk folders delete karo
+    deleteOrderBuildFolders(order);
+    cleanupOrphanBuildFolders();
 
     // Delete order
     db.prepare('DELETE FROM orders WHERE id=?').run(req.params.id);
@@ -968,24 +996,12 @@ app.delete('/api/admin/orders', requireAdmin, (req, res) => {
   if (!Array.isArray(ids) || !ids.length) return res.json({ error: 'No IDs provided' });
 
   try {
-    // Delete APK files for each order
-    const buildsDir = path.join(__dirname, 'builds');
+    // Pura build folder delete karo har order ke liye
     for (const id of ids) {
       const order = db.prepare('SELECT * FROM orders WHERE id=?').get(id);
-      if (order && (order.apk_file || order.fake_apk_file)) {
-        for (const dir of fs.readdirSync(buildsDir)) {
-          const dirPath = path.join(buildsDir, dir);
-          if (order.apk_file) {
-            const apkPath = path.join(dirPath, order.apk_file);
-            if (fs.existsSync(apkPath)) fs.unlinkSync(apkPath);
-          }
-          if (order.fake_apk_file) {
-            const fakeApkPath = path.join(dirPath, order.fake_apk_file);
-            if (fs.existsSync(fakeApkPath)) fs.unlinkSync(fakeApkPath);
-          }
-        }
-      }
+      if (order) deleteOrderBuildFolders(order);
     }
+    cleanupOrphanBuildFolders();
 
     // Delete orders
     const placeholders = ids.map(() => '?').join(',');
