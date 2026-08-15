@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>Secured Analysis - Crimson Protocol</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Bungee&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
+
+:root{
+  --red:#ff1e1e;
+  --red2:#990000;
+  --blood-glow:rgba(255,30,30,.65);
+  --gold:#fbbf24;
+  --dark-crimson:#120003;
+  --panel-bg:rgba(18,2,5,.95);
+}
+
+body{
+  background:var(--dark-crimson);
+  color:#ffcccc;
+  font-family:'Share Tech Mono',monospace;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  position:relative;
+}
+
+/* ── animated grid background (Blood Red) ── */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(255,30,30,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,30,30,.045) 1px,transparent 1px);
+  background-size:40px 40px;
+  animation:gridScroll 20s linear infinite;
+  pointer-events:none;z-index:0;
+}
+@keyframes gridScroll{0%{background-position:0 0;}100%{background-position:40px 40px;}}
+
+/* ── red scan line ── */
+body::after{
+  content:'';
+  position:fixed;top:-100%;left:0;width:100%;height:100%;
+  background:linear-gradient(transparent 0%,rgba(255,30,30,.06) 50%,transparent 100%);
+  animation:scan 5s linear infinite;
+  pointer-events:none;z-index:1;
+}
+@keyframes scan{0%{top:-100%;}100%{top:200%;}}
+
+/* ── CRT vignette ── */
+.vignette{
+  position:fixed;inset:0;z-index:2;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%);
+}
+
+/* ── CRT scanlines ── */
+.crt{
+  position:fixed;inset:0;z-index:3;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 3px);
+  animation:crtFlicker 7s steps(60) infinite;
+}
+@keyframes crtFlicker{0%,100%{opacity:.5;}8%{opacity:.38;}9%{opacity:.58;}54%{opacity:.42;}55%{opacity:.62;}}
+
+/* ── ember particles canvas ── */
+#embers{position:fixed;inset:0;z-index:4;pointer-events:none;}
+
+/* ── main card ── */
+.card{
+  position:relative;z-index:10;
+  width:92%;max-width:430px;
+  background:var(--panel-bg);
+  border:1px solid rgba(255,30,30,.25);
+  border-radius:16px;
+  padding:26px 26px 24px;
+  box-shadow:
+    0 0 0 1px rgba(255,30,30,.1),
+    0 0 40px rgba(255,30,30,.15),
+    0 30px 60px rgba(0,0,0,.8);
+  backdrop-filter:blur(16px);
+  animation:cardIn .5s cubic-bezier(.16,1.1,.3,1) both;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px) scale(.96);}to{opacity:1;transform:translateY(0) scale(1);}}
+
+.card.breached{animation:cardBreach .5s ease both;}
+@keyframes cardBreach{
+  0%,100%{transform:translate(0,0);}
+  10%{transform:translate(-5px,3px);}20%{transform:translate(5px,-3px);}
+  30%{transform:translate(-4px,-4px);}40%{transform:translate(4px,4px);}
+  50%{transform:translate(-3px,2px);}60%{transform:translate(3px,-2px);}
+  70%{transform:translate(-2px,1px);}80%{transform:translate(2px,-1px);}
+}
+
+/* sharp blood corner accents (all 4 now) */
+.card::before,.card::after{content:'';position:absolute;width:22px;height:22px;z-index:2;pointer-events:none;}
+.card::before{top:-2px;left:-2px;border-top:3px solid var(--red);border-left:3px solid var(--red);border-radius:6px 0 0 0;}
+.card::after{bottom:-2px;right:-2px;border-bottom:3px solid var(--red);border-right:3px solid var(--red);border-radius:0 0 6px 0;}
+.card .c2{position:absolute;width:22px;height:22px;z-index:2;pointer-events:none;}
+.card .c2.tl2{top:-2px;right:-2px;border-top:3px solid rgba(255,30,30,.4);border-right:3px solid rgba(255,30,30,.4);border-radius:0 6px 0 0;}
+.card .c2.br2{bottom:-2px;left:-2px;border-bottom:3px solid rgba(255,30,30,.4);border-left:3px solid rgba(255,30,30,.4);border-radius:0 0 0 6px;}
+
+/* warning tape top & bottom */
+.tape{
+  position:absolute;left:0;right:0;height:7px;z-index:2;pointer-events:none;
+  background:repeating-linear-gradient(45deg,var(--red) 0 10px,transparent 10px 20px);
+  opacity:.55;
+}
+.tape.top{top:0;border-radius:16px 16px 0 0;}
+.tape.bottom{bottom:0;border-radius:0 0 16px 16px;}
+.card.breached .tape{opacity:.95;}
+
+/* ── header ── */
+.header{text-align:center;margin-bottom:20px;}
+
+.logo-ring{
+  width:74px;height:74px;
+  border-radius:50%;
+  border:2px solid rgba(255,30,30,.3);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 12px;position:relative;
+  background:radial-gradient(circle,rgba(255,30,30,.15) 0%,transparent 70%);
+  animation:ringPulse 2s ease-in-out infinite;
+  overflow:hidden;
+}
+@keyframes ringPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,30,30,.5);}
+  50%{box-shadow:0 0 0 12px rgba(255,30,30,0);}
+}
+.logo-ring::before{
+  content:'';position:absolute;inset:-6px;border-radius:50%;
+  border:2px solid transparent;
+  border-top-color:var(--red);border-bottom-color:var(--red);
+  animation:spin 1.5s linear infinite;
+}
+.logo-ring::after{
+  content:'';position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 0deg,rgba(255,30,30,.4) 0deg 46deg,transparent 46deg 360deg);
+  animation:spin 2.2s linear infinite;
+  opacity:.7;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.shield-icon{
+  font-size:28px;color:var(--red);
+  filter:drop-shadow(0 0 8px var(--red));
+  position:relative;z-index:2;
+  animation:iconPulse 1.6s ease-in-out infinite alternate;
+}
+@keyframes iconPulse{from{transform:scale(.94);}to{transform:scale(1.07);}}
+
+.title{
+  position:relative;
+  font-family:'Orbitron',sans-serif;
+  font-size:22px;font-weight:900;letter-spacing:2px;
+  color:#fff;text-shadow:0 0 16px var(--blood-glow);
+}
+.title .hl{color:var(--red);text-shadow:0 0 10px rgba(255,30,30,.8);}
+/* glitch layers */
+.title::before,.title::after{
+  content:attr(data-text);position:absolute;inset:0;opacity:0;pointer-events:none;
+}
+.title::before{color:var(--red);animation:glitchA 3.6s steps(1,end) infinite;}
+.title::after{color:#00e5ff;animation:glitchB 3.6s steps(1,end) infinite;}
+@keyframes glitchA{
+  0%,88%,100%{opacity:0;}
+  89%{opacity:.75;transform:translate(-2px,-1px);clip-path:inset(0 0 55% 0);}
+  92%{opacity:0;}
+  96%{opacity:.75;transform:translate(2px,1px);clip-path:inset(60% 0 0 0);}
+}
+@keyframes glitchB{
+  0%,84%,100%{opacity:0;}
+  85%{opacity:.6;transform:translate(2px,1px);clip-path:inset(45% 0 20% 0);}
+  90%{opacity:0;}
+  97%{opacity:.6;transform:translate(-2px,-1px);clip-path:inset(10% 0 60% 0);}
+}
+
+.subtitle{
+  font-size:10px;letter-spacing:3.5px;
+  color:rgba(255,30,30,.6);margin-top:6px;
+  text-transform:uppercase;font-weight:bold;
+  min-height:12px;
+}
+.subtitle .cursor{background:rgba(255,30,30,.7);}
+
+/* ── status strip ── */
+.status-strip{
+  display:flex;justify-content:space-between;align-items:center;
+  background:rgba(255,30,30,.06);
+  border:1px solid rgba(255,30,30,.18);
+  border-radius:8px;padding:8px 14px;margin-bottom:8px;
+  font-size:10px;letter-spacing:1.5px;color:rgba(255,30,30,.8);
+  flex-wrap:wrap;gap:4px;
+}
+.status-live{display:flex;align-items:center;gap:6px;color:var(--red);font-weight:bold;}
+.dot-live{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--red);box-shadow:0 0 8px var(--red);
+  animation:blink 1s ease-in-out infinite;
+}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.2;}}
+
+/* fake telemetry row */
+.telemetry{
+  display:flex;justify-content:space-between;gap:6px;
+  margin-bottom:14px;flex-wrap:wrap;
+}
+.tel-cell{
+  flex:1;min-width:70px;text-align:center;
+  background:rgba(0,0,0,.55);
+  border:1px solid rgba(255,30,30,.16);
+  border-radius:6px;padding:5px 4px;
+}
+.tel-cell .k{
+  display:block;font-size:7.5px;letter-spacing:1.5px;
+  color:rgba(255,30,30,.5);margin-bottom:2px;
+}
+.tel-cell .v{
+  font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;
+  color:var(--red);text-shadow:0 0 6px rgba(255,30,30,.6);
+}
+.tel-cell .v.ok{color:#00ff66;text-shadow:0 0 6px rgba(0,255,102,.6);}
+
+/* ── terminal ── */
+.terminal{
+  background:rgba(0,0,0,.6);
+  border:1px solid rgba(255,30,30,.15);
+  border-radius:10px;padding:12px 14px;
+  margin-bottom:18px;min-height:150px;position:relative;overflow:hidden;
+  box-shadow:inset 0 0 15px rgba(0,0,0,.7);
+}
+.terminal-header{
+  font-size:9px;letter-spacing:2px;color:rgba(255,30,30,.5);
+  margin-bottom:10px;display:flex;align-items:center;gap:8px;
+}
+.terminal-header::before{content:'';flex:1;height:1px;background:rgba(255,30,30,.2);}
+.rec{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:7px;letter-spacing:1px;color:var(--red);
+}
+.rec::before{
+  content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--red);box-shadow:0 0 6px var(--red);
+  animation:blink 1s ease-in-out infinite;
+}
+/* faint hex stream behind */
+.hexstream{
+  position:absolute;inset:0;z-index:0;overflow:hidden;
+  font-size:8px;line-height:14px;color:rgba(255,30,30,.05);
+  word-break:break-all;pointer-events:none;
+  animation:hexUp 6s linear infinite;
+}
+@keyframes hexUp{from{transform:translateY(0);}to{transform:translateY(-50%);}}
+
+#logBox{position:relative;z-index:2;}
+.log-line{
+  font-size:12px;line-height:22px;color:#ffb3b3;
+  opacity:0;transform:translateX(-8px);
+  animation:logAppear .4s forwards;
+  display:flex;align-items:center;gap:8px;
+}
+@keyframes logAppear{to{opacity:1;transform:translateX(0);}}
+
+.log-icon{font-size:10px;flex:0 0 auto;}
+.log-icon.ok{color:var(--red);}
+.log-icon.warn{color:var(--gold);}
+.log-icon.crit{color:#ff5555;font-weight:bold;}
+.log-icon.done{color:#00ff66;}
+
+.log-txt .dim{color:rgba(255,150,150,.4);}
+.log-txt .hot{color:var(--red);text-shadow:0 0 6px rgba(255,30,30,.7);}
+
+.cursor{
+  display:inline-block;width:8px;height:13px;
+  background:var(--red);margin-left:3px;vertical-align:middle;
+  animation:cursorBlink .8s step-end infinite;
+  box-shadow:0 0 6px var(--red);
+}
+@keyframes cursorBlink{0%,100%{opacity:1;}50%{opacity:0;}}
+
+/* ── progress ── */
+.prog-section{margin-bottom:16px;}
+
+.prog-labels{
+  display:flex;justify-content:space-between;
+  font-size:10px;letter-spacing:1px;
+  color:rgba(255,30,30,.6);margin-bottom:8px;
+}
+.prog-labels #pct{
+  color:var(--red);
+  font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;
+  text-shadow:0 0 5px var(--red);
+}
+.prog-labels #pct.full{color:#00ff66;text-shadow:0 0 8px rgba(0,255,102,.8);}
+
+.bar-track{
+  height:6px;background:rgba(255,30,30,.1);
+  border-radius:20px;overflow:visible;position:relative;
+}
+.bar-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#990000,var(--red));
+  border-radius:20px;position:relative;
+  box-shadow:0 0 12px var(--red);
+}
+.bar-fill::after{
+  content:'';position:absolute;right:0;top:50%;
+  transform:translate(50%,-50%);
+  width:12px;height:12px;border-radius:50%;
+  background:var(--red);
+  box-shadow:0 0 10px var(--red),0 0 20px rgba(255,30,30,.6);
+}
+.bar-fill::before{
+  content:'';position:absolute;right:0;top:50%;
+  transform:translate(50%,-50%);
+  width:22px;height:22px;border-radius:50%;
+  border:1px solid rgba(255,30,30,.45);
+  animation:headPing 1s ease-out infinite;
+}
+@keyframes headPing{0%{transform:translate(50%,-50%) scale(.5);opacity:.9;}100%{transform:translate(50%,-50%) scale(1.4);opacity:0;}}
+
+/* steps */
+.steps{display:flex;justify-content:space-between;margin-top:14px;gap:8px;}
+.step{
+  flex:1;background:rgba(255,30,30,.03);
+  border:1px solid rgba(255,30,30,.15);
+  border-radius:8px;padding:8px 6px;
+  text-align:center;font-size:8.5px;letter-spacing:.5px;
+  color:rgba(255,30,30,.4);transition:all .3s;position:relative;
+}
+.step.active{
+  background:rgba(255,30,30,.12);
+  border-color:rgba(255,30,30,.6);
+  color:var(--red);box-shadow:0 0 10px rgba(255,30,30,.3);
+  font-weight:bold;animation:stepPulse .8s ease-in-out infinite alternate;
+}
+@keyframes stepPulse{from{box-shadow:0 0 6px rgba(255,30,30,.2);}to{box-shadow:0 0 14px rgba(255,30,30,.5);}}
+.step.done{
+  background:rgba(255,30,30,.2);
+  border-color:var(--red);
+  color:#fff;text-shadow:0 0 5px var(--red);
+}
+.step.done .step-icon{filter:drop-shadow(0 0 5px rgba(255,30,30,.8));}
+.step-icon{font-size:13px;display:block;margin-bottom:3px;}
+
+/* hex ticker marquee */
+.ticker{
+  margin-top:14px;overflow:hidden;position:relative;
+  border-top:1px solid rgba(255,30,30,.15);
+  padding-top:6px;height:18px;
+}
+.ticker-in{
+  display:inline-block;white-space:nowrap;
+  font-size:8px;letter-spacing:1px;color:rgba(255,30,30,.4);
+  animation:tickerMove 14s linear infinite;
+}
+@keyframes tickerMove{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+
+/* ── BREACH COMPLETE stamp ── */
+#stamp{
+  position:absolute;inset:0;z-index:30;
+  display:none;align-items:center;justify-content:center;
+  pointer-events:none;
+}
+#stamp.show{display:flex;}
+#stamp .st-in{
+  font-family:'Bungee',sans-serif;font-size:26px;letter-spacing:3px;
+  color:#fff;text-shadow:0 0 14px var(--red),0 0 30px var(--red),2px 2px 0 rgba(0,0,0,.8);
+  border:3px solid var(--red);border-radius:8px;
+  padding:10px 22px;background:rgba(0,0,0,.65);
+  transform:rotate(-6deg) scale(1.8);opacity:0;
+  box-shadow:0 0 30px rgba(255,30,30,.6),inset 0 0 20px rgba(255,30,30,.25);
+}
+#stamp.show .st-in{
+  animation:stampHit .45s cubic-bezier(.2,1.4,.3,1) forwards;
+}
+@keyframes stampHit{0%{transform:rotate(-12deg) scale(2.2);opacity:0;}60%{transform:rotate(-4deg) scale(.96);opacity:1;}100%{transform:rotate(-6deg) scale(1);opacity:1;}}
+
+/* white flash */
+#flash{
+  position:fixed;inset:0;z-index:99;pointer-events:none;opacity:0;
+  background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.9),rgba(255,30,30,.5) 40%,transparent 75%);
+}
+#flash.go{animation:flashGo .55s ease-out forwards;}
+@keyframes flashGo{0%{opacity:0;}12%{opacity:.95;}100%{opacity:0;}}
+
+/* ── footer ── */
+.footer{
+  text-align:center;font-size:9px;letter-spacing:2px;
+  color:rgba(255,30,30,.25);padding-top:4px;
+}
+.footer span{color:rgba(255,30,30,.45);}
+</style>
+</head>
+<body>
+
+<canvas id="embers"></canvas>
+<div class="vignette"></div>
+<div class="crt"></div>
+<div id="flash"></div>
+
+<div class="card" id="card">
+
+  <div class="tape top"></div>
+  <div class="tape bottom"></div>
+  <span class="c2 tl2"></span><span class="c2 br2"></span>
+
+  <!-- header -->
+  <div class="header">
+    <div class="logo-ring">
+      <div class="shield-icon">☣</div>
+    </div>
+    <div class="title" data-text="CRIMSON PROTOCOL"><span class="hl">CRIMSON</span> PROTOCOL</div>
+    <div class="subtitle" id="subtitle"></div>
+  </div>
+
+  <!-- live strip -->
+  <div class="status-strip">
+    <div class="status-live"><div class="dot-live"></div>BREACH DETECTION</div>
+    <div id="statusRight">NODE-66 · RESTRICTED</div>
+    <div id="timeStamp">--:--:--</div>
+  </div>
+
+  <!-- telemetry -->
+  <div class="telemetry">
+    <div class="tel-cell"><span class="k">CPU LOAD</span><span class="v" id="tCpu">0%</span></div>
+    <div class="tel-cell"><span class="k">THREADS</span><span class="v" id="tThr">0</span></div>
+    <div class="tel-cell"><span class="k">SIGNAL</span><span class="v ok" id="tSig">LOCKED</span></div>
+    <div class="tel-cell"><span class="k">SHELL</span><span class="v" id="tSh">--</span></div>
+  </div>
+
+  <!-- terminal log -->
+  <div class="terminal">
+    <div class="hexstream" id="hexstream"></div>
+    <div class="terminal-header"><span class="rec">REC</span> CORE TERMINAL</div>
+    <div id="logBox"></div>
+  </div>
+
+  <!-- progress -->
+  <div class="prog-section">
+    <div class="prog-labels">
+      <span>OVERRIDING SYSTEM</span>
+      <span id="pct">0%</span>
+    </div>
+    <div class="bar-track">
+      <div class="bar-fill" id="barFill"></div>
+    </div>
+
+    <div class="steps" id="stepsRow">
+      <div class="step active" id="s1"><span class="step-icon">☠</span>BYPASS</div>
+      <div class="step"       id="s2"><span class="step-icon">🔓</span>ROOT</div>
+      <div class="step"       id="s3"><span class="step-icon">☣</span>INJECT</div>
+      <div class="step"       id="s4"><span class="step-icon">⚡</span>BREACH</div>
+    </div>
+
+    <!-- hex ticker -->
+    <div class="ticker">
+      <div class="ticker-in" id="tickerIn"></div>
+    </div>
+  </div>
+
+  <!-- footer -->
+  <div class="footer">© 2026 <span>CRIMSON OVERRIDE SYSTEM</span> · RESTRICTED ACCESS</div>
+
+  <!-- BREACH COMPLETE stamp -->
+  <div id="stamp"><div class="st-in">BREACH COMPLETE</div></div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ---------- LIVE CLOCK ---------- */
+  function tick(){
+    var now=new Date();
+    var h=String(now.getHours()).padStart(2,'0');
+    var m=String(now.getMinutes()).padStart(2,'0');
+    var s=String(now.getSeconds()).padStart(2,'0');
+    var el=document.getElementById('timeStamp');
+    if(el)el.textContent=h+':'+m+':'+s;
+  }
+  tick();setInterval(tick,1000);
+
+  /* ---------- FAKE TELEMETRY ---------- */
+  var cpu=62;
+  setInterval(function(){
+    cpu=Math.max(38,Math.min(99,cpu+(Math.random()*14-7)));
+    var c=document.getElementById('tCpu');if(c)c.textContent=Math.round(cpu)+'%';
+    var t=document.getElementById('tThr');if(t)t.textContent=8+Math.floor(Math.random()*9);
+    var sh=document.getElementById('tSh');
+    if(sh){
+      if(cpu>85)sh.textContent='HEAVY';
+      else if(cpu>65)sh.textContent='ACTIVE';
+      else sh.textContent='STEALTH';
+    }
+  },400);
+
+  /* ---------- SUBTITLE TYPEWRITER ---------- */
+  var SUB='OVERRIDE ENGINE v6.66 · ENCRYPTED';
+  var subEl=document.getElementById('subtitle');
+  var si=0;
+  (function typeSub(){
+    if(si<=SUB.length){
+      subEl.textContent=SUB.slice(0,si)+(si<SUB.length?'_':'');
+      si++;
+      setTimeout(typeSub,55);
+    }else{
+      subEl.textContent=SUB;
+      var c=document.createElement('span');
+      c.className='cursor';
+      subEl.appendChild(c);
+    }
+  })();
+
+  /* ---------- TERMINAL TYPED LOGS ---------- */
+  var LINES=[
+    {ic:'ok',   plain:'Injecting crimson bypass...',                        rich:'Injecting <span class="dim">crimson</span> bypass...'},
+    {ic:'ok',   plain:'Establishing root pipeline...',                      rich:'Establishing <span class="dim">root</span> pipeline...'},
+    {ic:'crit', plain:'Executing malicious matrix override...',             rich:'Executing <span class="dim">malicious</span> matrix override...'},
+    {ic:'warn', plain:'Bypassing firewall integrity...',                    rich:'Bypassing <span class="dim">firewall</span> integrity...'},
+    {ic:'ok',   plain:'Synchronizing payload weights...',                   rich:'Synchronizing <span class="dim">payload</span> weights...'},
+    {ic:'ok',   plain:'Decrypting kernel layer 0x7F3A...',                  rich:'Decrypting kernel layer <span class="dim">0x7F3A</span>...'},
+    {ic:'done', plain:'System Breach — EXPLOIT READY',                      rich:'System Breach — <span class="hot">EXPLOIT READY</span>'}
+  ];
+  var ICONS={ok:'☣',crit:'⚡',warn:'⚠',done:'✔'};
+  var box=document.getElementById('logBox');
+  var lineStarts=[150,650,1150,1650,2150,2650,3150];
+
+  function typeLine(i,ch){
+    var lineEl=box.querySelector('[data-l="'+i+'"]');
+    if(!lineEl){
+      lineEl=document.createElement('div');
+      lineEl.className='log-line';
+      lineEl.setAttribute('data-l',i);
+      lineEl.innerHTML='<span class="log-icon '+LINES[i].ic+'">'+ICONS[LINES[i].ic]+'</span><span class="log-txt"></span>';
+      box.appendChild(lineEl);
+    }
+    var tEl=lineEl.querySelector('.log-txt');
+    var plain=LINES[i].plain;
+    if(ch===undefined)ch=0;
+    if(ch<=plain.length){
+      tEl.textContent=plain.slice(0,ch);
+      ch++;
+      setTimeout(function(){typeLine(i,ch);},13);
+    }else{
+      tEl.innerHTML=LINES[i].rich;
+      if(i===LINES.length-1){
+        var c=document.createElement('span');
+        c.className='cursor';
+        tEl.appendChild(c);
+      }
+    }
+  }
+  lineStarts.forEach(function(st,i){
+    setTimeout(function(){typeLine(i,0);},st);
+  });
+
+  /* ---------- SMOOTH PROGRESS (3.5s, synced) ---------- */
+  var D=3500,t0=null,raf=null;
+  var bar=document.getElementById('barFill');
+  var pctEl=document.getElementById('pct');
+  function ease(t){
+    /* cubic-bezier(.4,0,.2,1) approx */
+    return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+  }
+  function frame(ts){
+    if(t0===null)t0=ts;
+    var t=Math.min(1,(ts-t0)/D);
+    var p=Math.round(ease(t)*100);
+    if(bar)bar.style.width=p+'%';
+    if(pctEl)pctEl.textContent=p+'%';
+    if(t<1){raf=requestAnimationFrame(frame);}
+    else{finish();}
+  }
+  raf=requestAnimationFrame(frame);
+
+  /* ---------- STEPS ---------- */
+  var STEPS=[
+    {id:'s1',at:0},
+    {id:'s2',at:900},
+    {id:'s3',at:1900},
+    {id:'s4',at:3100}
+  ];
+  var prev=null;
+  STEPS.forEach(function(st,i){
+    setTimeout(function(){
+      if(prev){
+        var pe=document.getElementById(prev);
+        pe.classList.remove('active');pe.classList.add('done');
+      }
+      var el=document.getElementById(st.id);
+      el.classList.add('active');
+      prev=st.id;
+    },st.at);
+  });
+
+  /* ---------- FINISH SEQUENCE ---------- */
+  var finished=false;
+  function finish(){
+    if(finished)return;finished=true;
+    if(raf)cancelAnimationFrame(raf);
+    if(bar)bar.style.width='100%';
+    if(pctEl){pctEl.textContent='100%';pctEl.classList.add('full');}
+
+    /* last step done */
+    var last=document.getElementById('s4');
+    if(last){last.classList.remove('active');last.classList.add('done');}
+
+    /* status flip */
+    var sr=document.getElementById('statusRight');
+    if(sr){sr.textContent='BREACH COMPLETE';sr.style.color='#00ff66';sr.style.textShadow='0 0 6px rgba(0,255,102,.7)';}
+    var sig=document.getElementById('tSig');
+    if(sig)sig.textContent='GRANTED';
+
+    /* flash + shake + stamp */
+    var fl=document.getElementById('flash');
+    if(fl){fl.classList.add('go');setTimeout(function(){fl.classList.remove('go');},600);}
+    var card=document.getElementById('card');
+    if(card){card.classList.add('breached');}
+    setTimeout(function(){
+      var st=document.getElementById('stamp');
+      if(st)st.classList.add('show');
+    },250);
+  }
+
+  /* ---------- EMBER PARTICLES ---------- */
+  var cv=document.getElementById('embers');
+  var cx=cv.getContext('2d');
+  var parts=[];
+  function rs(){
+    cv.width=innerWidth;cv.height=innerHeight;
+  }
+  rs();window.addEventListener('resize',rs);
+  function spawn(init){
+    parts.push({
+      x:Math.random()*cv.width,
+      y:init?Math.random()*cv.height:cv.height+4,
+      vx:(Math.random()-.5)*.35,
+      vy:-(0.35+Math.random()*1.1),
+      r:.6+Math.random()*1.7,
+      life:1,
+      f:.006+Math.random()*.018,
+      tw:Math.random()*6.28
+    });
+  }
+  for(var i=0;i<60;i++)spawn(true);
+  function draw(){
+    cx.clearRect(0,0,cv.width,cv.height);
+    for(var i=parts.length-1;i>=0;i--){
+      var e=parts[i];
+      e.x+=e.vx;e.y+=e.vy;e.life-=e.f;e.tw+=.08;
+      if(e.life<=0||e.y<-6){parts.splice(i,1);continue;}
+      var a=Math.max(0,Math.min(1,e.life));
+      var fli=.7+.3*Math.sin(e.tw*3);
+      cx.beginPath();cx.fillStyle='#ff1e1e';cx.globalAlpha=a*fli;
+      cx.arc(e.x,e.y,e.r,0,6.2832);cx.fill();
+      cx.globalAlpha=a*fli*.3;
+      cx.beginPath();cx.arc(e.x,e.y,e.r*2.6,0,6.2832);cx.fill();
+    }
+    cx.globalAlpha=1;
+    if(Math.random()<.5)spawn(false);
+    requestAnimationFrame(draw);
+  }
+  draw();
+
+  /* ---------- HEX STREAM + TICKER ---------- */
+  var hs=document.getElementById('hexstream');
+  var CH='0123456789ABCDEF';
+  (function(){
+    var str='';
+    for(var i=0;i<900;i++)str+=CH[Math.floor(Math.random()*16)]+' ';
+    hs.textContent=str+' '+str;
+  })();
+  (function(){
+    var t=document.getElementById('tickerIn');
+    var s='';
+    for(var i=0;i<40;i++)s+='0x'+CH[Math.floor(Math.random()*16)]+CH[Math.floor(Math.random()*16)]+CH[Math.floor(Math.random()*16)]+CH[Math.floor(Math.random()*16)]+' :: ';
+    t.textContent=s+s;
+  })();
+
+})();
+</script>
+
+<script>
+/* ── INTRO SOUND ──
+   Loading page owns the intro now (Java plays nothing). ZAYRO bridge is
+   attached to this WebView, same as the popup page. The same-sound guard
+   in MainActivity prevents any double/repeat play. */
+try{
+  if (window.ZAYRO && typeof ZAYRO.playSound === 'function') {
+    window.ZAYRO.playSound('intro.mp3');
+  } else {
+    var _a=new Audio('intro.mp3');
+    var _p=_a.play();
+    if(_p&&_p.catch)_p.catch(function(){});
+  }
+}catch(e){}
+</script>
+</body>
+</html>
