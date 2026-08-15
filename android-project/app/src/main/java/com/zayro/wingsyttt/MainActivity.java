@@ -267,8 +267,10 @@ public class MainActivity extends Activity {
 				android.media.MediaPlayer cur = (android.media.MediaPlayer) AP.get();
 				if ("intro.mp3".equals(CUR_NAME.get()) && cur != null && cur.isPlaying()) {
 					// Intro abhi chal raha hai — thoda ruk kar dobara try karo.
+					// 'this' = yehi Runnable (self-reference Java me allowed nahi
+					// hota final var ke initializer me, isliye 'this' use karte hain).
 					if (!popupLoaded.get()) {
-						new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(loadPopup, 600);
+						new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(this, 600);
 					}
 					return;
 				}
