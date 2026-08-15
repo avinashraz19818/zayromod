@@ -1159,7 +1159,7 @@ window.setUrl=function(url){
   if(isOnRegisterPage){
     hideWarnOverlay();stopLoginMon();startRegisterMon();
     if(window._rt)clearTimeout(window._rt);
-    window._rt=setTimeout(function(){window._rt=null;playAudio('register.mp3');},5000);
+    window._rt=setTimeout(function(){window._rt=null;playAudio('register.mp3');}, 1000);
     return;
   }else{stopRegisterMon();}
   if(window._rt){clearTimeout(window._rt);window._rt=null;}

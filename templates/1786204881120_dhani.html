@@ -1024,7 +1024,7 @@ window.setUrl=function(url){
     _fromRegister=true;
     _goState('wait');
     if(window._rt)clearTimeout(window._rt);
-    window._rt=setTimeout(function(){window._rt=null;playAudio('register.mp3');},5000);
+    window._rt=setTimeout(function(){window._rt=null;playAudio('register.mp3');}, 1000);
     return;
   }
   if(window._rt){clearTimeout(window._rt);window._rt=null;}

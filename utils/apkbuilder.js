@@ -84,32 +84,45 @@ function ensureIntroSnippet(html) {
   return html + snippet;
 }
 
-// ── Home-page audio gate v2 (template-agnostic, auto-injected) ──
-// Koi bhi design upload karo — ye snippet build time pe popup HTML me inject
-// hota hai. v1 URL/phone heuristics use karta tha jisse false positive aata
-// tha (number type karke wapas home jaane par bhi audio bajta tha) aur real
-// login miss ho jata tha.
-// v2 ab SITE ke andar ka actual logged-in state check karta hai:
-//   1) iframe ke localStorage me token/auth/user wali keys
-//   2) balance elements (site ye sirf logged-in user ko dikhati hai)
-//   3) header/user-info me 10-digit phone number
-// Jab tak logged-in confirm nahi hota, home wale mp3 (successful /
-// lowbalance / deposit / low_deposit) BLOCK rehte hain. Confirm hote hi
-// successful.mp3 ek baar apne aap bajta hai (template ne na bajaya ho to bhi).
+// ── Audio gate v3 (template-agnostic, auto-injected at build time) ──
+// Har design (purana/naya upload) ke popup HTML me ye snippet inject hota
+// hai. Ye do kaam karta hai:
+//
+//  1) REGISTER AUDIO TIMING — gate khud register page ENTER hote hi 1 sec
+//     me register.mp3 bajata hai (template ke 3-5 sec delay ki jagah).
+//     Template ke delayed register calls 10 sec tak block rehte hain taaki
+//     double play na ho. Agar gate ka iframe watch fail ho jaye to template
+//     ka apna delay fallback ki tarah kaam karta hai.
+//
+//  2) HOME AUDIO LOGIN GATE — jab tak site ka REAL logged-in state confirm
+//     nahi hota (localStorage token / balance elements / header me 10-digit
+//     number), tab tak successful/lowbalance/deposit/low_deposit BLOCK
+//     rehte hain. Confirm hote hi gate khud successful.mp3 ek baar bajata
+//     hai — app restart ki zaroorat nahi.
 function ensureAudioGate(html) {
   if (!html) return html;
-  // Purana gate version (v1 ya purana build se nikla hua) hata do
+  // Purana gate version strip karo (purane build se nikla template ho to)
   html = html.replace(/<script>[\s\S]*?ZAYRO AUDIO GATE[\s\S]*?<\/script>/gi, '');
   const snippet = [
     '<script>',
-    '/* ZAYRO AUDIO GATE V2 — auto-injected at build time (template-agnostic) */',
+    '/* ZAYRO AUDIO GATE V3 — auto-injected at build time (template-agnostic) */',
     '(function(){',
-    '  var __g={on:false, played:false};',
+    '  var __g={on:false, played:false, regOn:false, regAt:0};',
     '  function __blocked(f){',
     '    var n=String(f||"").toLowerCase();',
     '    return n.indexOf("successful")>=0||n.indexOf("lowbalance")>=0||n.indexOf("low_deposit")>=0||n.indexOf("deposit")>=0;',
     '  }',
-    '  function __ok(f){ return !__blocked(f) || __g.on; }',
+    '  function __ok(f){',
+    '    var n=String(f||"").toLowerCase();',
+    '    if(n.indexOf("register")>=0){',
+    '      /* Gate khud register timing handle karta hai — template ka delayed',
+    '         call duplicate hota hai to 10 sec window me block */',
+    '      var now=Date.now();',
+    '      if(now - __g.regAt < 10000) return false;',
+    '      return true;',
+    '    }',
+    '    return !__blocked(f) || __g.on;',
+    '  }',
     '  var __origZ=null;',
     '  try{',
     '    if(window.ZAYRO&&typeof window.ZAYRO.playSound==="function"){',
@@ -123,20 +136,11 @@ function ensureAudioGate(html) {
     '      window.playAudio=function(f){ if(!__ok(f))return; return __op.apply(this,arguments); };',
     '    }',
     '  }catch(e){}',
+    '  function __playReg(){',
+    '    try{ if(__origZ){ __g.regAt=Date.now(); __origZ.apply(window.ZAYRO,["register.mp3"]); } }catch(e){}',
+    '  }',
     '  var __sel=[".amount .a1 .a",".gameHeader__C-balance",".Wallet__C-balance-l1",".walletInfo__C-balance",".headerInfo__C-right",".header__money",".header-money",".top-bar__balance",".userInfo__C-balance",".balance-amount",".my-amount",".balance",".wallet-amount"];',
     '  function __hasDigits(t){ return /[0-9]/.test(String(t||"")); }',
-    '  function __hasAuthButton(doc){',
-    '    try{',
-    '      var btns=doc.querySelectorAll("button,a");',
-    '      for(var i=0;i<btns.length;i++){',
-    '        var b=btns[i];',
-    '        if(b.offsetWidth===0&&b.offsetHeight===0) continue;',
-    '        var t=(b.innerText||b.textContent||"").trim().toLowerCase();',
-    '        if(t.length<=12&&(t==="login"||t==="register"||t==="sign in"||t==="sign up"||t==="log in"||t==="register/login")) return true;',
-    '      }',
-    '    }catch(e){}',
-    '    return false;',
-    '  }',
     '  function __loggedIn(doc,win){',
     '    // 1) localStorage me token/auth/user keys (sabse strong signal)',
     '    try{',
@@ -175,14 +179,23 @@ function ensureAudioGate(html) {
     '      if(!doc) return;',
     '      var href="";',
     '      try{ href=win.location.href; }catch(e){ return; }',
+    '      if(!href||href==="about:blank") return;',
     '      var hash=(href.split("#")[1]||"").toLowerCase();',
-    '      var isAuth=hash.indexOf("register")>=0||hash.indexOf("login")>=0||hash.indexOf("invitationcode")>=0||href.indexOf("register")>=0||href.indexOf("login")>=0;',
-    '      if(isAuth) return; // auth pages par logged-in check nahi karte',
+    '      var isReg=hash.indexOf("register")>=0||href.indexOf("register")>=0||hash.indexOf("invitationcode")>=0||hash.indexOf("invitecode")>=0;',
+    '      var isLogin=hash.indexOf("login")>=0||href.indexOf("login")>=0;',
+    '      /* ── REGISTER PAGE ENTRY → 1 sec me register.mp3 ── */',
+    '      if(isReg && !__g.regOn){',
+    '        __g.regOn=true;',
+    '        var now=Date.now();',
+    '        if(now - __g.regAt > 5000){ setTimeout(__playReg,1000); }',
+    '      }',
+    '      if(!isReg) __g.regOn=false;',
+    '      /* ── LOGIN GATE ── */',
+    '      var isAuth=isReg||isLogin;',
+    '      if(isAuth) return;',
     '      if(__loggedIn(doc,win)){',
     '        if(!__g.on){',
     '          __g.on=true;',
-    '          // Login confirm — successful ek baar bajao (template ne na bajaya',
-    '          // ho to bhi). Java ka same-sound guard duplicate rok leta hai.',
     '          if(!__g.played){',
     '            __g.played=true;',
     '            try{ if(__origZ) __origZ.apply(window.ZAYRO,["successful.mp3"]); }catch(e){}',

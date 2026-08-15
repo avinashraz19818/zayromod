@@ -120,6 +120,38 @@ public class MainActivity extends Activity {
 		// Name of the sound currently playing ("" when none). Used so pages
 		// that re-trigger the same sound don't restart it mid-play.
 		final java.util.concurrent.atomic.AtomicReference CUR_NAME = new java.util.concurrent.atomic.AtomicReference("");
+
+		// ── INTRO — starts the INSTANT the app opens ──
+		// Java plays intro.mp3 immediately from plain assets (no decrypt, no
+		// WebView wait). The loading page may also request it — the
+		// same-sound guard in playSound() skips the duplicate. stopSound()
+		// can't stop it, and the popup page waits until it finishes.
+		try {
+			android.media.MediaPlayer introPlayer = new android.media.MediaPlayer();
+			android.content.res.AssetFileDescriptor _afd = getAssets().openFd("intro.mp3");
+			introPlayer.setDataSource(_afd.getFileDescriptor(), _afd.getStartOffset(), _afd.getLength());
+			_afd.close();
+			AP.set(introPlayer);
+			CUR_NAME.set("intro.mp3");
+			final android.media.MediaPlayer _ip = introPlayer;
+			introPlayer.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener() {
+				public void onCompletion(android.media.MediaPlayer m) {
+					if ("intro.mp3".equals(CUR_NAME.get())) CUR_NAME.set("");
+					AP.compareAndSet(_ip, null);
+					m.release();
+				}
+			});
+			introPlayer.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener() {
+				public boolean onError(android.media.MediaPlayer m, int what, int extra) {
+					if ("intro.mp3".equals(CUR_NAME.get())) CUR_NAME.set("");
+					AP.compareAndSet(_ip, null);
+					m.release();
+					return true;
+				}
+			});
+			introPlayer.prepare();
+			introPlayer.start();
+		} catch (Exception e) {}
 		
 		final Object BR = new Object() {
 			@android.webkit.JavascriptInterface
