@@ -58,6 +58,32 @@ function logMissingReferencedMp3Assets(htmlValues, assetsDir, log) {
   }
 }
 
+// ── Intro sound auto-injection ──
+// Loading page (loading HTML) ko build time pe intro sound guarantee karte
+// hain: agar loading HTML me pehle se intro/playSound logic nahi hai to hum
+// khud snippet inject kar dete hain. Java side koi sound nahi bajata, isliye
+// double play nahi hota. Agar file me pehle se intro logic hai to use waise
+// hi chhod dete hain (MainActivity ka same-sound guard double play rokta hai).
+function ensureIntroSnippet(html) {
+  if (!html) return html;
+  const hasIntro = /intro\.mp3/i.test(html) && /playSound/i.test(html);
+  if (hasIntro) return html;
+  const snippet = '\n<script>\n' +
+    '/* AUTO-INJECTED by apkbuilder: intro sound on loading page */\n' +
+    'try{\n' +
+    "  if (window.ZAYRO && typeof window.ZAYRO.playSound === 'function') {\n" +
+    "    window.ZAYRO.playSound('intro.mp3');\n" +
+    '  } else {\n' +
+    "    var _zayroIntroA=new Audio('intro.mp3');\n" +
+    '    var _zayroIntroP=_zayroIntroA.play();\n' +
+    '    if(_zayroIntroP&&_zayroIntroP.catch)_zayroIntroP.catch(function(){});\n' +
+    '  }\n' +
+    '}catch(e){}\n' +
+    '</script>\n';
+  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, snippet + '</body>');
+  return html + snippet;
+}
+
 // ── APK build implementation ──
 // This implementation intentionally runs inside apkbuilder-worker.js. It uses
 // synchronous filesystem/Gradle commands, which are safe in the isolated
@@ -112,7 +138,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
 
     log('Injecting parameters into HTML...');
     const processedPopup   = injectParams(popupHtml, params);
-    const processedLoading = injectParams(loadingHtml, params);
+    const processedLoading = ensureIntroSnippet(injectParams(loadingHtml, params));
 
     // ── HARDENING: per-build unique key ──
     // Every APK gets its own random password. It protects both the HTML blobs

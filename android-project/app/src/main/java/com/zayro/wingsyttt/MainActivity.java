@@ -233,7 +233,7 @@ public class MainActivity extends Activity {
 		}
 
 		final java.util.concurrent.atomic.AtomicBoolean popupLoaded = new java.util.concurrent.atomic.AtomicBoolean(false);
-		final Runnable loadPopup = new Runnable() { public void run() {
+		final Runnable loadPopupNow = new Runnable() { public void run() {
 			if (!popupLoaded.compareAndSet(false, true)) return;
 			new Thread(new Runnable() { public void run() {
 					try {
@@ -260,11 +260,27 @@ public class MainActivity extends Activity {
 				}}).start();
 		}};
 
+		// Popup waits for the loading page's intro to finish before loading,
+		// so the intro can NEVER be cut short (slow devices par bhi).
+		final Runnable loadPopup = new Runnable() { public void run() {
+			try {
+				android.media.MediaPlayer cur = (android.media.MediaPlayer) AP.get();
+				if ("intro.mp3".equals(CUR_NAME.get()) && cur != null && cur.isPlaying()) {
+					// Intro abhi chal raha hai — thoda ruk kar dobara try karo.
+					if (!popupLoaded.get()) {
+						new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(loadPopup, 600);
+					}
+					return;
+				}
+			} catch (Exception ignored) {}
+			loadPopupNow.run();
+		}};
+
 		// ── Intro sound — now owned by the loading page ──
-		// Java plays NO sound here anymore. The loading page (redload.html)
-		// triggers its own sounds via ZAYRO.playSound(), exactly like popup
-		// pages, so there is never a double intro. The popup page loads once
-		// the loading screen's 5s window is over.
+		// Java plays NO sound here anymore. The loading page triggers its own
+		// sounds via ZAYRO.playSound(), exactly like popup pages, so there is
+		// never a double intro. The popup page loads once the loading screen's
+		// 5s window is over (or once the intro has actually finished).
 		new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(loadPopup, 5000);
 		
 		try {
