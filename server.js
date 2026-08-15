@@ -1265,6 +1265,115 @@ app.post('/api/admin/orders/:id/rebuild', requireAdmin, (req, res) => {
   }
 });
 
+// ── ADMIN: Create order for ANY user from scratch (FREE — 0 coins) ──
+// Admin panel me user select karke direct order banaya ja sakta hai, bina
+// user ke koi request kiye. Isme user ke coins NAHI katte (free admin order).
+app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), async (req, res) => {
+  const { user_id, design_id, app_name, register_url, min_deposit, brand_title, fake_addon, fake_register_url } = req.body;
+  if (!user_id || !design_id || !app_name || !register_url) return res.json({ error: 'Missing required fields (user, design, app name, register URL)' });
+
+  let cleanRegisterUrl;
+  let cleanFakeRegisterUrl = null;
+  try {
+    cleanRegisterUrl = normalizeHttpUrl(register_url);
+    if (fake_register_url) cleanFakeRegisterUrl = normalizeHttpUrl(fake_register_url);
+  } catch (error) {
+    return res.json({ error: error.message || 'Enter a valid http(s) register URL' });
+  }
+
+  const design = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(design_id);
+  if (!design) return res.json({ error: 'Design not found' });
+  const isDhaniDesign = design.category === 'dhani' || design.java_type === 'dhani' || design.java_type === 'premium';
+
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(user_id);
+  if (!user) return res.json({ error: 'User not found' });
+
+  const fakeAddonEnabled = fake_addon === 'true' || fake_addon === true;
+  if (fakeAddonEnabled && !cleanFakeRegisterUrl) return res.json({ error: 'Fake site register URL required' });
+
+  const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(cleanRegisterUrl, isDhaniDesign);
+  const domain = extractDomain(cleanRegisterUrl);
+  const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
+  let fakeFirebasePath = null;
+
+  try {
+    await updateFirebaseLinks(firebasePath, { registerUrl: cleanRegisterUrl, depositUrl, wingoUrl });
+    if (fakeAddonEnabled && cleanFakeRegisterUrl) {
+      const fakeDomain = extractDomain(cleanFakeRegisterUrl);
+      const fakeUrls = buildUrls(cleanFakeRegisterUrl, isDhaniDesign);
+      fakeFirebasePath = `zayrof${fakeDomain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}`;
+      await updateFirebaseLinks(fakeFirebasePath, {
+        registerUrl: cleanFakeRegisterUrl,
+        depositUrl: fakeUrls.deposit,
+        wingoUrl: fakeUrls.wingo
+      });
+    }
+  } catch (error) {
+    return res.json({ error: `${error.message}. Order not created.` });
+  }
+
+  _pkgCounter++;
+  const packageName = makePackageName(app_name, _pkgCounter);
+  const iconFile = req.file ? path.basename(req.file.path) : null;
+
+  // FREE order — coins_spent = 0, koi deduction nahi
+  const orderResult = db.prepare(`
+    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,status,coins_spent,design_variant,coupon_code,discount_coins)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'building',0,'real','',0)
+  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit) || 300, brand_title?.trim() || app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath);
+
+  const orderId = orderResult.lastInsertRowid;
+  const buildId = `build_${orderId}_${Date.now()}`;
+
+  res.json({ success: true, orderId, buildId, message: 'FREE order created — build started' });
+
+  // ── Build in background (same pipeline as user orders) ──
+  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
+  const logs = [];
+  const logPush = (msg) => { logs.push(msg); db.prepare('UPDATE orders SET build_log=? WHERE id=?').run(logs.join('\n'), orderId); };
+
+  buildApk(order, design, buildId, logPush).then(async result => {
+    if (result.success) {
+      db.prepare('UPDATE orders SET apk_file=? WHERE id=?').run(result.apkFile, orderId);
+
+      let fakeResult = null;
+      if (fakeAddonEnabled && cleanFakeRegisterUrl) {
+        logPush('\n--- Building Fake APK ---');
+        const fakeOrder = {
+          ...order,
+          is_fake: true,
+          app_name: order.app_name + ' Fake',
+          package_name: 'com.zayrof.' + packageName.split('.').pop(),
+          register_url: cleanFakeRegisterUrl,
+          deposit_url: buildUrls(cleanFakeRegisterUrl, isDhaniDesign).deposit,
+          wingo_url: buildUrls(cleanFakeRegisterUrl, isDhaniDesign).wingo,
+          domain: extractDomain(cleanFakeRegisterUrl),
+          firebase_path: order.fake_firebase_path
+            || `zayrof${extractDomain(cleanFakeRegisterUrl).replace(/[^a-z0-9]/gi, '').substring(0, 8)}`
+        };
+        fakeResult = await buildApk(fakeOrder, design, buildId + '_fake', logPush);
+        if (fakeResult.success) {
+          db.prepare('UPDATE orders SET fake_apk_file=? WHERE id=?').run(fakeResult.apkFile, orderId);
+          logPush('Fake APK ready!');
+        } else {
+          logPush('Fake APK build failed: ' + fakeResult.error);
+        }
+      }
+
+      db.prepare('UPDATE orders SET status=? WHERE id=?').run('done', orderId);
+      const apkPaths = [result.apkPath];
+      if (fakeResult?.success) apkPaths.push(fakeResult.apkPath);
+      sendApkReady(user, db.prepare('SELECT * FROM orders WHERE id=?').get(orderId), apkPaths, []).catch(() => {});
+    } else {
+      db.prepare('UPDATE orders SET status=? WHERE id=?').run('failed', orderId);
+    }
+  }).catch(err => {
+    db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('failed', err.message, orderId);
+  });
+});
+
+
 // Complete Firebase manager for each APK from Admin > Users > APKs.
 app.get('/api/admin/orders/:id/firebase', requireAdmin, async (req, res) => {
   const order = getAdminOrder(req.params.id);

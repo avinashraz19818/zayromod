@@ -576,7 +576,9 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
 
   <!-- ORDERS -->
   <div id="sec-orders" class="section">
-    <div class="topbar"><h1>All Orders<small>Every APK build request</small></h1></div>
+    <div class="topbar"><h1>All Orders<small>Every APK build request</small></h1>
+      <button class="btn btn-ok" onclick="openCreateOrderModal()"><svg><use href="#i-plus"/></svg> Create Order (FREE)</button>
+    </div>
     <div class="card">
       <div class="card-hd"><span class="accent"></span><h3>Filters & Search</h3></div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:16px">
@@ -588,6 +590,41 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
         <button class="btn btn-danger" id="bulkDeleteBtn" style="display:none" onclick="bulkDeleteOrders()"><svg><use href="#i-x"/></svg> Delete Selected (<span id="selectedCount">0</span>)</button>
       </div>
       <div id="ordersList" style="color:var(--dim)">Loading…</div>
+    </div>
+  </div>
+
+  <!-- CREATE ORDER MODAL (ADMIN, FREE) -->
+  <div id="createOrderModal" class="emodal">
+    <div class="esheet" role="dialog" aria-modal="true" style="max-width:560px">
+      <div class="ehead">
+        <h3>Create Order for User <span style="font-size:11px;color:var(--gold);font-weight:700;margin-left:6px">FREE · 0 coins</span></h3>
+        <button class="close" onclick="closeCreateOrderModal()" aria-label="Close">✕</button>
+      </div>
+      <div class="ebody">
+        <div class="form-group"><label>User *</label>
+          <select id="coUser" class="input"><option value="">Loading users…</option></select></div>
+        <div class="form-group"><label>Design *</label>
+          <select id="coDesign" class="input"><option value="">Loading designs…</option></select></div>
+        <div class="form-group"><label>App Name *</label>
+          <input type="text" id="coAppName" class="input" placeholder="e.g. BDG WIN VIP"></div>
+        <div class="form-group"><label>Register URL *</label>
+          <input type="text" id="coRegisterUrl" class="input" placeholder="https://site.com/#/register?invitationCode=..."></div>
+        <div class="form-group"><label>Min Deposit (default 300)</label>
+          <input type="number" id="coMinDeposit" class="input" value="300" min="1"></div>
+        <div class="form-group"><label>Brand Title (optional — default app name)</label>
+          <input type="text" id="coBrandTitle" class="input" placeholder="Brand title"></div>
+        <div class="form-group"><label>Fake APK Addon (optional)</label>
+          <label style="display:flex;gap:8px;align-items:center;font-weight:400;cursor:pointer">
+            <input type="checkbox" id="coFakeAddon" onchange="document.getElementById('coFakeUrlRow').style.display=this.checked?'block':'none'"> Enable Fake APK
+          </label>
+          <div id="coFakeUrlRow" style="display:none;margin-top:8px">
+            <input type="text" id="coFakeUrl" class="input" placeholder="Fake site register URL (https://...)">
+          </div></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+          <button class="btn btn-outline" onclick="closeCreateOrderModal()">Cancel</button>
+          <button class="btn btn-ok" onclick="createOrderForUser(this)"><svg><use href="#i-plus"/></svg> Create & Build (FREE)</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1415,6 +1452,77 @@ async function subUserCoins(userId) {
   if (d.error) return toast(d.error, true);
   toast('✓ ' + amount + ' coins subtracted!');
   loadUsers();
+}
+
+/* ── CREATE ORDER (ADMIN, FREE) ── */
+async function openCreateOrderModal() {
+  const modal = document.getElementById('createOrderModal');
+  modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+
+  // Users dropdown
+  const users = await api('/api/admin/users');
+  const uSel = document.getElementById('coUser');
+  if (users.error) { uSel.innerHTML = '<option value="">Error loading users</option>'; }
+  else {
+    uSel.innerHTML = '<option value="">Select user…</option>' +
+      users.map(u => `<option value="${u.id}">${u.username} (ID: ${u.id}) — ${u.coins} coins</option>`).join('');
+  }
+
+  // Designs dropdown
+  const designs = await api('/api/admin/designs');
+  const dSel = document.getElementById('coDesign');
+  if (designs.error) { dSel.innerHTML = '<option value="">Error loading designs</option>'; }
+  else {
+    const active = designs.filter(d => d.active === 1 || d.active === true);
+    dSel.innerHTML = '<option value="">Select design…</option>' +
+      active.map(d => `<option value="${d.id}">${d.name} (ID: ${d.id})</option>`).join('');
+  }
+
+  // Reset rest
+  document.getElementById('coAppName').value = '';
+  document.getElementById('coRegisterUrl').value = '';
+  document.getElementById('coMinDeposit').value = '300';
+  document.getElementById('coBrandTitle').value = '';
+  document.getElementById('coFakeAddon').checked = false;
+  document.getElementById('coFakeUrl').value = '';
+  document.getElementById('coFakeUrlRow').style.display = 'none';
+}
+
+function closeCreateOrderModal() {
+  const modal = document.getElementById('createOrderModal');
+  modal.classList.remove('show');
+  document.body.style.overflow = document.getElementById('userOrdersModal').classList.contains('show') ? 'hidden' : '';
+}
+
+async function createOrderForUser(btn) {
+  const userId = document.getElementById('coUser').value;
+  const designId = document.getElementById('coDesign').value;
+  const appName = document.getElementById('coAppName').value.trim();
+  const registerUrl = document.getElementById('coRegisterUrl').value.trim();
+  if (!userId) return toast('User select karo', true);
+  if (!designId) return toast('Design select karo', true);
+  if (!appName) return toast('App name bharo', true);
+  if (!registerUrl) return toast('Register URL bharo', true);
+
+  setLoading(btn, true, 'Creating…');
+  const body = {
+    user_id: userId,
+    design_id: designId,
+    app_name: appName,
+    register_url: registerUrl,
+    min_deposit: document.getElementById('coMinDeposit').value || 300,
+    brand_title: document.getElementById('coBrandTitle').value.trim(),
+    fake_addon: document.getElementById('coFakeAddon').checked
+  };
+  if (body.fake_addon) body.fake_register_url = document.getElementById('coFakeUrl').value.trim();
+
+  const d = await api('/api/admin/orders/create', 'POST', body);
+  setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+  toast('✓ FREE order #' + d.orderId + ' created — build started!');
+  closeCreateOrderModal();
+  loadOrders();
 }
 
 async function deleteUser(userId, username) {
