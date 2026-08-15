@@ -84,6 +84,80 @@ function ensureIntroSnippet(html) {
   return html + snippet;
 }
 
+// ── Home-page audio gate (template-agnostic, auto-injected) ──
+// Koi bhi design template upload karo — ye snippet build time pe popup HTML
+// me inject hota hai, isliye har design (purana ya naya upload) covered hai.
+// Rule: jab tak asli login/registration detect nahi hota, tab tak home page
+// wale mp3 (successful / lowbalance / deposit / low_deposit) BLOCK rahenge.
+// Login/registration detect hone ke baad sab normal chalega.
+// - register.mp3, bypass.mp3, intro.mp3 pe koi rok nahi (unka apna flow hai)
+// - Agar template me pehle se isLoggedIn flag hai (newer templates) to wo
+//   bhi respect hota hai.
+function ensureAudioGate(html) {
+  if (!html) return html;
+  // Pehle se gate injected hai (e.g. purane build se nikla template) to skip
+  if (html.indexOf('ZAYRO AUDIO GATE') !== -1) return html;
+  const snippet = [
+    '<script>',
+    '/* ZAYRO AUDIO GATE — auto-injected at build time (template-agnostic) */',
+    '(function(){',
+    '  var __loggedIn=false, __sawAuth=false, __sawPhone=false;',
+    '  function __isAllowed(f){',
+    '    var n=String(f||"").toLowerCase();',
+    '    var blocked=n.indexOf("successful")>=0||n.indexOf("lowbalance")>=0||n.indexOf("low_deposit")>=0||n.indexOf("deposit")>=0;',
+    '    if(!blocked) return true;',
+    '    try{ if(window.isLoggedIn===true) return true; }catch(e){}',
+    '    return __loggedIn;',
+    '  }',
+    '  try{',
+    '    if(typeof playAudio==="function"){',
+    '      var __origPlay=playAudio;',
+    '      window.playAudio=function(f){',
+    '        if(!__isAllowed(f)) return;',
+    '        return __origPlay.apply(this, arguments);',
+    '      };',
+    '    }',
+    '  }catch(e){}',
+    '  try{',
+    '    if(window.ZAYRO && typeof window.ZAYRO.playSound==="function"){',
+    '      var __origZ=window.ZAYRO.playSound;',
+    '      window.ZAYRO.playSound=function(f){',
+    '        if(!__isAllowed(f)) return;',
+    '        return __origZ.apply(window.ZAYRO, arguments);',
+    '      };',
+    '    }',
+    '  }catch(e){}',
+    '  setInterval(function(){',
+    '    try{',
+    '      var fr=document.getElementById("target-game-frame");',
+    '      if(!fr){ var fs=document.getElementsByTagName("iframe"); if(fs.length) fr=fs[0]; }',
+    '      if(!fr || !fr.contentWindow) return;',
+    '      var href="";',
+    '      try{ href=fr.contentWindow.location.href; }catch(e){ return; }',
+    '      if(!href || href==="about:blank") return;',
+    '      var hash=href.split("#")[1]||"";',
+    '      var isReg=hash.indexOf("/register")>=0||href.indexOf("register")>=0||hash.indexOf("invitationcode")>=0;',
+    '      var isLogin=hash.indexOf("/login")>=0||href.indexOf("login")>=0;',
+    '      if(isReg||isLogin){',
+    '        __sawAuth=true;',
+    '        try{',
+    '          var doc=fr.contentDocument||fr.contentWindow.document;',
+    '          var inp=doc.querySelector("input[type=tel],input[placeholder*=phone],input[placeholder*=Phone],input[placeholder*=mobile],input[placeholder*=Mobile],input[placeholder*=user]");',
+    '          if(inp){ var v=(inp.value||"").replace(/[^0-9]/g,""); if(v.length>=10) __sawPhone=true; }',
+    '        }catch(e2){}',
+    '      } else if(__sawAuth && __sawPhone){',
+    '        __loggedIn=true;',
+    '      }',
+    '    }catch(e){}',
+    '  },700);',
+    '})();',
+    '</script>',
+    ''
+  ].join('\n');
+  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, snippet + '</body>');
+  return html + snippet;
+}
+
 // ── APK build implementation ──
 // This implementation intentionally runs inside apkbuilder-worker.js. It uses
 // synchronous filesystem/Gradle commands, which are safe in the isolated
@@ -137,7 +211,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     };
 
     log('Injecting parameters into HTML...');
-    const processedPopup   = injectParams(popupHtml, params);
+    const processedPopup   = ensureAudioGate(injectParams(popupHtml, params));
     const processedLoading = ensureIntroSnippet(injectParams(loadingHtml, params));
 
     // ── HARDENING: per-build unique key ──
