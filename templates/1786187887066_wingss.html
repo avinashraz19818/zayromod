@@ -1207,7 +1207,7 @@ function updateUI(){
     document.getElementById('homeBal').textContent=dispBal;
     showOnly('sv-home');showBtn('btn-wingo-area');
     /* play successful.mp3 only once per login session */
-    if(!_successPlayed){_successPlayed=true;playAudio('successful.mp3');}
+    if(!_successPlayed && currentPhone){_successPlayed=true;playAudio('successful.mp3');}
   }
   else if(curState==='low'){
     setShell('st-danger');

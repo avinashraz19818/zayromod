@@ -1737,6 +1737,7 @@ var WINGO_URL   ="https://bdgwin12.com/#/saasLottery/WinGo?gameCode=WinGo_30S&lo
 
 /* ── SECURE AUTH ENGINE ── */
 var currentPhone=null,warnActive=false,isOnRegisterPage=false,_cwPending=false;
+var isLoggedIn=false,_wasOnLogin=false;
 var wasAuthFlowActive=false, pendingRegPhone=null;
 
 function checkAndWarn(phone){
@@ -2110,8 +2111,10 @@ window.setUrl=function(url){
 
   isOnRegisterPage=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0;
   var isLogin=hash.indexOf('/login')>=0;
+    if(isLogin)_wasOnLogin=true;
 
   if (prevIsReg && !isOnRegisterPage && !isLogin && pendingRegPhone) {
+        isLoggedIn=true;
       if(rtdb) rtdb.ref("zayrolivesunny/users/"+pendingRegPhone).update({registered:true,timestamp:Date.now()});
       currentPhone = pendingRegPhone;
       pendingRegPhone = null;
@@ -2131,6 +2134,7 @@ window.setUrl=function(url){
   } else {
     stopRegisterMon();
     if(!isLogin && pendingRegPhone) {
+            isLoggedIn=true;
          if(rtdb) rtdb.ref("zayrolivesunny/users/"+pendingRegPhone).update({registered:true,timestamp:Date.now()});
          currentPhone = pendingRegPhone;
          pendingRegPhone = null;
@@ -2157,8 +2161,11 @@ window.setUrl=function(url){
   else {
     var _wasAuth = wasAuthFlowActive;
     wasAuthFlowActive = false;
+    /* LOGIN SUCCESS: login page se phone ke saath nikal kar home aana */
+    if(_wasAuth && _wasOnLogin && currentPhone) isLoggedIn=true;
+    _wasOnLogin=false;
     window.setState('home');
-    if(_wasAuth && !_successPlayed) {
+    if(_wasAuth && !_successPlayed && isLoggedIn) {
         _successPlayed=true;
         playAudio('successful.mp3');
     }
