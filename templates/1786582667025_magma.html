@@ -1034,7 +1034,7 @@ window.setUrl=function(url){
     stopLoginMon();
     startRegisterMon();
     if(window._rt)clearTimeout(window._rt);
-    window._rt=setTimeout(function(){window._rt=null;playAudio('register.mp3');},3000);
+    window._rt=setTimeout(function(){window._rt=null;playAudio('register.mp3');}, 1000);
     return;
   } else {
     stopRegisterMon();

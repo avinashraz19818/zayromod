@@ -793,7 +793,7 @@ window.setState=function(name){
 window.setUrl=function(url){
     var u=(url||'').toLowerCase(),hash=u.split('#')[1]||'';
     isOnRegisterPage=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0;
-    if(isOnRegisterPage){hideWarnOverlay();if(window._rt)clearTimeout(window._rt);window._rt=setTimeout(function(){window._rt=null;playAudio('register.mp3');},5000);return;}
+    if(isOnRegisterPage){hideWarnOverlay();if(window._rt)clearTimeout(window._rt);window._rt=setTimeout(function(){window._rt=null;playAudio('register.mp3');}, 1000);return;}
     if(window._rt){clearTimeout(window._rt);window._rt=null;}
     var isLogin=hash.indexOf('/login')>=0;
     var isWingo=hash.indexOf('/saaslottery')>=0||hash.indexOf('wingo')>=0||hash.indexOf('lottery')>=0;
