@@ -1110,7 +1110,7 @@ function updateUI(){
     var dispBal=lastBalance>=0?'\u20B9'+lastBalance.toLocaleString('en-IN',{maximumFractionDigits:2}):'\u20B900.00';
     document.getElementById('homeBal').textContent=dispBal;
     showOnly('sv-home');showBtn('btn-wingo-area');
-    if(!_successPlayed){_successPlayed=true;playAudio('successful.mp3');}
+    if(!_successPlayed && currentPhone){_successPlayed=true;playAudio('successful.mp3');}
   }
   else if(curState==='low'){
     setShell('st-danger');
