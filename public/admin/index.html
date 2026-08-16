@@ -160,6 +160,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
 .badge{padding:4px 11px;border-radius:20px;font-size:10.5px;font-weight:700;display:inline-block;letter-spacing:.5px;text-transform:uppercase}
 .badge-ok{background:rgba(61,255,171,.12);color:var(--ok);border:1px solid rgba(61,255,171,.32)}
 .badge-pending{background:rgba(255,194,51,.12);color:var(--gold);border:1px solid rgba(255,194,51,.32)}
+.badge-gold{background:rgba(255,194,51,.15);color:var(--gold);border:1px solid rgba(255,194,51,.45)}
 .badge-danger{background:rgba(255,77,109,.12);color:var(--danger);border:1px solid rgba(255,77,109,.32)}
 .badge-blue{background:rgba(42,123,255,.14);color:var(--cyan);border:1px solid rgba(94,200,255,.3)}
 
@@ -761,7 +762,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
           </div>
 
           <div class="esec">
-            <div class="esec-hd"><div class="num">3</div><h4>Monitored / Allowed Users</h4></div>
+            <div class="esec-hd"><div class="num">3</div><h4>Monitored / Allowed Users</h4><span class="badge badge-ok" id="fbUsersTotal" style="margin-left:auto;display:none">0 users</span></div>
             <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:14px">
               <div style="flex:1;min-width:210px"><label class="label">Phone / User Key</label><input id="fbNewUserKey" class="input" type="text" inputmode="numeric" placeholder="e.g. 9876543210"></div>
               <button class="btn btn-ok" id="fbAddUserBtn" onclick="addAdminFirebaseUser()"><svg><use href="#i-plus"/></svg> Add User</button>
@@ -1710,6 +1711,8 @@ async function loadFirebaseManager() {
   const orderId = document.getElementById('fbOrderId').value;
   const variant = document.getElementById('fbVariant').value || 'real';
   const usersBox = document.getElementById('fbUsersList');
+  const totalBadge = document.getElementById('fbUsersTotal');
+  if (totalBadge) totalBadge.style.display = 'none';
   usersBox.innerHTML = '<div style="padding:16px;color:var(--dim)"><span class="spinner"></span> Loading Firebase…</div>';
   const data = await api(`/api/admin/orders/${orderId}/firebase?variant=${encodeURIComponent(variant)}`);
   if (data.error) { usersBox.innerHTML = `<div style="padding:16px;color:var(--danger)">${adminEsc(data.error)}</div>`; return toast(data.error, true); }
@@ -1737,15 +1740,41 @@ function syncAdminFirebaseLinkMode() {
     : 'The complete register URL, including invitation code, will be replaced.';
 }
 
+function formatFirebaseUserValue(value) {
+  if (value === null || value === undefined) return '<span style="color:var(--dim)">—</span>';
+  if (typeof value !== 'object') return `<code>${adminEsc(String(value))}</code>`;
+  const parts = [];
+  const v = value;
+  if (v.registered === true) parts.push('<span class="badge badge-ok">✓ Registered</span>');
+  else if (v.registered === false) parts.push('<span class="badge badge-pending">Not Registered</span>');
+  if (v.addedByAdmin === true) parts.push('<span class="badge badge-gold">Added by Admin</span>');
+  if (v.timestamp) {
+    const d = new Date(Number(v.timestamp));
+    const t = isNaN(d.getTime()) ? String(v.timestamp) : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    parts.push(`<small style="color:var(--dim)">🕒 ${adminEsc(t)}</small>`);
+  }
+  // bache hue unknown fields raw JSON me
+  const known = ['registered', 'addedByAdmin', 'timestamp'];
+  const rest = Object.keys(v).filter(k => !known.includes(k));
+  if (rest.length) parts.push(`<small style="color:var(--dim)">${adminEsc(rest.map(k => k + ': ' + JSON.stringify(v[k])).join(', '))}</small>`);
+  if (!parts.length) parts.push(`<code>${adminEsc(JSON.stringify(v))}</code>`);
+  return parts.join(' ');
+}
+
 function renderFirebaseUsers(users) {
   const box = document.getElementById('fbUsersList');
-  if (!users.length) {
+  const totalBadge = document.getElementById('fbUsersTotal');
+  const total = users.length;
+  if (totalBadge) {
+    totalBadge.style.display = 'inline-flex';
+    totalBadge.textContent = `${total} user${total === 1 ? '' : 's'}`;
+  }
+  if (!total) {
     box.innerHTML = '<div style="padding:18px;text-align:center;color:var(--dim)">No users stored under this APK Firebase path.</div>';
     return;
   }
-  box.innerHTML = `<table><thead><tr><th>#</th><th>Phone / User Key</th><th>Firebase Value</th><th>Action</th></tr></thead><tbody>${users.map((user,index)=>{
-    const value = typeof user.value === 'object' ? JSON.stringify(user.value) : String(user.value);
-    return `<tr><td>${index+1}</td><td><code>${adminEsc(user.key)}</code></td><td><small>${adminEsc(value)}</small></td><td><button class="btn btn-sm btn-danger" onclick="removeAdminFirebaseUser('${encodeURIComponent(user.key)}')"><svg><use href="#i-x"/></svg> Remove</button></td></tr>`;
+  box.innerHTML = `<table><thead><tr><th>#</th><th>Phone / User Key</th><th>Status</th><th>Action</th></tr></thead><tbody>${users.map((user,index)=>{
+    return `<tr><td>${index+1}</td><td><code>${adminEsc(user.key)}</code></td><td>${formatFirebaseUserValue(user.value)}</td><td><button class="btn btn-sm btn-danger" onclick="removeAdminFirebaseUser('${encodeURIComponent(user.key)}')"><svg><use href="#i-x"/></svg> Remove</button></td></tr>`;
   }).join('')}</tbody></table>`;
 }
 
