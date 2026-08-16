@@ -16,6 +16,9 @@ const BOLD = buildMap(0x1D400, 0x1D41A, 0x1D7CE);
 const SANS = buildMap(0x1D5A0, 0x1D5BA, 0x1D7E2);
 // Mathematical Monospace: A U+1D670, a U+1D68A, 0 U+1D7F6
 const MONO = buildMap(0x1D670, 0x1D68A, 0x1D7F6);
+// Mathematical Sans-Serif BOLD: A U+1D5D4, a U+1D5EE, 0 U+1D7EC
+// (ye "𝗕𝗼𝗹𝗱 𝗙𝗼𝗻𝘁" wala style hai)
+const SANSBOLD = buildMap(0x1D5D4, 0x1D5EE, 0x1D7EC);
 
 // Small caps (Unicode phonetic extensions) — digits/uppercase bhi small caps
 // me convert hote hain; jo letters small caps nahi hain (jaise x) wo plain
@@ -56,10 +59,11 @@ function smallCaps(text) {
   return out;
 }
 
-// Order me dikhane wale options — sirf 4 styled (Normal intentionally
+// Order me dikhane wale options — sirf styled (Normal intentionally
 // nahi dikhaya jata; legacy/default ke liye 'normal' internal hi rehta hai)
 const FONT_STYLES = [
   { key: 'bold',      label: 'Bold' },
+  { key: 'sansbold',  label: 'Bold Sans' },
   { key: 'smallcaps', label: 'Small Caps' },
   { key: 'sans',      label: 'Sans Serif' },
   { key: 'mono',      label: 'Monospace' }
@@ -69,6 +73,7 @@ function applyFontStyle(text, style) {
   if (!text) return text;
   switch (String(style || 'normal').toLowerCase()) {
     case 'bold':      return mapWith(text, BOLD);
+    case 'sansbold':  return mapWith(text, SANSBOLD);
     case 'sans':      return mapWith(text, SANS);
     case 'mono':      return mapWith(text, MONO);
     case 'smallcaps': return smallCaps(text);
