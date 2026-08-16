@@ -56,9 +56,9 @@ function smallCaps(text) {
   return out;
 }
 
-// Order me dikhane wale options — 5 hi (zyada stylish nahi)
+// Order me dikhane wale options — sirf 4 styled (Normal intentionally
+// nahi dikhaya jata; legacy/default ke liye 'normal' internal hi rehta hai)
 const FONT_STYLES = [
-  { key: 'normal',    label: 'Normal' },
   { key: 'bold',      label: 'Bold' },
   { key: 'smallcaps', label: 'Small Caps' },
   { key: 'sans',      label: 'Sans Serif' },
