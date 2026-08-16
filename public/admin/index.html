@@ -469,6 +469,11 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
   .tbl-wrap td::before{font-size:8.5px}
   .tbl-wrap td:last-child .btn{padding:5px 10px!important;font-size:11px!important}
 }
+/* ── App Name Font Style picker ── */
+.font-picker{display:flex;gap:8px;flex-wrap:wrap}
+.font-picker .fp-btn{padding:8px 12px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:#fff;font-size:13px;line-height:1.3;cursor:pointer;transition:.15s;min-width:56px;text-align:center}
+.font-picker .fp-btn:hover{border-color:var(--cyan)}
+.font-picker .fp-btn.sel{border-color:var(--cyan);background:rgba(56,189,248,.12);box-shadow:0 0 0 1px var(--cyan)}
 </style>
 </head>
 <body>
@@ -618,6 +623,9 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
               <input type="file" id="coIcon" accept="image/*" class="input">
               <div class="hint">PNG, square 512×512 recommended.</div></div>
           </div>
+          <div class="form-group" style="margin:12px 0 0"><label>App Name Font Style</label>
+            <div class="font-picker" id="coFontPicker"></div>
+            <div class="hint">Sirf phone ke home screen wale naam ka font — app ke andar wala HTML unchanged.</div></div>
         </div>
 
         <div class="card" style="margin-bottom:14px">
@@ -1488,6 +1496,32 @@ async function subUserCoins(userId) {
 }
 
 /* ── CREATE ORDER (ADMIN, FREE) ── */
+let coFontStyle = 'normal';
+let _coFontTimer = null;
+function refreshCoFontPicker() {
+  const name = document.getElementById('coAppName').value.trim();
+  api('/api/font-styles?text=' + encodeURIComponent(name || 'Aa 123')).then(opts => {
+    if (!Array.isArray(opts)) return;
+    const box = document.getElementById('coFontPicker');
+    box.innerHTML = '';
+    opts.forEach(o => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'fp-btn' + (o.key === coFontStyle ? ' sel' : '');
+      b.dataset.style = o.key;
+      b.textContent = o.sample;
+      b.title = o.label;
+      b.onclick = () => { coFontStyle = o.key; [...box.children].forEach(x => x.classList.toggle('sel', x.dataset.style === o.key)); };
+      box.appendChild(b);
+    });
+  }).catch(() => {});
+}
+document.getElementById('coAppName').addEventListener('input', () => {
+  clearTimeout(_coFontTimer);
+  _coFontTimer = setTimeout(refreshCoFontPicker, 250);
+});
+refreshCoFontPicker();
+
 async function openCreateOrderModal() {
   const modal = document.getElementById('createOrderModal');
   modal.classList.add('show');
@@ -1520,6 +1554,8 @@ async function openCreateOrderModal() {
   document.getElementById('coFakeAddon').checked = false;
   document.getElementById('coFakeUrl').value = '';
   document.getElementById('coFakeUrlRow').style.display = 'none';
+  coFontStyle = 'normal';
+  refreshCoFontPicker();
 }
 
 function closeCreateOrderModal() {
@@ -1547,6 +1583,7 @@ async function createOrderForUser(btn) {
   fd.append('user_id', userId);
   fd.append('design_id', designId);
   fd.append('app_name', appName);
+  fd.append('app_name_style', coFontStyle);
   fd.append('register_url', registerUrl);
   fd.append('min_deposit', document.getElementById('coMinDeposit').value || 300);
   fd.append('brand_title', appName); // server default: app name hi brand title hai
