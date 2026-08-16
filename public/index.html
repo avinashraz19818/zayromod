@@ -1045,7 +1045,7 @@ async function selectDesign(id,designData=null){
   $('fakeUrlBox').style.display='none';
   $('fakeAddonBox').classList.remove('active');
   ['orderAppName','orderRegUrl','orderIcon','fakeRegUrl','couponCode'].forEach(i=>$(i).value='');
-  orderFontStyle='normal';refreshOrderFontPicker();
+  orderFontStyle='bold';refreshOrderFontPicker();
   appliedCoupon={code:'',discount:0,total:null};
   $('couponHint').textContent='Discount coupons are set by admin.';
   $('orderMinDeposit').value='300';
@@ -1084,12 +1084,13 @@ async function applyCoupon(btn){
   toast('Coupon applied!');
 }
 /* ── App Name Font Style picker ── */
-let orderFontStyle='normal';
+let orderFontStyle='bold';
 let _fontTimer=null;
 function refreshOrderFontPicker(){
   const name=$('orderAppName').value.trim();
   api('/api/font-styles?text='+encodeURIComponent(name||'Aa 123')).then(opts=>{
     if(!Array.isArray(opts))return;
+    if(!opts.some(o=>o.key===orderFontStyle))orderFontStyle='bold';
     const box=$('orderFontPicker');
     box.innerHTML='';
     opts.forEach(o=>{

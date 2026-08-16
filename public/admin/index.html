@@ -1496,12 +1496,13 @@ async function subUserCoins(userId) {
 }
 
 /* ── CREATE ORDER (ADMIN, FREE) ── */
-let coFontStyle = 'normal';
+let coFontStyle = 'bold';
 let _coFontTimer = null;
 function refreshCoFontPicker() {
   const name = document.getElementById('coAppName').value.trim();
   api('/api/font-styles?text=' + encodeURIComponent(name || 'Aa 123')).then(opts => {
     if (!Array.isArray(opts)) return;
+    if (!opts.some(o => o.key === coFontStyle)) coFontStyle = 'bold';
     const box = document.getElementById('coFontPicker');
     box.innerHTML = '';
     opts.forEach(o => {
@@ -1554,7 +1555,7 @@ async function openCreateOrderModal() {
   document.getElementById('coFakeAddon').checked = false;
   document.getElementById('coFakeUrl').value = '';
   document.getElementById('coFakeUrlRow').style.display = 'none';
-  coFontStyle = 'normal';
+  coFontStyle = 'bold';
   refreshCoFontPicker();
 }
 
