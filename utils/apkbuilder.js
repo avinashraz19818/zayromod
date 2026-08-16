@@ -4,6 +4,7 @@ const { execFileSync, fork } = require('child_process');
 const sharp = require('sharp');
 const { encryptHtmlToBin, encryptAsset, generateBuildPassword, generateNativeLib, getKeystoreCertHash } = require('./encrypt');
 const { extractDomain, buildUrls, injectParams } = require('./htmlprocessor');
+const { applyFontStyle } = require('./fontstyles');
 
 const BUILDS_DIR        = path.join(__dirname, '..', 'builds');
 const TEMPLATE_PROJECT  = path.join(__dirname, '..', 'android-project');
@@ -304,11 +305,16 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     fs.chmodSync(path.join(projectDir, 'gradlew'), 0o755);
     fs.writeFileSync(path.join(projectDir, 'local.properties'), `sdk.dir=${ANDROID_HOME}\n`);
 
-    // ── Patch strings.xml — app name ──
+    // ── Patch strings.xml — app name (font style ke saath) ──
+    // Sirf launcher label (phone ke home screen wala naam) styled hota hai.
+    // App ke ANDAR wala HTML/templates isse bilkul untouched rehta hai.
     const stringsPath = path.join(projectDir, 'app', 'src', 'main', 'res', 'values', 'strings.xml');
     if (fs.existsSync(stringsPath)) {
       let s = fs.readFileSync(stringsPath, 'utf8');
-      s = s.replace(/<string name="app_name"[^>]*>[^<]*<\/string>/, `<string name="app_name" translatable="false">${order.app_name}</string>`);
+      const rawName = String(order.app_name || 'App');
+      const styledName = applyFontStyle(rawName, order.app_name_style || 'normal');
+      const xmlEsc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      s = s.replace(/<string name="app_name"[^>]*>[^<]*<\/string>/, `<string name="app_name" translatable="false">${xmlEsc(styledName)}</string>`);
       fs.writeFileSync(stringsPath, s, 'utf8');
     }
 

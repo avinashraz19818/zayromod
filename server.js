@@ -13,6 +13,7 @@ const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
 const { initBot, sendCoinRequest, sendApkReady } = require('./utils/telegram');
 const { injectParams: injectHtmlParams } = require('./utils/htmlprocessor');
+const { applyFontStyle, isValidStyle, FONT_STYLES } = require('./utils/fontstyles');
 const {
   normalizeHttpUrl,
   replaceUrlDomain,
@@ -330,6 +331,17 @@ app.get('/api/designs/:id', (req, res) => {
   res.json(withPreviewImages(d));
 });
 
+// App name font styles — live preview ke liye (user + admin form dono use
+// karte hain). Text transform karke styled sample return karta hai.
+app.get('/api/font-styles', (req, res) => {
+  const text = String(req.query.text || '').slice(0, 40) || 'Aa 123';
+  res.json(FONT_STYLES.map(s => ({
+    key: s.key,
+    label: s.label,
+    sample: applyFontStyle(text, s.key)
+  })));
+});
+
 // ═══════════════════════════════════════════
 // ORDER / BUILD ROUTES
 // ═══════════════════════════════════════════
@@ -364,6 +376,7 @@ app.post('/api/coupons/validate', requireAuth, (req, res) => {
 app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) => {
   const { design_id, app_name, register_url, min_deposit, brand_title, fake_addon, fake_register_url } = req.body;
   if (!design_id || !app_name || !register_url) return res.json({ error: 'Missing required fields' });
+  const appNameStyle = isValidStyle(req.body.app_name_style) ? req.body.app_name_style : 'normal';
 
   let cleanRegisterUrl;
   let cleanFakeRegisterUrl = null;
@@ -428,9 +441,9 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   db.prepare('UPDATE users SET coins = coins - ? WHERE id=?').run(totalCoins, user.id);
 
   const orderResult = db.prepare(`
-    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,status,coins_spent,design_variant,coupon_code,discount_coins)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'building',?,?,?,?)
-  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath, totalCoins, 'real', couponResult.code, couponResult.discount);
+    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,app_name_style,status,coins_spent,design_variant,coupon_code,discount_coins)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'building',?,?,?,?)
+  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath, appNameStyle, totalCoins, 'real', couponResult.code, couponResult.discount);
   if (couponResult.code && couponResult.discount > 0) {
     db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=?').run(couponResult.coupon.id);
   }
@@ -1271,6 +1284,7 @@ app.post('/api/admin/orders/:id/rebuild', requireAdmin, (req, res) => {
 app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), async (req, res) => {
   const { user_id, design_id, app_name, register_url, min_deposit, brand_title, fake_addon, fake_register_url } = req.body;
   if (!user_id || !design_id || !app_name || !register_url) return res.json({ error: 'Missing required fields (user, design, app name, register URL)' });
+  const appNameStyle = isValidStyle(req.body.app_name_style) ? req.body.app_name_style : 'normal';
 
   let cleanRegisterUrl;
   let cleanFakeRegisterUrl = null;
@@ -1319,9 +1333,9 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
 
   // FREE order — coins_spent = 0, koi deduction nahi
   const orderResult = db.prepare(`
-    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,status,coins_spent,design_variant,coupon_code,discount_coins)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'building',0,'real','',0)
-  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit) || 300, brand_title?.trim() || app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath);
+    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,app_name_style,status,coins_spent,design_variant,coupon_code,discount_coins)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'building',0,'real','',0)
+  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit) || 300, brand_title?.trim() || app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath, appNameStyle);
 
   const orderId = orderResult.lastInsertRowid;
   const buildId = `build_${orderId}_${Date.now()}`;
