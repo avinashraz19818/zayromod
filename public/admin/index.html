@@ -593,36 +593,71 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
     </div>
   </div>
 
-  <!-- CREATE ORDER MODAL (ADMIN, FREE) -->
+  <!-- CREATE ORDER MODAL (ADMIN, FREE) — user panel jaisa poora form -->
   <div id="createOrderModal" class="emodal">
-    <div class="esheet" role="dialog" aria-modal="true" style="max-width:560px">
+    <div class="esheet" role="dialog" aria-modal="true" style="max-width:640px">
       <div class="ehead">
         <h3>Create Order for User <span style="font-size:11px;color:var(--gold);font-weight:700;margin-left:6px">FREE · 0 coins</span></h3>
         <button class="close" onclick="closeCreateOrderModal()" aria-label="Close">✕</button>
       </div>
       <div class="ebody">
-        <div class="form-group"><label>User *</label>
-          <select id="coUser" class="input"><option value="">Loading users…</option></select></div>
-        <div class="form-group"><label>Design *</label>
-          <select id="coDesign" class="input"><option value="">Loading designs…</option></select></div>
-        <div class="form-group"><label>App Name *</label>
-          <input type="text" id="coAppName" class="input" placeholder="e.g. BDG WIN VIP"></div>
-        <div class="form-group"><label>Register URL *</label>
-          <input type="text" id="coRegisterUrl" class="input" placeholder="https://site.com/#/register?invitationCode=..."></div>
-        <div class="form-group"><label>Min Deposit (default 300)</label>
-          <input type="number" id="coMinDeposit" class="input" value="300" min="1"></div>
-        <div class="form-group"><label>Brand Title (optional — default app name)</label>
-          <input type="text" id="coBrandTitle" class="input" placeholder="Brand title"></div>
-        <div class="form-group"><label>Fake APK Addon (optional)</label>
-          <label style="display:flex;gap:8px;align-items:center;font-weight:400;cursor:pointer">
-            <input type="checkbox" id="coFakeAddon" onchange="document.getElementById('coFakeUrlRow').style.display=this.checked?'block':'none'"> Enable Fake APK
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-hd"><span class="accent"></span><h3>Account</h3></div>
+          <div class="form-group" style="margin:0"><label>User * (jiske naam order banega)</label>
+            <select id="coUser" class="input"><option value="">Loading users…</option></select></div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-hd"><span class="accent"></span><h3>1 · App Identity</h3></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group" style="margin:0"><label>App Name *</label>
+              <input type="text" id="coAppName" class="input" placeholder="e.g. VIP Panel">
+              <div class="hint">Package: com.zayro.&lt;appname&gt;</div></div>
+            <div class="form-group" style="margin:0"><label>App Icon</label>
+              <input type="file" id="coIcon" accept="image/*" class="input">
+              <div class="hint">PNG, square 512×512 recommended.</div></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-hd"><span class="accent"></span><h3>2 · Site &amp; Deposit</h3></div>
+          <div class="form-group" style="margin:0"><label>Register URL *</label>
+            <input type="url" id="coRegisterUrl" class="input" placeholder="https://example.com/#/register?invitationCode=...">
+            <div class="hint">Deposit &amp; Wingo URLs auto-built from this domain.</div></div>
+          <div class="form-group" style="margin:10px 0 0"><label>Minimum Deposit Amount (₹)</label>
+            <input type="number" id="coMinDeposit" class="input" value="300" min="1"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-hd"><span class="accent"></span><h3>3 · Fake Site APK (optional)</h3></div>
+          <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-weight:600;color:var(--gold)">
+            <input type="checkbox" id="coFakeAddon" onchange="document.getElementById('coFakeUrlRow').style.display=this.checked?'block':'none'">
+            Add Fake Site APK
           </label>
-          <div id="coFakeUrlRow" style="display:none;margin-top:8px">
-            <input type="text" id="coFakeUrl" class="input" placeholder="Fake site register URL (https://...)">
-          </div></div>
+          <div class="hint">Same design, different URL — 2 APKs milenge (real + fake).</div>
+          <div id="coFakeUrlRow" style="display:none;margin-top:10px">
+            <div class="form-group" style="margin:0"><label>Fake Site Register URL</label>
+              <input type="url" id="coFakeUrl" class="input" placeholder="https://fakesite.com/#/register?..."></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-hd"><span class="accent"></span><h3>4 · Design</h3></div>
+          <div class="form-group" style="margin:0"><label>Design *</label>
+            <select id="coDesign" class="input"><option value="">Loading designs…</option></select></div>
+          <div class="form-group" style="margin:10px 0 0"><label>Brand Title (optional — default app name)</label>
+            <input type="text" id="coBrandTitle" class="input" placeholder="Brand title"></div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-2);border:1px solid var(--border);border-radius:12px;padding:12px 16px">
+          <span style="color:var(--dim);font-size:12px">Cost</span>
+          <b style="color:var(--gold);font-size:14px">FREE · 0 coins</b>
+        </div>
+
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
           <button class="btn btn-outline" onclick="closeCreateOrderModal()">Cancel</button>
-          <button class="btn btn-ok" onclick="createOrderForUser(this)"><svg><use href="#i-plus"/></svg> Create & Build (FREE)</button>
+          <button class="btn btn-ok" onclick="createOrderForUser(this)"><svg><use href="#i-plus"/></svg> Create &amp; Build (FREE)</button>
         </div>
       </div>
     </div>
@@ -1484,6 +1519,7 @@ async function openCreateOrderModal() {
   document.getElementById('coRegisterUrl').value = '';
   document.getElementById('coMinDeposit').value = '300';
   document.getElementById('coBrandTitle').value = '';
+  document.getElementById('coIcon').value = '';
   document.getElementById('coFakeAddon').checked = false;
   document.getElementById('coFakeUrl').value = '';
   document.getElementById('coFakeUrlRow').style.display = 'none';
@@ -1504,20 +1540,25 @@ async function createOrderForUser(btn) {
   if (!designId) return toast('Design select karo', true);
   if (!appName) return toast('App name bharo', true);
   if (!registerUrl) return toast('Register URL bharo', true);
+  const fakeAddon = document.getElementById('coFakeAddon').checked;
+  if (fakeAddon && !document.getElementById('coFakeUrl').value.trim()) return toast('Fake Addon on hai — Fake URL bharo', true);
 
   setLoading(btn, true, 'Creating…');
-  const body = {
-    user_id: userId,
-    design_id: designId,
-    app_name: appName,
-    register_url: registerUrl,
-    min_deposit: document.getElementById('coMinDeposit').value || 300,
-    brand_title: document.getElementById('coBrandTitle').value.trim(),
-    fake_addon: document.getElementById('coFakeAddon').checked
-  };
-  if (body.fake_addon) body.fake_register_url = document.getElementById('coFakeUrl').value.trim();
 
-  const d = await api('/api/admin/orders/create', 'POST', body);
+  // FormData — icon file bhi jaata hai (user panel wale form jaisa)
+  const fd = new FormData();
+  fd.append('user_id', userId);
+  fd.append('design_id', designId);
+  fd.append('app_name', appName);
+  fd.append('register_url', registerUrl);
+  fd.append('min_deposit', document.getElementById('coMinDeposit').value || 300);
+  fd.append('brand_title', document.getElementById('coBrandTitle').value.trim() || appName);
+  fd.append('fake_addon', fakeAddon ? 'true' : 'false');
+  if (fakeAddon) fd.append('fake_register_url', document.getElementById('coFakeUrl').value.trim());
+  const iconInput = document.getElementById('coIcon');
+  if (iconInput.files && iconInput.files[0]) fd.append('icon', iconInput.files[0]);
+
+  const d = await api('/api/admin/orders/create', 'POST', fd, true);
   setLoading(btn, false);
   if (d.error) return toast(d.error, true);
   toast('✓ FREE order #' + d.orderId + ' created — build started!');
