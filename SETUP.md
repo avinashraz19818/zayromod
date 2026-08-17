@@ -129,7 +129,7 @@ apk-builder/
 ├── server.js              — Main server
 ├── database/db.js         — SQLite database
 ├── utils/
-│   ├── encrypt.js         — Per-build key + AES-256-GCM asset encryption + native lib generation
+│   ├── encrypt.js         — HTML .bin encryption (fixed key) — assets plain rehte hain
 │   ├── htmlprocessor.js   — Template injection
 │   ├── apkbuilder.js      — APK build pipeline
 │   └── telegram.js        — Telegram bot
@@ -146,25 +146,19 @@ apk-builder/
 
 ## APK Hardening (automatic — no setup needed)
 
-Har build me automatic protection lagti hai:
+Bas itna protection hai:
 
-1. **Per-build unique key** — har APK ka apna random 32-hex password hota hai.
-2. **Assets encryption (MP3s excluded)** — HTML, PNG, fonts, icon — sab AES-256-GCM
-   se encrypted hote hain. APK decompile karo to assets folder me sirf garbage
-   bytes milenge, koi file readable nahi hogi. **MP3 files plain hi rehti hain**
-   — koi encryption/decryption nahi — taaki sounds seedha MediaPlayer se sahi
-   play hon.
-3. **Native key vault** — key APK ke native library (.so) me XOR-masked store hoti
-   hai. Binary me plaintext string nahi hoti; key sirf runtime pe reconstruct hoti hai.
-4. **Signature integrity check** — app apne sign-certificate ka SHA-256 verify karti
-   hai. Koi APK ko decompile karke modify karke alag key se re-sign kare to app
-   turant band ho jaati hai ("integrity check failed").
-5. **R8/ProGuard obfuscation** — Java code obfuscated hota hai (pehle se enabled).
-6. **No backup** — decrypted data adb backup se extract nahi ho sakta.
+1. **HTML encryption (fixed key)** — sirf popup/loading HTML files (.bin) AES-256-CBC
+   se encrypted hote hain (PBKDF2, fixed password). APK ke assets me HTML readable
+   nahi hota.
+2. **Assets plain** — PNG, MP3, fonts, icon sab PLAIN rehte hain (koi encrypt/decrypt
+   nahi). MP3 seedha MediaPlayer se assets se hi play hota hai — saare sounds sahi
+   chalte hain.
+3. **R8/ProGuard obfuscation** — Java code obfuscated hota hai (pehle se enabled).
+4. **No backup** — app data adb backup se extract nahi ho sakta.
 
-`keytool` (OpenJDK ke saath aata hai) available ho to integrity check auto-embed
-hota hai; na ho to build normal chalega sirf check ke bina. Old APKs pe koi asar
-nahi — sirf naye builds pe protection lagti hai.
+Native key vault / signature integrity check NAHI hai (hata diya gaya — purana
+simple style, jaise pehle chalta tha).
 
 ## Admin Login
 Default: admin / admin123 (change in .env)

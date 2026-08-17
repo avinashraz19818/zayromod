@@ -62,7 +62,11 @@ public class MainActivity extends Activity {
 		});
 	}
 	
-		private void initializeLogic() {
+	private void initializeLogic() {
+		// ═══════════════════════════════════════════════════════════════════
+		// SIMPLE FLOW (no security vault) — intro Java se, popup/loading HTML
+		// encrypted .bin files se, baaki sab assets PLAIN.
+		// ═══════════════════════════════════════════════════════════════════
 		final android.widget.FrameLayout root = new android.widget.FrameLayout(this);
 		final android.webkit.WebView wP = new android.webkit.WebView(this);
 		final android.webkit.WebView wL = new android.webkit.WebView(this);
@@ -80,7 +84,6 @@ public class MainActivity extends Activity {
 		s2.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 		s2.setMediaPlaybackRequiresUserGesture(false);
 		
-		// Strict multi-tab block parameters
 		s2.setJavaScriptCanOpenWindowsAutomatically(true);
 		s2.setSupportMultipleWindows(true); 
 		
@@ -92,6 +95,7 @@ public class MainActivity extends Activity {
 		s3.setDomStorageEnabled(true);
 		s3.setAllowFileAccessFromFileURLs(true); 
 		s3.setAllowUniversalAccessFromFileURLs(true);
+		s3.setMediaPlaybackRequiresUserGesture(false);
 		wL.setBackgroundColor(0xFF050310);
 		
 		android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(-1, -1);
@@ -113,7 +117,10 @@ public class MainActivity extends Activity {
 			}
 		});
 		
+		// Current player + current sound name + pending sound (intro ke baad).
 		final java.util.concurrent.atomic.AtomicReference AP = new java.util.concurrent.atomic.AtomicReference(null);
+		final java.util.concurrent.atomic.AtomicReference CUR_NAME = new java.util.concurrent.atomic.AtomicReference("");
+		final java.util.concurrent.atomic.AtomicReference PENDING = new java.util.concurrent.atomic.AtomicReference(null);
 		
 		final Object BR = new Object() {
 			@android.webkit.JavascriptInterface
@@ -123,65 +130,111 @@ public class MainActivity extends Activity {
 			
 			@android.webkit.JavascriptInterface
 			public void playSound(final String f) {
-				if (f == null || f.trim().length() == 0) return;
+				if (f == null) return;
+				String rawName = f.trim();
+				if (rawName.length() == 0) return;
+				final String soundName = new java.io.File(rawName).getName();
+				String lowerName = soundName.toLowerCase(java.util.Locale.US);
+				// big/small results Android TTS se bolte hain (MP3 nahi hota)
+				if (lowerName.equals("big.mp3") || lowerName.equals("small.mp3")) {
+					if (T[0] != null) T[0].speak(lowerName.equals("big.mp3") ? "Big" : "Small", android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "zayro_result");
+					return;
+				}
+				final String playableName = lowerName.equals("loginw.mp3") ? "bypass.mp3" : soundName;
+				// Intro chal raha hai to naya sound abhi mat bajao — intro khatam
+				// hote hi ye pending sound baj jayega (intro kabhi nahi katega).
+				if ("intro.mp3".equals(CUR_NAME.get())) {
+					PENDING.set(playableName);
+					return;
+				}
 				new Thread(new Runnable() { public void run() {
-					android.media.MediaPlayer p = null;
+						android.media.MediaPlayer p = null;
 					try {
-						p = new android.media.MediaPlayer(); AP.set(p);
-						android.content.res.AssetFileDescriptor a = getAssets().openFd(f);
-						p.setDataSource(a.getFileDescriptor(), a.getStartOffset(), a.getLength()); a.close();
-						final android.media.MediaPlayer fp = p;
-						p.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener() {
-							public void onCompletion(android.media.MediaPlayer m) { AP.compareAndSet(fp, null); m.release(); }
-						});
-						p.prepare(); p.start();
-					} catch (Exception e) {
-						if (p != null) { AP.compareAndSet(p, null); try { p.release(); } catch (Exception x) {} }
-					}
+							p = new android.media.MediaPlayer();
+							// Same sound already playing hai to restart mat karo
+							android.media.MediaPlayer cur = (android.media.MediaPlayer) AP.get();
+							if (playableName.equals(CUR_NAME.get()) && cur != null) {
+								try { if (cur.isPlaying()) { try { p.release(); } catch (Exception x) {} return; } } catch (Exception e) {}
+							}
+							// MP3s PLAIN assets me hain — seedha yahi se play
+							android.content.res.AssetFileDescriptor a = getAssets().openFd(playableName);
+							p.setDataSource(a.getFileDescriptor(), a.getStartOffset(), a.getLength()); a.close();
+							// Ek hi sound ek time pe — purana stop karke naya
+							android.media.MediaPlayer prev = (android.media.MediaPlayer) AP.getAndSet(p);
+							if (prev != null) {
+								try { if (prev.isPlaying()) prev.stop(); } catch (Exception e) {}
+								try { prev.release(); } catch (Exception e) {}
+							}
+							CUR_NAME.set(playableName);
+							final android.media.MediaPlayer fp = p;
+							p.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener() {
+								public void onCompletion(android.media.MediaPlayer m) {
+									if (playableName.equals(CUR_NAME.get())) CUR_NAME.set("");
+									AP.compareAndSet(fp, null); m.release();
+								}
+							});
+							p.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener() {
+								public boolean onError(android.media.MediaPlayer m, int what, int extra) {
+									if (playableName.equals(CUR_NAME.get())) CUR_NAME.set("");
+									AP.compareAndSet(fp, null); m.release(); return true;
+								}
+							});
+							p.prepare(); p.start();
+						} catch (Exception e) {
+							if (playableName.equals(CUR_NAME.get())) CUR_NAME.set("");
+							if (p != null) { AP.compareAndSet(p, null); try { p.release(); } catch (Exception x) {} }
+						}
 				}}).start();
 			}
 			
 			@android.webkit.JavascriptInterface
 			public void stopSound() {
-				Object o = AP.getAndSet(null);
-				if (o != null) {
-					android.media.MediaPlayer p = (android.media.MediaPlayer) o;
-					try { if (p.isPlaying()) p.stop(); } catch (Exception e) {}
-					try { p.release(); } catch (Exception e) {}
-				}
+				if (T[0] != null) { try { T[0].stop(); } catch (Exception e) {} }
+				// MP3 ko YAHAN nahi rokta — sound hamesha pura bajta hai.
+				// Naya playSound() aane par purana khud stop ho jata hai.
 			}
 		};
 		
 		wP.addJavascriptInterface(BR, "ZAYRO");
+		wL.addJavascriptInterface(BR, "ZAYRO");
 		
-		// ── Intro sound on splash loading (full 5 secs) ──
-		// Player AP me NAHI hai — isliye page ka stopSound intro ko nahi rok
-		// sakta, intro hamesha pura bajta hai. Lekin ek strong reference
-		// zaroor rakhte hain taaki garbage collector intro ko beech me
-		// release na kar de. MP3 plain assets me hai — seedha assets se play.
-		final android.media.MediaPlayer[] introHolder = new android.media.MediaPlayer[1];
+		// ── INTRO — app khulte hi turant, PLAIN asset se ──
 		try {
 			android.media.MediaPlayer introPlayer = new android.media.MediaPlayer();
 			android.content.res.AssetFileDescriptor afd = getAssets().openFd("intro.mp3");
 			introPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
 			afd.close();
-			introHolder[0] = introPlayer;
 			introPlayer.prepare();
+			// Strong reference — GC kabhi beech me release nahi kar sakta
+			AP.set(introPlayer);
+			CUR_NAME.set("intro.mp3");
+			final android.media.MediaPlayer ip = introPlayer;
+			introPlayer.setOnCompletionListener(new android.media.MediaPlayer.OnCompletionListener() {
+				public void onCompletion(android.media.MediaPlayer m) {
+					if ("intro.mp3".equals(CUR_NAME.get())) CUR_NAME.set("");
+					AP.compareAndSet(ip, null);
+					m.release();
+					// Intro ke baad pending sound (agar koi tha) play karo
+					Object pend = PENDING.getAndSet(null);
+					if (pend != null) playSound((String) pend);
+				}
+			});
+			introPlayer.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener() {
+				public boolean onError(android.media.MediaPlayer m, int what, int extra) {
+					if ("intro.mp3".equals(CUR_NAME.get())) CUR_NAME.set("");
+					AP.compareAndSet(ip, null);
+					m.release();
+					Object pend = PENDING.getAndSet(null);
+					if (pend != null) playSound((String) pend);
+					return true;
+				}
+			});
 			introPlayer.start();
 		} catch (Exception e) {}
 		
-		// ── CRYPTO FILE LOADER DECRYPTORS ──
-		// Per-build key native library se aati hai (har APK ki apni key) —
-		// hardcoded password nahi, isliye automated builds bhi chalta hai.
-		final SecurityUtil sec = new SecurityUtil();
-		final byte[] MK = sec.getMarker();
-		final String PW = sec.getDecryptKey();
-		
-		// Encrypted PNGs/fonts/icon ko app-private folder me decrypt karte
-		// hain taaki popup HTML ke relative image paths sahi resolve hon.
-		// MP3s plain assets me rehte hain (koi encrypt/decrypt nahi).
-		final String ZD = new java.io.File(getFilesDir(), "za").getAbsolutePath();
-		CryptoUtil.decryptAssetsToDir(MainActivity.this, PW);
+		// ── HTML .bin DECRYPT (fixed key) ──
+		final byte[] MK = {(byte)0xDE,(byte)0xAD,(byte)0xBE,(byte)0xEF,(byte)0xCA,(byte)0xFE,(byte)0xBA,(byte)0xBE};
+		final String PW = "zayroavi@132";
 		byte[] _buf = new byte[8192]; int _n;
 		
 		try {
@@ -190,27 +243,27 @@ public class MainActivity extends Activity {
 			while ((_n = is.read(_buf)) != -1) bos.write(_buf, 0, _n); is.close();
 			final byte[] bd = bos.toByteArray();
 			new Thread(new Runnable() { public void run() {
-				try {
-					int mp = -1;
-					for (int i = 0; i <= bd.length - 8; i++) {
-						boolean ok = true;
-						for (int j = 0; j < 8; j++) if (bd[i+j] != MK[j]) { ok = false; break; }
-						if (ok) { mp = i; break; }
-					}
-					if (mp < 0) throw new Exception("no marker");
-					byte[] salt = java.util.Arrays.copyOfRange(bd, mp+8, mp+24);
-					byte[] iv   = java.util.Arrays.copyOfRange(bd, mp+24, mp+40);
-					byte[] enc  = java.util.Arrays.copyOfRange(bd, mp+40, bd.length-64);
-					javax.crypto.SecretKeyFactory sf = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-					byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(PW.toCharArray(), salt, 100000, 256)).getEncoded();
-					javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
-					c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
-					final String html = new String(c.doFinal(enc), "UTF-8");
-					wP.post(new Runnable() { public void run() {
-						wP.loadDataWithBaseURL("file://" + ZD + "/", html, "text/html", "UTF-8", null);
-					}});
-				} catch (Exception e) { android.util.Log.e("DW", "popup dec: " + e.getMessage()); }
-			}}).start();
+					try {
+						int mp = -1;
+						for (int i = 0; i <= bd.length - 8; i++) {
+							boolean ok = true;
+							for (int j = 0; j < 8; j++) if (bd[i+j] != MK[j]) { ok = false; break; }
+							if (ok) { mp = i; break; }
+						}
+						if (mp < 0) throw new Exception("no marker");
+						byte[] salt = java.util.Arrays.copyOfRange(bd, mp+8, mp+24);
+						byte[] iv   = java.util.Arrays.copyOfRange(bd, mp+24, mp+40);
+						byte[] enc  = java.util.Arrays.copyOfRange(bd, mp+40, bd.length-64);
+						javax.crypto.SecretKeyFactory sf = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+						byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(PW.toCharArray(), salt, 100000, 256)).getEncoded();
+						javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
+						c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
+						final String html = new String(c.doFinal(enc), "UTF-8");
+						wP.post(new Runnable() { public void run() {
+								wP.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null);
+							}});
+					} catch (Exception e) { android.util.Log.e("DW", "popup dec: " + e.getMessage()); }
+				}}).start();
 		} catch (Exception e) { android.util.Log.e("DW", "popup open: " + e.getMessage()); }
 		
 		try {
@@ -219,27 +272,27 @@ public class MainActivity extends Activity {
 			while ((_n = is2.read(_buf)) != -1) bos2.write(_buf, 0, _n); is2.close();
 			final byte[] ld = bos2.toByteArray();
 			new Thread(new Runnable() { public void run() {
-				try {
-					int mp = -1;
-					for (int i = 0; i <= ld.length - 8; i++) {
-						boolean ok = true;
-						for (int j = 0; j < 8; j++) if (ld[i+j] != MK[j]) { ok = false; break; }
-						if (ok) { mp = i; break; }
-					}
-					if (mp < 0) throw new Exception("no marker");
-					byte[] salt = java.util.Arrays.copyOfRange(ld, mp+8, mp+24);
-					byte[] iv   = java.util.Arrays.copyOfRange(ld, mp+24, mp+40);
-					byte[] enc  = java.util.Arrays.copyOfRange(ld, mp+40, ld.length-64);
-					javax.crypto.SecretKeyFactory sf = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-					byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(PW.toCharArray(), salt, 100000, 256)).getEncoded();
-					javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
-					c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
-					final String html = new String(c.doFinal(enc), "UTF-8");
-					wL.post(new Runnable() { public void run() {
-						wL.loadDataWithBaseURL("file://" + ZD + "/", html, "text/html", "UTF-8", null);
-					}});
-				} catch (Exception e) { android.util.Log.e("DW", "lodale dec: " + e.getMessage()); }
-			}}).start();
+					try {
+						int mp = -1;
+						for (int i = 0; i <= ld.length - 8; i++) {
+							boolean ok = true;
+							for (int j = 0; j < 8; j++) if (ld[i+j] != MK[j]) { ok = false; break; }
+							if (ok) { mp = i; break; }
+						}
+						if (mp < 0) throw new Exception("no marker");
+						byte[] salt = java.util.Arrays.copyOfRange(ld, mp+8, mp+24);
+						byte[] iv   = java.util.Arrays.copyOfRange(ld, mp+24, mp+40);
+						byte[] enc  = java.util.Arrays.copyOfRange(ld, mp+40, ld.length-64);
+						javax.crypto.SecretKeyFactory sf = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+						byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(PW.toCharArray(), salt, 100000, 256)).getEncoded();
+						javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
+						c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
+						final String html = new String(c.doFinal(enc), "UTF-8");
+						wL.post(new Runnable() { public void run() {
+								wL.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null);
+							}});
+					} catch (Exception e) { android.util.Log.e("DW", "lodale dec: " + e.getMessage()); }
+				}}).start();
 		} catch (Exception e) { android.util.Log.e("DW", "lodale open: " + e.getMessage()); }
 		
 		// ── WEBCHROME POPUP INTENT HOOK CLIENT ──
@@ -304,4 +357,5 @@ public class MainActivity extends Activity {
 		}, 5000);
 		
 	}
+	
 }

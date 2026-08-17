@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync, fork } = require('child_process');
 const sharp = require('sharp');
-const { encryptHtmlToBin, encryptAsset, generateBuildPassword, generateNativeLib, getKeystoreCertHash } = require('./encrypt');
+const { encryptHtmlToBin, FIXED_PASSWORD } = require('./encrypt');
 const { extractDomain, buildUrls, injectParams } = require('./htmlprocessor');
 const { applyFontStyle } = require('./fontstyles');
 
@@ -371,18 +371,14 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     const processedPopup   = normalizeRegisterDelay(ensureAudioGate(injectParams(popupHtml, params)));
     const processedLoading = stripIntroSnippet(injectParams(loadingHtml, params));
 
-    // ── HARDENING: per-build unique key ──
-    // Every APK gets its own random password. It protects both the HTML blobs
-    // (PBKDF2) and every other asset (AES-256-GCM). The key is embedded XOR-
-    // masked in the native library, never as a plain string.
-    const buildPassword = generateBuildPassword();
-
+    // ── HTML encryption (fixed key) — sirf .bin files encrypted ──
+    // Baaki saare assets (PNG/MP3/fonts/icon) APK me PLAIN rehte hain.
     log('Encrypting HTML to .bin files...');
     const zayrobin      = path.join(buildDir, 'zayro.bin');
     const loadingBinName = isDhani ? 'lodale.bin' : 'loading.bin';
     const loadingbin    = path.join(buildDir, loadingBinName);
-    await encryptHtmlToBin(processedPopup,   zayrobin, buildPassword);
-    await encryptHtmlToBin(processedLoading, loadingbin, buildPassword);
+    await encryptHtmlToBin(processedPopup,   zayrobin, FIXED_PASSWORD);
+    await encryptHtmlToBin(processedLoading, loadingbin, FIXED_PASSWORD);
     log('Bin files created.');
 
     // ── Check template project exists ──
@@ -458,33 +454,12 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       fs.writeFileSync(path.join(assetsDir, 'my_icon.png'), iconBuffer);
     }
 
-    // Encrypt every non-.bin asset inside the project assets dir in place,
-    // EXCEPT MP3s. MP3s stay PLAIN inside the APK so MediaPlayer plays them
-    // straight from assets with zero encrypt/decrypt handling. (.bin files
-    // are already encrypted with the PBKDF2 layout — the app's legacy
-    // decryptor reads them directly.)
-    for (const f of fs.readdirSync(assetsDir)) {
-      const assetPath = path.join(assetsDir, f);
-      if (!fs.statSync(assetPath).isFile()) continue;
-      const lower = f.toLowerCase();
-      if (lower.endsWith('.bin') || lower.endsWith('.mp3')) continue;
-      fs.writeFileSync(assetPath, encryptAsset(fs.readFileSync(assetPath), buildPassword));
-    }
-    log('Assets encrypted (MP3s left plain).');
+    // Sab assets PLAIN rehte hain (PNG/MP3/fonts/icon) — koi encryption nahi.
+    // Sirf HTML .bin files encrypted hain (upar kiye hue). Purana simple style.
+    log('Assets plain (sirf HTML .bin encrypted).');
 
-    // ── HARDENING: per-build native library (key + integrity hash) ──
-    // Burn the build-unique key and the expected signing-cert SHA-256 into the
-    // native lib. If keytool is unavailable the cert hash is omitted and the
-    // runtime integrity check is skipped (build never fails because of it).
+    // ── No native hardening — keystore sirf signing ke liye ──
     const keystorePath = path.join(__dirname, '..', 'keystore', 'release.keystore');
-    const certHashHex = fs.existsSync(keystorePath)
-      ? getKeystoreCertHash(keystorePath, 'zayro@123')
-      : null;
-    const nativeSrc = generateNativeLib({ password: buildPassword, certHashHex });
-    const nativeLibPath = path.join(projectDir, 'app', 'src', 'main', 'cpp', 'native-lib.cpp');
-    fs.mkdirSync(path.dirname(nativeLibPath), { recursive: true });
-    fs.writeFileSync(nativeLibPath, nativeSrc, 'utf8');
-    log(certHashHex ? 'Native hardening + integrity check embedded.' : 'Native hardening embedded (integrity check skipped — keytool unavailable).');
 
     // ── Gradle build ──
     log('Compiling APK package...');
