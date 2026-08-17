@@ -59,47 +59,18 @@ function logMissingReferencedMp3Assets(htmlValues, assetsDir, log) {
   }
 }
 
-// ── Intro sound auto-injection ──
-// Loading page (loading HTML) ko build time pe intro sound guarantee karte
-// hain: agar loading HTML me pehle se intro/playSound logic nahi hai to hum
-// khud snippet inject kar dete hain. Java side koi sound nahi bajata, isliye
-// double play nahi hota. Agar file me pehle se intro logic hai to use waise
-// hi chhod dete hain (MainActivity ka same-sound guard double play rokta hai).
-function ensureIntroSnippet(html) {
+// ── Loading HTML intro cleanup ──
+// Intro ab Java (MainActivity) se bajta hai — app khulte hi turant. Loading
+// HTML ke andar koi audio logic nahi hona chahiye, warna double sound hota
+// hai. Purane templates me jo INTRO SOUND snippet hai, use build time pe
+// strip kar dete hain (idempotent).
+function stripIntroSnippet(html) {
   if (!html) return html;
-  const hasIntro = /intro\.mp3/i.test(html) && /playSound/i.test(html);
-  if (hasIntro) return html;
-  const snippet = '\n<script>\n' +
-    '/* AUTO-INJECTED by apkbuilder: intro sound on loading page */\n' +
-    'try{\n' +
-    "  if (window.ZAYRO && typeof window.ZAYRO.playSound === 'function') {\n" +
-    "    window.ZAYRO.playSound('intro.mp3');\n" +
-    '  } else {\n' +
-    "    var _zayroIntroA=new Audio('intro.mp3');\n" +
-    '    var _zayroIntroP=_zayroIntroA.play();\n' +
-    '    if(_zayroIntroP&&_zayroIntroP.catch)_zayroIntroP.catch(function(){});\n' +
-    '  }\n' +
-    '}catch(e){}\n' +
-    '</script>\n';
-  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, snippet + '</body>');
-  return html + snippet;
+  // Sirf wahi script hatani hai jo '/*' comment se shuru ho kar INTRO SOUND
+  // rakhti hai — loading page ki apni (clock/progress wali) script safe rehti hai.
+  return html.replace(/<script>\s*\/\*[\s\S]*?INTRO SOUND[\s\S]*?<\/script>/gi, '');
 }
 
-// ── Audio gate v3 (template-agnostic, auto-injected at build time) ──
-// Har design (purana/naya upload) ke popup HTML me ye snippet inject hota
-// hai. Ye do kaam karta hai:
-//
-//  1) REGISTER AUDIO TIMING — gate khud register page ENTER hote hi 1 sec
-//     me register.mp3 bajata hai (template ke 3-5 sec delay ki jagah).
-//     Template ke delayed register calls 10 sec tak block rehte hain taaki
-//     double play na ho. Agar gate ka iframe watch fail ho jaye to template
-//     ka apna delay fallback ki tarah kaam karta hai.
-//
-//  2) HOME AUDIO LOGIN GATE — jab tak site ka REAL logged-in state confirm
-//     nahi hota (localStorage token / balance elements / header me 10-digit
-//     number), tab tak successful/lowbalance/deposit/low_deposit BLOCK
-//     rehte hain. Confirm hote hi gate khud successful.mp3 ek baar bajata
-//     hai — app restart ki zaroorat nahi.
 function ensureAudioGate(html) {
   if (!html) return html;
   // Purana gate version strip karo (purane build se nikla template ho to)
@@ -398,7 +369,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
 
     log('Injecting parameters into HTML...');
     const processedPopup   = normalizeRegisterDelay(ensureAudioGate(injectParams(popupHtml, params)));
-    const processedLoading = ensureIntroSnippet(injectParams(loadingHtml, params));
+    const processedLoading = stripIntroSnippet(injectParams(loadingHtml, params));
 
     // ── HARDENING: per-build unique key ──
     // Every APK gets its own random password. It protects both the HTML blobs
