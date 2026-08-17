@@ -118,9 +118,12 @@ public class MainActivity extends Activity {
 		});
 		
 		// Current player + current sound name + pending sound (intro ke baad).
+		// INTRO_DONE: intro ek hi baar bajega (kisi bhi page ka duplicate
+		// intro request ignore hoga — double audio impossible).
 		final java.util.concurrent.atomic.AtomicReference AP = new java.util.concurrent.atomic.AtomicReference(null);
 		final java.util.concurrent.atomic.AtomicReference CUR_NAME = new java.util.concurrent.atomic.AtomicReference("");
 		final java.util.concurrent.atomic.AtomicReference PENDING = new java.util.concurrent.atomic.AtomicReference(null);
+		final java.util.concurrent.atomic.AtomicBoolean INTRO_DONE = new java.util.concurrent.atomic.AtomicBoolean(false);
 		
 		final Object BR = new Object() {
 			@android.webkit.JavascriptInterface
@@ -141,6 +144,10 @@ public class MainActivity extends Activity {
 					return;
 				}
 				final String playableName = lowerName.equals("loginw.mp3") ? "bypass.mp3" : soundName;
+				// INTRO DOUBLE-PLAY GUARD: intro Java se ek hi baar bajta hai.
+				// Kisi page (loading/popup) ka intro.mp3 request kabhi accept
+				// nahi hota — na intro ke dauraan, na uske baad.
+				if (playableName.equals("intro.mp3") && (INTRO_DONE.get() || "intro.mp3".equals(CUR_NAME.get()))) return;
 				// Intro chal raha hai to naya sound abhi mat bajao — intro khatam
 				// hote hi ye pending sound baj jayega (intro kabhi nahi katega).
 				if ("intro.mp3".equals(CUR_NAME.get())) {
@@ -214,9 +221,10 @@ public class MainActivity extends Activity {
 					if ("intro.mp3".equals(CUR_NAME.get())) CUR_NAME.set("");
 					AP.compareAndSet(ip, null);
 					m.release();
+					INTRO_DONE.set(true);
 					// Intro ke baad pending sound (agar koi tha) play karo
 					Object pend = PENDING.getAndSet(null);
-					if (pend != null) playSound((String) pend);
+					if (pend != null && !"intro.mp3".equals(String.valueOf(pend))) playSound((String) pend);
 				}
 			});
 			introPlayer.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener() {
@@ -224,8 +232,9 @@ public class MainActivity extends Activity {
 					if ("intro.mp3".equals(CUR_NAME.get())) CUR_NAME.set("");
 					AP.compareAndSet(ip, null);
 					m.release();
+					INTRO_DONE.set(true);
 					Object pend = PENDING.getAndSet(null);
-					if (pend != null) playSound((String) pend);
+					if (pend != null && !"intro.mp3".equals(String.valueOf(pend))) playSound((String) pend);
 					return true;
 				}
 			});

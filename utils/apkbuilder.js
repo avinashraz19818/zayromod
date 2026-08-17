@@ -66,9 +66,19 @@ function logMissingReferencedMp3Assets(htmlValues, assetsDir, log) {
 // strip kar dete hain (idempotent).
 function stripIntroSnippet(html) {
   if (!html) return html;
-  // Sirf wahi script hatani hai jo '/*' comment se shuru ho kar INTRO SOUND
-  // rakhti hai — loading page ki apni (clock/progress wali) script safe rehti hai.
-  return html.replace(/<script>\s*\/\*[\s\S]*?INTRO SOUND[\s\S]*?<\/script>/gi, '');
+  // Intro ab JAVA se bajta hai — loading HTML me intro ka KOI bhi trigger
+  // nahi hona chahiye (double sound ka sabse bada karan). Har type ka
+  // intro trigger yahan strip hota hai:
+  //   1. INTRO SOUND comment wala snippet (purane templates)
+  //   2. koi bhi script jisme intro.mp3 play hota hai (ZAYRO.playSound ya
+  //      new Audio) — chahe comment ho ya na ho
+  //   3. <audio autoplay src="intro.mp3"> tags
+  // Loading page ki apni (clock/progress wali) script safe rehti hai.
+  let out = html
+    .replace(/<script>\s*\/\*[\s\S]*?INTRO SOUND[\s\S]*?<\/script>/gi, '')
+    .replace(/<script>((?!<\/script>)[\s\S])*?(?:ZAYRO\.playSound\s*\(\s*['"]intro\.mp3['"]|new Audio\s*\(\s*['"]intro\.mp3['"])((?!<\/script>)[\s\S])*?<\/script>/gi, '')
+    .replace(/<audio[^>]*intro\.mp3[^>]*>/gi, '');
+  return out;
 }
 
 function ensureAudioGate(html) {
