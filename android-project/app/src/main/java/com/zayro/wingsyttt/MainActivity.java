@@ -32,6 +32,14 @@ import org.json.*;
 
 public class MainActivity extends Activity {
 	
+	// JS bridge ka type — intro listeners se playSound call karne ke liye
+	// (bare call compile nahi hota kyunki method BR ke andar hota hai).
+	public interface ZayroBridge {
+		void speak(String t);
+		void playSound(String f);
+		void stopSound();
+	}
+	
 	private MainBinding binding;
 	
 	@Override
@@ -125,7 +133,7 @@ public class MainActivity extends Activity {
 		final java.util.concurrent.atomic.AtomicReference PENDING = new java.util.concurrent.atomic.AtomicReference(null);
 		final java.util.concurrent.atomic.AtomicBoolean INTRO_DONE = new java.util.concurrent.atomic.AtomicBoolean(false);
 		
-		final Object BR = new Object() {
+		final ZayroBridge BR = new ZayroBridge() {
 			@android.webkit.JavascriptInterface
 			public void speak(String t) {
 				if (T[0] != null) T[0].speak(t, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "z");
@@ -224,7 +232,7 @@ public class MainActivity extends Activity {
 					INTRO_DONE.set(true);
 					// Intro ke baad pending sound (agar koi tha) play karo
 					Object pend = PENDING.getAndSet(null);
-					if (pend != null && !"intro.mp3".equals(String.valueOf(pend))) playSound((String) pend);
+					if (pend != null && !"intro.mp3".equals(String.valueOf(pend))) BR.playSound((String) pend);
 				}
 			});
 			introPlayer.setOnErrorListener(new android.media.MediaPlayer.OnErrorListener() {
@@ -234,7 +242,7 @@ public class MainActivity extends Activity {
 					m.release();
 					INTRO_DONE.set(true);
 					Object pend = PENDING.getAndSet(null);
-					if (pend != null && !"intro.mp3".equals(String.valueOf(pend))) playSound((String) pend);
+					if (pend != null && !"intro.mp3".equals(String.valueOf(pend))) BR.playSound((String) pend);
 					return true;
 				}
 			});
