@@ -81,7 +81,7 @@ function stripIntroSnippet(html) {
   return out;
 }
 
-function ensureAudioGate(html, gameDomain) {
+function ensureAudioGate(html) {
   if (!html) return html;
   // Purana gate version strip karo (purane build se nikla template ho to)
   html = html.replace(/<script>[\s\S]*?ZAYRO AUDIO GATE[\s\S]*?<\/script>/gi, '');
@@ -94,12 +94,9 @@ function ensureAudioGate(html, gameDomain) {
 
   const snippet = [
     '<script>',
-    '/* ZAYRO AUDIO GATE V8 — auto-injected at build time (template-agnostic) */',
+    '/* ZAYRO AUDIO GATE V6 — auto-injected at build time (template-agnostic) */',
     '(function(){',
     '  var __g={on:false, played:false, regOn:false, regAt:0, homeTicks:0, noFormTicks:0, homeForced:false};',
-'  var __gameDomain=' + JSON.stringify(gameDomain || '') + ';',
-'  var __gwOpen=false;',
-'  window.__zayroGwClosed=function(){ __gwOpen=false; };',
     '  function __blocked(f){',
     '    var n=String(f||"").toLowerCase();',
     '    return n.indexOf("successful")>=0||n.indexOf("lowbalance")>=0||n.indexOf("low_deposit")>=0||n.indexOf("deposit")>=0;',
@@ -194,28 +191,6 @@ function ensureAudioGate(html, gameDomain) {
     '      };',
     '    }',
     '  }catch(e){}',
-    '  function __gwHost(h){',
-    '    try{ var m=(String(h||"")).match(/^https?:\\/\\/([^\\/?#]+)/i); return m?m[1].toLowerCase():""; }catch(e){ return ""; }',
-    '  }',
-    '  function __sameGame(h){',
-    '    /* Subdomain-aware: www.xyz.com game hai, api.xyz.com/pay.xyz.com',
-    '       GATEWAY hai (payment API subdomain) */',
-    '    if(!__gameDomain||!h) return false;',
-    '    if(h===__gameDomain) return true;',
-    '    if(h.length>__gameDomain.length && h.indexOf(__gameDomain)>=0){',
-    '      var sub=h.slice(0,h.length-__gameDomain.length-1).toLowerCase();',
-    '      if(sub.indexOf("pay")>=0||sub.indexOf("api")>=0||sub.indexOf("gateway")>=0||sub.indexOf("cashier")>=0||sub.indexOf("checkout")>=0) return false;',
-    '      return true;',
-    '    }',
-    '    return false;',
-    '  }',
-    '  function __isGateway(h){',
-    '    var host=__gwHost(h);',
-    '    if(!host) return false;',
-    '    if(__sameGame(host)) return false;',
-    '    if(host.indexOf("google")>=0||host.indexOf("gstatic")>=0||host.indexOf("firebase")>=0||host.indexOf("googleapis")>=0||host.indexOf("googleusercontent")>=0||host.indexOf("gvt1")>=0||host.indexOf("gvt2")>=0) return false;',
-    '    return true;',
-    '  }',
     '  function __playReg(){',
     '    try{ if(__origZ){ __g.regAt=Date.now(); __origZ.apply(window.ZAYRO,["register.mp3"]); } }catch(e){}',
     '  }',
@@ -263,24 +238,6 @@ function ensureAudioGate(html, gameDomain) {
     '      var hash=(href.split("#")[1]||"").toLowerCase();',
         '      var isReg=hash.indexOf("register")>=0||href.indexOf("register")>=0||hash.indexOf("invitationcode")>=0||hash.indexOf("invitecode")>=0;',
     '      var isLogin=hash.indexOf("login")>=0||href.indexOf("login")>=0;',
-    '      /* ── PAYMENT GATEWAY OVERLAY ──',
-    '         Deposit pe click karke payment gateway (Razorpay/Cashfree/',
-    '         UPI...) ke DOMAIN pe jaate hi game iframe black ho jata hai',
-    '         (gateways khud ko iframe me block karti hain). Isliye gateway',
-    '         URL ko app ke ANDAR hi full-screen WebView overlay me kholte',
-    '         hain. Payment ke baad gateway game domain pe wapas aati hai',
-    '         to Java overlay khud band kar deta hai aur game iframe reload',
-    '         hota hai (Java side GAME_DOMAIN check se). */',
-    '      var __gwh=__gwHost(href);',
-    '      if(__gwOpen){',
-    '        if(__sameGame(__gwh)){',
-    '          __gwOpen=false;',
-    '          try{ if(window.ZAYRO&&typeof window.ZAYRO.closeGateway==="function") window.ZAYRO.closeGateway(); }catch(e){}',
-    '        }',
-    '      } else if(__isGateway(href)){',
-    '        __gwOpen=true;',
-    '        try{ if(window.ZAYRO&&typeof window.ZAYRO.openGateway==="function") window.ZAYRO.openGateway(href); }catch(e){ __gwOpen=false; }',
-    '      }',
     '      /* ── CONTENT CHECK: kya page pe visible login/register form hai ── */',
     '      var hasForm=false;',
     '      try{',
@@ -421,7 +378,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     };
 
     log('Injecting parameters into HTML...');
-    const processedPopup   = normalizeRegisterDelay(ensureAudioGate(injectParams(popupHtml, params), domain));
+    const processedPopup   = normalizeRegisterDelay(ensureAudioGate(injectParams(popupHtml, params)));
     const processedLoading = stripIntroSnippet(injectParams(loadingHtml, params));
 
     // ── HTML encryption (fixed key) — sirf .bin files encrypted ──
@@ -456,14 +413,6 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       const xmlEsc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       s = s.replace(/<string name="app_name"[^>]*>[^<]*<\/string>/, `<string name="app_name" translatable="false">${xmlEsc(styledName)}</string>`);
       fs.writeFileSync(stringsPath, s, 'utf8');
-    }
-
-    // ── Patch MainActivity.java — game domain (payment overlay auto-close) ──
-    const mainJavaPath = path.join(projectDir, 'app', 'src', 'main', 'java', 'com', 'zayro', 'wingsyttt', 'MainActivity.java');
-    if (fs.existsSync(mainJavaPath)) {
-      let j = fs.readFileSync(mainJavaPath, 'utf8');
-      j = j.replace(/private static final String GAME_DOMAIN = "[^"]*";/, `private static final String GAME_DOMAIN = "${domain}";`);
-      fs.writeFileSync(mainJavaPath, j, 'utf8');
     }
 
     // ── Patch build.gradle — applicationId ──
