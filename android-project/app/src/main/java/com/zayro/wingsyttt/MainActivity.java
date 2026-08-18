@@ -38,7 +38,23 @@ public class MainActivity extends Activity {
 		void speak(String t);
 		void playSound(String f);
 		void stopSound();
+		void openGateway(String url);
+		void closeGateway();
 	}
+	
+	// ── Payment gateway overlay ──
+	// Deposit pe click karke payment gateway (Razorpay/Cashfree/UPI…) ke
+	// domain pe jaate hi game iframe BLACK ho jata tha — gateways khud ko
+	// iframe ke andar load hone se block karti hain (X-Frame-Options).
+	// Ab gateway ka URL app ke ANDAR hi full-screen WebView overlay me
+	// khulta hai, payment proper hota hai, aur wapas game domain pe aate
+	// hi overlay khud band ho kar game iframe reload kar deta hai.
+	// GAME_DOMAIN build time pe apkbuilder.js yahan inject karta hai.
+	private static final String GAME_DOMAIN = "";
+	private android.widget.FrameLayout rootContainer = null;
+	private android.webkit.WebView popupView = null;
+	private android.widget.FrameLayout gatewayOverlay = null;
+	private android.webkit.WebView gatewayView = null;
 	
 	private MainBinding binding;
 	
@@ -49,6 +65,138 @@ public class MainActivity extends Activity {
 		setContentView(binding.getRoot());
 		initialize(_savedInstanceState);
 		initializeLogic();
+	}
+	
+	@Override
+	public void onBackPressed() {
+		if (gatewayOverlay != null) { hideGatewayOverlay(); return; }
+		super.onBackPressed();
+	}
+	
+	// ── Payment gateway overlay (in-app full screen) ──
+	private void showGatewayOverlay(final String url) {
+		runOnUiThread(new Runnable() { public void run() {
+			try {
+				if (url == null || url.length() == 0) return;
+				if (!(url.startsWith("http://") || url.startsWith("https://"))) return;
+				if (gatewayOverlay != null) {
+					if (gatewayView != null) gatewayView.loadUrl(url);
+					return;
+				}
+				final android.widget.FrameLayout ov = new android.widget.FrameLayout(MainActivity.this);
+				ov.setBackgroundColor(0xFF0B0F1A);
+				ov.setLayoutParams(new android.widget.FrameLayout.LayoutParams(-1, -1));
+				
+				final android.webkit.WebView gv = new android.webkit.WebView(MainActivity.this);
+				android.webkit.WebSettings gs = gv.getSettings();
+				gs.setJavaScriptEnabled(true);
+				gs.setDomStorageEnabled(true);
+				gs.setAllowFileAccess(true);
+				gs.setAllowContentAccess(true);
+				gs.setAllowFileAccessFromFileURLs(true);
+				gs.setAllowUniversalAccessFromFileURLs(true);
+				gs.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+				gs.setSupportMultipleWindows(true);
+				gs.setJavaScriptCanOpenWindowsAutomatically(true);
+				gs.setMediaPlaybackRequiresUserGesture(false);
+				gs.setUserAgentString("Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+				ov.addView(gv, new android.widget.FrameLayout.LayoutParams(-1, -1));
+				
+				// Close (✕) button
+				final android.widget.TextView closeBtn = new android.widget.TextView(MainActivity.this);
+				closeBtn.setText("\u2715");
+				closeBtn.setTextColor(0xFFFFFFFF);
+				closeBtn.setTextSize(20f);
+				closeBtn.setPadding(28, 28, 28, 28);
+				closeBtn.setOnClickListener(new android.view.View.OnClickListener() {
+					public void onClick(android.view.View v) { hideGatewayOverlay(); }
+				});
+				ov.addView(closeBtn, new android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.TOP | android.view.Gravity.END));
+				
+				final android.webkit.WebViewClient gwClient = new android.webkit.WebViewClient() {
+					@Override
+					public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+						final String u = request.getUrl().toString();
+						// UPI / payment app deep links → external app me kholo
+						if (u != null && (u.startsWith("upi://") || u.startsWith("intent://") || u.startsWith("phonepe://") || u.startsWith("paytmmp://") || u.startsWith("tez://") || u.startsWith("gpay://") || u.startsWith("bhimgpay://"))) {
+							try {
+								android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u));
+								i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+								MainActivity.this.startActivity(i);
+							} catch (Exception e) {}
+							return true;
+						}
+						// Payment wapas game domain pe aa gaya → overlay band + game reload
+						if (GAME_DOMAIN != null && GAME_DOMAIN.length() > 0 && u != null && u.toLowerCase().contains(GAME_DOMAIN)) {
+							hideGatewayOverlay();
+							return true;
+						}
+						gv.loadUrl(u);
+						return true;
+					}
+				};
+				gv.setWebViewClient(gwClient);
+				
+				gv.setWebChromeClient(new android.webkit.WebChromeClient() {
+					@Override
+					public boolean onCreateWindow(android.webkit.WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+						android.webkit.WebView temp = new android.webkit.WebView(view.getContext());
+						temp.getSettings().setJavaScriptEnabled(true);
+						temp.setWebViewClient(new android.webkit.WebViewClient() {
+							@Override
+							public boolean shouldOverrideUrlLoading(android.webkit.WebView v, android.webkit.WebResourceRequest request) {
+								final String u = request.getUrl().toString();
+								if (u != null && (u.startsWith("upi://") || u.startsWith("intent://") || u.startsWith("phonepe://") || u.startsWith("paytmmp://") || u.startsWith("tez://") || u.startsWith("gpay://") || u.startsWith("bhimgpay://"))) {
+									try {
+										android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(u));
+										i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+										MainActivity.this.startActivity(i);
+									} catch (Exception e) {}
+									return true;
+								}
+								if (GAME_DOMAIN != null && GAME_DOMAIN.length() > 0 && u != null && u.toLowerCase().contains(GAME_DOMAIN)) {
+									hideGatewayOverlay();
+									return true;
+								}
+								gv.loadUrl(u);
+								return true;
+							}
+						});
+						android.webkit.WebView.WebViewTransport transport = (android.webkit.WebView.WebViewTransport) resultMsg.obj;
+						transport.setWebView(temp);
+						resultMsg.sendToTarget();
+						return true;
+					}
+				});
+				
+				gatewayView = gv;
+				gatewayOverlay = ov;
+				if (rootContainer != null) rootContainer.addView(ov);
+				gv.loadUrl(url);
+			} catch (Exception e) {}
+		}});
+	}
+	
+	private void hideGatewayOverlay() {
+		runOnUiThread(new Runnable() { public void run() {
+			try {
+				if (gatewayOverlay != null && gatewayOverlay.getParent() != null) {
+					((android.view.ViewGroup) gatewayOverlay.getParent()).removeView(gatewayOverlay);
+				}
+				if (gatewayView != null) {
+					gatewayView.stopLoading();
+					gatewayView.destroy();
+				}
+			} catch (Exception e) {}
+			gatewayOverlay = null;
+			gatewayView = null;
+			// Game iframe reload — naya balance/state aa jaye
+			if (popupView != null) {
+				try {
+					popupView.evaluateJavascript("try{if(window.__zayroGwClosed)window.__zayroGwClosed();var f=document.getElementById('target-game-frame');if(f){f.src=f.src;}}catch(e){}", null);
+				} catch (Exception e) {}
+			}
+		}});
 	}
 	
 	private void initialize(Bundle _savedInstanceState) {
@@ -208,6 +356,12 @@ public class MainActivity extends Activity {
 				// MP3 ko YAHAN nahi rokta — sound hamesha pura bajta hai.
 				// Naya playSound() aane par purana khud stop ho jata hai.
 			}
+			
+			@android.webkit.JavascriptInterface
+			public void openGateway(String u) { showGatewayOverlay(u); }
+			
+			@android.webkit.JavascriptInterface
+			public void closeGateway() { hideGatewayOverlay(); }
 		};
 		
 		wP.addJavascriptInterface(BR, "ZAYRO");
@@ -358,6 +512,8 @@ public class MainActivity extends Activity {
 		root.addView(wP); 
 		root.addView(wL);
 		setContentView(root);
+		rootContainer = root;
+		popupView = wP;
 		
 		new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
 			public void run() {
