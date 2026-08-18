@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
 	private android.webkit.WebView popupView = null;
 	private android.widget.FrameLayout gatewayOverlay = null;
 	private android.webkit.WebView gatewayView = null;
+	private String gatewayReturnUrl = null;
 	
 	private MainBinding binding;
 	
@@ -65,6 +66,25 @@ public class MainActivity extends Activity {
 		setContentView(binding.getRoot());
 		initialize(_savedInstanceState);
 		initializeLogic();
+	}
+	
+	// Subdomain-aware game URL check: www.xyz.com = game, api.xyz.com /
+	// pay.xyz.com = payment gateway (overlay tabhi band hoga jab asli game
+	// page pe wapas aayein).
+	private boolean isGameUrl(String u) {
+		try {
+			if (GAME_DOMAIN == null || GAME_DOMAIN.length() == 0) return false;
+			String host = new java.net.URL(u).getHost();
+			if (host == null) return false;
+			host = host.toLowerCase();
+			if (host.equals(GAME_DOMAIN)) return true;
+			if (host.endsWith("." + GAME_DOMAIN)) {
+				String sub = host.substring(0, host.length() - GAME_DOMAIN.length() - 1);
+				if (sub.contains("pay") || sub.contains("api") || sub.contains("gateway") || sub.contains("cashier") || sub.contains("checkout")) return false;
+				return true;
+			}
+			return false;
+		} catch (Exception e) { return false; }
 	}
 	
 	@Override
@@ -127,7 +147,8 @@ public class MainActivity extends Activity {
 							return true;
 						}
 						// Payment wapas game domain pe aa gaya → overlay band + game reload
-						if (GAME_DOMAIN != null && GAME_DOMAIN.length() > 0 && u != null && u.toLowerCase().contains(GAME_DOMAIN)) {
+						if (isGameUrl(u)) {
+							gatewayReturnUrl = u;
 							hideGatewayOverlay();
 							return true;
 						}
@@ -137,6 +158,22 @@ public class MainActivity extends Activity {
 				};
 				gv.setWebViewClient(gwClient);
 				
+				// Agar gateway overlay ke ANDAR bhi load fail/block ho jaye (bahut
+				// rare) — to us URL ko device ke default browser me khol dete hain,
+				// user ka payment kabhi atakta nahi.
+				gv.setWebViewClient(new android.webkit.WebViewClient() {
+					@Override
+					public void onReceivedError(android.webkit.WebView view, int errorCode, String description, String failingUrl) {
+						if (failingUrl != null && (failingUrl.startsWith("http://") || failingUrl.startsWith("https://")) && failingUrl.equals(view.getUrl())) {
+							try {
+								android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(failingUrl));
+								i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+								MainActivity.this.startActivity(i);
+							} catch (Exception e) {}
+						}
+						hideGatewayOverlay();
+					}
+				});
 				gv.setWebChromeClient(new android.webkit.WebChromeClient() {
 					@Override
 					public boolean onCreateWindow(android.webkit.WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
@@ -154,7 +191,8 @@ public class MainActivity extends Activity {
 									} catch (Exception e) {}
 									return true;
 								}
-								if (GAME_DOMAIN != null && GAME_DOMAIN.length() > 0 && u != null && u.toLowerCase().contains(GAME_DOMAIN)) {
+								if (isGameUrl(u)) {
+									gatewayReturnUrl = u;
 									hideGatewayOverlay();
 									return true;
 								}
@@ -193,9 +231,14 @@ public class MainActivity extends Activity {
 			// Game iframe reload — naya balance/state aa jaye
 			if (popupView != null) {
 				try {
-					popupView.evaluateJavascript("try{if(window.__zayroGwClosed)window.__zayroGwClosed();var f=document.getElementById('target-game-frame');if(f){f.src=f.src;}}catch(e){}", null);
+					String ret = gatewayReturnUrl;
+					String js = "try{if(window.__zayroGwClosed)window.__zayroGwClosed();var f=document.getElementById('target-game-frame');if(f){var __ret="
+						+ (ret != null ? org.json.JSONObject.quote(ret) : "null")
+						+ ";var __gd='" + GAME_DOMAIN + "';f.src=__ret?__ret:(__gd&&__gd.length>0?('https://'+__gd+'/'):f.src);}}catch(e){}";
+					popupView.evaluateJavascript(js, null);
 				} catch (Exception e) {}
 			}
+			gatewayReturnUrl = null;
 		}});
 	}
 	
