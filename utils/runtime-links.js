@@ -23,15 +23,25 @@ const DEFAULT_FIREBASE_DATABASE_URL = 'https://zayrodev-195f3-default-rtdb.fireb
 // ───────────────────────────────────────────────────────────────────────────
 let _saCache = null, _saLoaded = false;
 function loadServiceAccount() {
-  if (_saLoaded) return _saCache;
+  // CRITICAL FIX: fail ko hamesha cache nahi karte — agar pehli baar file
+  // nahi thi/corrupt thi to har call pe dobara try hota hai. (Pehle null
+  // cache ho jata tha aur file banane ke baad bhi token kabhi nahi banta
+  // tha — har Firebase write 401 deta tha.)
+  if (_saLoaded && _saCache) return _saCache;
   _saLoaded = true;
   try {
     const filePath = process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT;
     const inline = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    if (filePath && fs.existsSync(filePath)) _saCache = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    else if (inline) _saCache = JSON.parse(inline);
-    else _saCache = null;
-  } catch (e) { _saCache = null; }
+    if (filePath && fs.existsSync(filePath)) {
+      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      if (parsed && parsed.client_email && parsed.private_key) _saCache = parsed;
+    } else if (inline) {
+      const parsed = JSON.parse(inline);
+      if (parsed && parsed.client_email && parsed.private_key) _saCache = parsed;
+    }
+  } catch (e) {
+    console.error('[fb-sa] service account load fail:', e.message);
+  }
   return _saCache;
 }
 
@@ -81,11 +91,14 @@ async function _doTokenExchange() {
     if (j && j.access_token) {
       _tokenCache = j.access_token;
       _tokenExp = now + ((j.expires_in || 3600) * 1000);
+      console.log('[fb-token] access token mila —', j.access_token.slice(0, 12) + '...');
       return _tokenCache;
     }
+    console.error('[fb-token] exchange FAIL:', JSON.stringify(j).slice(0, 250));
     return null;
   } catch (e) {
     // token exchange fail — token ke bina aage badho (request khud chalti hai)
+    console.error('[fb-token] exchange ERROR:', e.message);
     return null;
   }
 }

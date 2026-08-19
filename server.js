@@ -1040,6 +1040,32 @@ app.get('/api/admin/content-links', requireAdmin, (req, res) => {
   }
 });
 
+// ── FIREBASE SELF-TEST — server ka apna token kaam karta hai ya nahi ──
+app.get('/api/admin/firebase/selftest', async (req, res) => {
+  const secret = process.env.RESTORE_SECRET || '';
+  const isAdmin = req.session && req.session.isAdmin;
+  const hdrOk = secret.length > 0 && String(req.headers['x-restore-secret'] || '') === secret;
+  if (!isAdmin && !hdrOk) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { getFirebaseAccessToken } = require('./utils/runtime-links');
+    const token = await getFirebaseAccessToken();
+    const dbUrl = String(process.env.FIREBASE_DATABASE_URL || 'https://zayrodev-195f3-default-rtdb.firebaseio.com').replace(/\/+$/, '');
+    if (!token) return res.json({ ok: false, step: 'token', msg: 'Token nahi bana — SA file/env check karo' });
+    // probe write (harmless) — server ke token se
+    const u = `${dbUrl}/zayrobdgwinabiz/config.json?access_token=${encodeURIComponent(token)}`;
+    const r = await fetch(u, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ probeServer: Date.now() }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const txt = await r.text();
+    res.json({ ok: r.status === 200, step: 'write', status: r.status, detail: txt.slice(0, 120) });
+  } catch (e) {
+    res.json({ ok: false, step: 'error', msg: e.message });
+  }
+});
+
 // ── FIREBASE RESTORE LINK — rules lage hain, isliye server ke token se ──
 // Admin session YA x-restore-secret header (scripts/automation ke liye).
 // .env me: RESTORE_SECRET=koi_bhi_random_value
