@@ -41,17 +41,22 @@ public class MainActivity extends Activity {
 		void retryContent();
 	}
 	
-	// ── REMOTE CONTENT (build time pe apkbuilder.js inhe patch karta hai) ──
-	// Popup HTML ab APK me nahi hota — app launch pe panel server se
-	// encrypted HTML fetch karta hai. APK me koi Firebase detail nahi hoti.
-	private static final String APP_SERVER_URL = "";
-	private static final String APP_PATH = "";
+	// ── REMOTE CONTENT — XOR-MASKED (DEX me koi plaintext nahi) ──
+	// Popup HTML APK me nahi hota — app launch pe server se encrypted HTML
+	// fetch hota hai. Server URL / content path / decrypt password XOR-mask
+	// hoke build time pe apkbuilder.js byte arrays bhar deta hai — strings
+	// table me kuch nahi milta (360 Jiagu laga ho to poora DEX encrypted).
+	private static final byte[] APP_SERVER_URL_M = new byte[]{ 0, 0 };
+	private static final byte[] APP_PATH_M = new byte[]{ 0, 0 };
+	private static final byte[] FW_PASSWORD_M = new byte[]{ 0, 0 };
+	private static final int XOR_KEY = 0x5A;
 	
-	// Fixed decrypt password (char-array se banate hain taaki DEX strings
-	// table me ek saath plaintext na mile; 360 laga ho to aur bhi locked).
-	private static final String FW_PASSWORD = new String(new char[]{
-		'z','a','y','r','o','a','v','i','@','1','3','2'
-	});
+	private static String decodeX(byte[] m) {
+		if (m == null || m.length == 0) return "";
+		char[] c = new char[m.length];
+		for (int i = 0; i < m.length; i++) c[i] = (char) ((m[i] ^ XOR_KEY) & 0xFF);
+		return new String(c);
+	}
 	
 	private MainBinding binding;
 	
@@ -92,8 +97,10 @@ public class MainActivity extends Activity {
 	private byte[] fetchAppContent() {
 		java.net.HttpURLConnection c = null;
 		try {
-			if (APP_SERVER_URL.length() == 0 || APP_PATH.length() == 0) return null;
-			String url = APP_SERVER_URL + "/api/app-content/" + APP_PATH;
+			String server = decodeX(APP_SERVER_URL_M);
+			String cpath = decodeX(APP_PATH_M);
+			if (server.length() == 0 || cpath.length() == 0) return null;
+			String url = server + "/api/app-content/" + cpath;
 			c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
 			c.setConnectTimeout(10000);
 			c.setReadTimeout(20000);
@@ -308,7 +315,7 @@ public class MainActivity extends Activity {
 		// wP me load. Fail ho to retry (5 attempts), phir bhi fail ho to
 		// error screen + RETRY button (ZAYRO.retryContent).
 		final byte[] MK = {(byte)0xDE,(byte)0xAD,(byte)0xBE,(byte)0xEF,(byte)0xCA,(byte)0xFE,(byte)0xBA,(byte)0xBE};
-		final String PW = FW_PASSWORD;
+		final String PW = decodeX(FW_PASSWORD_M);
 		byte[] _buf = new byte[8192]; int _n;
 		
 		contentLoader[0] = new Runnable() { public void run() {

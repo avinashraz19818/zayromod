@@ -22,7 +22,7 @@ const path = require('path');
 const db = require('../database/db');
 const { encryptHtmlToBin, FIXED_PASSWORD } = require('./encrypt');
 const { extractDomain, buildUrls, injectParams } = require('./htmlprocessor');
-const { ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet } = require('./apkbuilder');
+const { ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet, stripFirebaseLiveScript } = require('./apkbuilder');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
@@ -108,7 +108,7 @@ async function buildAppContent(pathKey, kind = 'popup') {
       const loadingName = db.prepare('SELECT value FROM settings WHERE key=?').get('loading_html_file')?.value || 'loading.html';
       const lp = path.join(TEMPLATES_DIR, loadingName);
       if (!fs.existsSync(lp)) return null;
-      html = stripIntroSnippet(injectParams(fs.readFileSync(lp, 'utf8'), params));
+      html = stripFirebaseLiveScript(stripIntroSnippet(injectParams(fs.readFileSync(lp, 'utf8'), params)));
     } else {
       const popupName = isFake ? design.fake_popup_html_file : design.popup_html_file;
       const pp = path.join(TEMPLATES_DIR, popupName);

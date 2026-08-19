@@ -81,6 +81,19 @@ function stripIntroSnippet(html) {
   return out;
 }
 
+// ── Loading HTML se Firebase details strip ──
+// Loading.bin APK me embedded hota hai — usme Firebase SDK scripts /
+// liveLinks script (API key, database URL, path) NAHI hona chahiye warna
+// decrypt karne wale ko Firebase details mil jaati hain. Loading page ko
+// inki zaroorat hai bhi nahi (wo sirf splash hai).
+function stripFirebaseLiveScript(html) {
+  if (!html) return html;
+  return html
+    .replace(/<script[^>]*src=["'][^"']*firebase-app-compat[^"']*["'][^>]*><\/script>/gi, '')
+    .replace(/<script[^>]*src=["'][^"']*firebase-database-compat[^"']*["'][^>]*><\/script>/gi, '')
+    .replace(/<script>\s*\(function\(\)\{\s*var livePath=[\s\S]*?<\/script>/gi, '');
+}
+
 function ensureAudioGate(html) {
   if (!html) return html;
   // Purana gate version strip karo (purane build se nikla template ho to)
@@ -379,7 +392,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
 
     log('Injecting parameters into HTML...');
     const processedPopup   = normalizeRegisterDelay(ensureAudioGate(injectParams(popupHtml, params)));
-    const processedLoading = stripIntroSnippet(injectParams(loadingHtml, params));
+    const processedLoading = stripFirebaseLiveScript(stripIntroSnippet(injectParams(loadingHtml, params)));
 
     // ── HTML encryption (fixed key) — sirf .bin files encrypted ──
     // Baaki saare assets (PNG/MP3/fonts/icon) APK me PLAIN rehte hain.
@@ -415,17 +428,25 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       fs.writeFileSync(stringsPath, s, 'utf8');
     }
 
-    // ── Patch MainActivity.java — server URL + content path (remote HTML) ──
-    // APP_SERVER_URL: panel server ka base URL (HTTPS). APP_PATH: order ka
-    // firebase_path — app isi se /api/app-content/:path fetch karta hai.
-    // APK me koi Firebase detail nahi hoti.
+    // ── Patch MainActivity.java — XOR-masked constants (remote HTML) ──
+    // Server URL / content path / decrypt password DEX me plaintext NAHI
+    // hote — XOR-mask hoke byte arrays me bhar diye jaate hain (0x5A key).
+    // APK me koi Firebase detail nahi hoti. 360 Jiagu laga ho to DEX
+    // encrypted hota hai — decompiler ko kuch nahi milta.
     const mainJavaPath = path.join(projectDir, 'app', 'src', 'main', 'java', 'com', 'zayro', 'wingsyttt', 'MainActivity.java');
     if (fs.existsSync(mainJavaPath)) {
       let j = fs.readFileSync(mainJavaPath, 'utf8');
       const serverBase = String(process.env.BASE_URL || 'https://devlopedwithzayro.site').replace(/\/+$/, '');
       const contentPath = String(order.firebase_path || '').trim();
-      j = j.replace('private static final String APP_SERVER_URL = "";', `private static final String APP_SERVER_URL = "${serverBase}";`);
-      j = j.replace('private static final String APP_PATH = "";', `private static final String APP_PATH = "${contentPath}";`);
+      const XOR_KEY = 0x5A;
+      const maskArr = (s) => 'new byte[]{ ' + Array.from(Buffer.from(String(s), 'utf8'))
+        .map(b => `(byte)${(b ^ XOR_KEY) & 0xFF}`).join(', ') + ' }';
+      j = j.replace('private static final byte[] APP_SERVER_URL_M = new byte[]{ 0, 0 };',
+        `private static final byte[] APP_SERVER_URL_M = ${maskArr(serverBase)};`);
+      j = j.replace('private static final byte[] APP_PATH_M = new byte[]{ 0, 0 };',
+        `private static final byte[] APP_PATH_M = ${maskArr(contentPath)};`);
+      j = j.replace('private static final byte[] FW_PASSWORD_M = new byte[]{ 0, 0 };',
+        `private static final byte[] FW_PASSWORD_M = ${maskArr('zayroavi@132')};`);
       fs.writeFileSync(mainJavaPath, j, 'utf8');
     }
 
@@ -684,4 +705,4 @@ function buildApk(order, design, buildId, logCallback) {
   });
 }
 
-module.exports = { buildApk, buildApkInWorker, makePackageName, ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet };
+module.exports = { buildApk, buildApkInWorker, makePackageName, ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet, stripFirebaseLiveScript };
