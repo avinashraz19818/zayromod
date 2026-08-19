@@ -35,6 +35,24 @@ const MK = Buffer.from([0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE]);
 
 const hasCode = (u) => /(invitationcode|invitecode|invite)=/i.test(String(u || ''));
 
+// .env load (RESTORE_SECRET / PORT) — server ke restore endpoint ke liye
+try { require(path.join(ROOT, 'node_modules', 'dotenv')).config({ path: path.join(ROOT, '.env') }); } catch (e) {}
+const RESTORE_SECRET = process.env.RESTORE_SECRET || '';
+const SERVER_PORT = process.env.PORT || '3000';
+
+// ── Server ke through restore (rules lage hain — server ka token verified hai) ──
+async function restoreViaServer(p, rec) {
+  const res = await fetch(`http://127.0.0.1:${SERVER_PORT}/api/admin/firebase/restore-link`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-restore-secret': RESTORE_SECRET },
+    body: JSON.stringify({ path: p, registerUrl: rec.reg, depositUrl: rec.dep, wingoUrl: rec.wingo }),
+    signal: AbortSignal.timeout(30000)
+  });
+  const j = await res.json().catch(() => ({}));
+  if (j && j.success) return true;
+  throw new Error(j && j.error ? j.error : ('HTTP ' + res.status));
+}
+
 // ── Service account token (rules lagi hain — config write isi se) ──
 let _tok = null, _tokExp = 0;
 const b64url = (b) => Buffer.from(b).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -60,7 +78,9 @@ function fbReq(method, urlPath, body) {
   return new Promise((resolve, reject) => {
     getToken().then(token => {
       let u = FB_URL + urlPath + '.json';
-      if (token) u += (u.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
+      // GET pe token mat lagao — rules .read=true hai, bina token 200 pakka.
+      // (Invalid token ke saath Firebase GET pe bhi 401 deta hai.)
+      if (token && method !== 'GET') u += (u.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
       const data = body === undefined ? undefined : JSON.stringify(body);
       const req = https.request(u, { method, headers: { 'Content-Type': 'application/json' }, timeout: 60000 }, res => {
         let b = '';
@@ -235,17 +255,26 @@ function scanApks() {
   for (const p of panels) {
     const rec = full.get(String(p).toLowerCase());
     if (!rec) { stillMissing.push(p); continue; }
-    const body = { registerUrl: rec.reg, depositUrl: rec.dep, wingoUrl: rec.wingo, linkUpdatedAt: Date.now() };
     if (DRY) {
       console.log(`[dry] ${p} → ${rec.reg.slice(0, 80)} (${rec.src})`);
       restored++;
-    } else {
+      continue;
+    }
+    // 1) Server ke through (working token — rules ke saath)
+    try {
+      await restoreViaServer(p, rec);
+      console.log(`✅ ${p} → ${rec.reg.slice(0, 80)} (${rec.src}) [via server]`);
+      restored++;
+      continue;
+    } catch (e1) {
+      // 2) Direct token fallback
+      const body = { registerUrl: rec.reg, depositUrl: rec.dep, wingoUrl: rec.wingo, linkUpdatedAt: Date.now() };
       try {
         await fbReq('PATCH', '/' + encodeURIComponent(p) + '/config', body);
-        console.log(`✅ ${p} → ${rec.reg.slice(0, 80)} (${rec.src})`);
+        console.log(`✅ ${p} → ${rec.reg.slice(0, 80)} (${rec.src}) [direct]`);
         restored++;
-      } catch (e) {
-        console.log(`❌ ${p}: ${e.message}`);
+      } catch (e2) {
+        console.log(`❌ ${p}: server=${e1.message}; direct=${e2.message}`);
       }
     }
   }

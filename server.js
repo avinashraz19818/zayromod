@@ -1040,6 +1040,32 @@ app.get('/api/admin/content-links', requireAdmin, (req, res) => {
   }
 });
 
+// ── FIREBASE RESTORE LINK — rules lage hain, isliye server ke token se ──
+// Admin session YA x-restore-secret header (scripts/automation ke liye).
+// .env me: RESTORE_SECRET=koi_bhi_random_value
+app.post('/api/admin/firebase/restore-link', async (req, res) => {
+  const secret = process.env.RESTORE_SECRET || '';
+  const isAdmin = req.session && req.session.isAdmin;
+  const hdrOk = secret.length > 0 && String(req.headers['x-restore-secret'] || '') === secret;
+  if (!isAdmin && !hdrOk) return res.status(403).json({ error: 'Forbidden — admin login ya RESTORE_SECRET header chahiye' });
+  const p = String(req.body.path || '').trim();
+  const registerUrl = String(req.body.registerUrl || '').trim();
+  const depositUrl = String(req.body.depositUrl || '').trim();
+  const wingoUrl = String(req.body.wingoUrl || '').trim();
+  if (!p || !registerUrl || !depositUrl || !wingoUrl) return res.json({ error: 'path, registerUrl, depositUrl, wingoUrl required' });
+  try {
+    const { updateFirebaseLinks, normalizeFirebasePath, normalizeHttpUrl } = require('./utils/runtime-links');
+    await updateFirebaseLinks(normalizeFirebasePath(p), {
+      registerUrl: normalizeHttpUrl(registerUrl),
+      depositUrl: normalizeHttpUrl(depositUrl),
+      wingoUrl: normalizeHttpUrl(wingoUrl)
+    });
+    res.json({ success: true, path: p });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
 // Users
 app.get('/api/admin/users', requireAdmin, (req, res) => {
   res.json(db.prepare('SELECT id,username,email,coins,plain_password,created_at FROM users ORDER BY id DESC').all());
