@@ -712,6 +712,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
                 <tr>
                   <th style="width:40px"><input type="checkbox" id="selectAllUserOrders" onchange="toggleSelectAllUserOrders(this)"></th>
                   <th>Order ID</th>
+                  <th>App Name</th>
                   <th>Design</th>
                   <th>Category</th>
                   <th>Status</th>
@@ -745,11 +746,12 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
             <span class="badge badge-ok" id="fbLiveBadge">Firebase Live</span>
           </div>
           <div class="form-group" id="fbVariantWrap" style="display:none">
-            <label>APK Version</label>
+            <label>APK Version (konsa APK manage karna hai)</label>
             <select id="fbVariant" class="input" onchange="loadFirebaseManager()">
               <option value="real">Real APK</option>
-              <option value="fake">Fake APK</option>
+              <option value="fake" id="fbVariantFakeOpt">Fake APK</option>
             </select>
+            <div class="hint">Fake option sirf tab dikhta hai jab order me fake APK ho.</div>
           </div>
 
           <div class="esec">
@@ -1701,7 +1703,7 @@ async function loadUserOrders(userId) {
   // Render orders table
   const tbody = document.getElementById('userOrdersTableBody');
   if (!orders.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:20px">No orders for this user</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--dim);padding:20px">No orders for this user</td></tr>';
     return;
   }
   
@@ -1709,6 +1711,7 @@ async function loadUserOrders(userId) {
     <tr data-id="${o.id}">
       <td><input type="checkbox" class="user-order-checkbox" value="${o.id}" onchange="toggleUserOrderSelection(this)"></td>
       <td>${o.id}</td>
+      <td><strong style="color:#fff">${adminEsc(o.app_name || '-')}</strong></td>
       <td>${o.design_name}</td>
       <td>${categoryBadge(o)}</td>
       <td><span class="badge ${o.status==='done'?'badge-ok':o.status==='failed'?'badge-danger':o.status==='building'?'badge-blue':'badge-pending'}">${o.status}</span></td>
@@ -1754,15 +1757,26 @@ async function loadFirebaseManager() {
   const usersBox = document.getElementById('fbUsersList');
   const totalBadge = document.getElementById('fbUsersTotal');
   if (totalBadge) totalBadge.style.display = 'none';
+  document.getElementById('fbVariantWrap').style.display = 'block';
+  const fakeOpt = document.getElementById('fbVariantFakeOpt');
+  if (fakeOpt) fakeOpt.style.display = 'none';
   usersBox.innerHTML = '<div style="padding:16px;color:var(--dim)"><span class="spinner"></span> Loading Firebase…</div>';
   const data = await api(`/api/admin/orders/${orderId}/firebase?variant=${encodeURIComponent(variant)}`);
-  if (data.error) { usersBox.innerHTML = `<div style="padding:16px;color:var(--danger)">${adminEsc(data.error)}</div>`; return toast(data.error, true); }
+  if (data.error) {
+    usersBox.innerHTML = `<div style="padding:16px;color:var(--danger)">${adminEsc(data.error)}</div>`;
+    return toast(data.error, true);
+  }
+  if (fakeOpt) fakeOpt.style.display = data.order.has_fake ? '' : 'none';
+  if (variant === 'fake' && !data.order.has_fake) {
+    document.getElementById('fbVariant').value = 'real';
+    return loadFirebaseManager();
+  }
   _firebaseManagerState = data;
   document.getElementById('fbManagerTitle').textContent = `${data.order.app_name} (#${data.order.id})`;
   document.getElementById('fbPathBadge').textContent = `Path: ${data.firebase_path}/config`;
   document.getElementById('fbLiveBadge').textContent = data.order.live_link_enabled ? 'Firebase Live' : 'Legacy APK — upgrade required';
   document.getElementById('fbLiveBadge').className = `badge ${data.order.live_link_enabled ? 'badge-ok' : 'badge-pending'}`;
-  document.getElementById('fbVariantWrap').style.display = data.order.has_fake ? 'block' : 'none';
+  // wrap + fake option upar dynamic ho chuke hain
   document.getElementById('fbMinDeposit').value = data.config.minDeposit ?? 0;
   document.getElementById('fbDepositCondition').value = String(data.config.depositCondition !== false);
   document.getElementById('fbRegisterCondition').value = String(data.config.registerCondition !== false);
