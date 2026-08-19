@@ -7,7 +7,7 @@
 #        <keystore> <storepass> <alias> <keypass>
 #
 # Env (apkbuilder set karta hai):
-#   JIAGU_USER — 360 jiagu account username
+#   JIAGU_USER — 360 jiagu account EMAIL (ya JIAGU_EMAIL env)
 #   JIAGU_PASS — 360 jiagu account password
 #
 # Note: jiagu ke flags version ke hisaab se thode alag ho sakte hain
@@ -30,9 +30,9 @@ if [ ! -f "$JAR" ]; then echo "jiagu jar not found: $JAR" >&2; exit 1; fi
 if [ ! -f "$IN" ]; then echo "input apk not found: $IN" >&2; exit 1; fi
 
 # 1) Login (pehli baar jaroori; fail ho to bhi aage badho)
-if [ -n "${JIAGU_USER:-}" ] && [ -n "${JIAGU_PASS:-}" ]; then
+if [ -n "${JIAGU_EMAIL:-}${JIAGU_USER:-}" ] && [ -n "${JIAGU_PASS:-}" ]; then
   echo "[jiagu] login..."
-  java -jar "$JAR" -login "$JIAGU_USER" "$JIAGU_PASS" >/dev/null 2>&1 || echo "[jiagu] login fail (ignore)"
+  java -jar "$JAR" -login "${JIAGU_EMAIL:-$JIAGU_USER}" "$JIAGU_PASS" >/dev/null 2>&1 || echo "[jiagu] login fail (ignore)"
 fi
 
 # 2) Keystore import (360 isse autosign ke liye use karta hai)
