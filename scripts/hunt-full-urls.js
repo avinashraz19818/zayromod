@@ -62,12 +62,16 @@ function fbReq(method, urlPath, body) {
       let u = FB_URL + urlPath + '.json';
       if (token) u += (u.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
       const data = body === undefined ? undefined : JSON.stringify(body);
-      const req = https.request(u, { method, headers: { 'Content-Type': 'application/json' } }, res => {
+      const req = https.request(u, { method, headers: { 'Content-Type': 'application/json' }, timeout: 60000 }, res => {
         let b = '';
         res.on('data', c => b += c);
-        res.on('end', () => { try { resolve(b ? JSON.parse(b) : null); } catch (e) { reject(e); } });
+        res.on('end', () => {
+          if (res.statusCode !== 200) { reject(new Error('HTTP ' + res.statusCode + ' ' + b.slice(0, 150))); return; }
+          try { resolve(b ? JSON.parse(b) : null); } catch (e) { reject(e); }
+        });
       });
       req.on('error', reject);
+      req.on('timeout', () => { req.destroy(new Error('fb timeout')); });
       if (data) req.write(data);
       req.end();
     }).catch(reject);
@@ -120,28 +124,7 @@ function scanDb() {
     }
   };
 
-  // a) better-sqlite3 child process
-  try {
-    const childJs = [
-      "const Database = require(" + JSON.stringify(path.join(ROOT, 'node_modules', 'better-sqlite3')) + ");",
-      "const db = new Database(" + JSON.stringify(DB_PATH) + ", { readonly: true });",
-      "const cols = db.prepare('PRAGMA table_info(orders)').all().map(r => r.name);",
-      "const sel = ['id','register_url','deposit_url','wingo_url','firebase_path',",
-      "  cols.includes('fake_register_url') ? 'fake_register_url' : 'NULL AS fake_register_url',",
-      "  cols.includes('fake_firebase_path') ? 'fake_firebase_path' : 'NULL AS fake_firebase_path'];",
-      "for (const r of db.prepare('SELECT ' + sel.join(',') + ' FROM orders').all()) {",
-      "  console.log(JSON.stringify(r));",
-      "}",
-      "db.close();",
-    ].join('\n');
-    const out = execFileSync(process.execPath, ['-e', childJs], { encoding: 'utf8', timeout: 30000 });
-    const rows = out.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
-    addRows(rows);
-    console.log(`[db] better-sqlite3 → ${map.size} path ka URL mila`);
-    return map;
-  } catch (e) { /* child crash — python3 fallback */ }
-
-  // b) python3 fallback
+  // a) python3 — sabse reliable (stdlib sqlite3, sab jagah chalta hai)
   try {
     const py = [
       'import sqlite3, json',
@@ -157,8 +140,26 @@ function scanDb() {
     const out = execFileSync('python3', ['-c', py], { encoding: 'utf8', timeout: 30000 });
     const rows = out.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
     addRows(rows);
-    console.log(`[db] python3 → ${map.size} path ka URL mila`);
-  } catch (e) { console.log('[db] dono fail:', e.message); }
+    if (rows.length) {
+      console.log(`[db] python3 → ${map.size} path ka URL mila (${rows.length} orders)`);
+      return map;
+    }
+    console.log('[db] python3 → 0 orders (khali DB?)');
+  } catch (e) { console.log('[db] python3 fail:', e.message); }
+
+  // b) better-sqlite3 in-process (VPS server wahi use karta hai)
+  try {
+    const Database = require(path.join(ROOT, 'node_modules', 'better-sqlite3'));
+    const db = new Database(DB_PATH, { readonly: true });
+    const cols = db.prepare('PRAGMA table_info(orders)').all().map(r => r.name);
+    const sel = ['id', 'register_url', 'deposit_url', 'wingo_url', 'firebase_path',
+      cols.includes('fake_register_url') ? 'fake_register_url' : 'NULL AS fake_register_url',
+      cols.includes('fake_firebase_path') ? 'fake_firebase_path' : 'NULL AS fake_firebase_path'];
+    const rows = db.prepare('SELECT ' + sel.join(',') + ' FROM orders').all();
+    db.close();
+    addRows(rows);
+    console.log(`[db] better-sqlite3 → ${map.size} path ka URL mila (${rows.length} orders)`);
+  } catch (e) { console.log('[db] better-sqlite3 fail:', e.message); }
   return map;
 }
 
@@ -215,7 +216,9 @@ function scanApks() {
   for (const m of [dbMap, apkMap]) for (const [k, v] of m) if (v && v.reg && hasCode(v.reg)) full.set(k, v);
 
   // Firebase current state
-  const tree = await fbReq('GET', '/');
+  let tree = null;
+  try { tree = await fbReq('GET', '/'); } catch (e) { console.log('[fb] read fail:', e.message); }
+  if (tree && typeof tree === 'object') console.log('[fb] tree mila — keys:', Object.keys(tree).length);
   const panels = [];
   if (tree && typeof tree === 'object') {
     for (const [top, val] of Object.entries(tree)) {
