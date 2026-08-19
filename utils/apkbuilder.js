@@ -621,16 +621,24 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       }
       return out;
     };
+    // NOTE: release buildType me signingConfig NAHI hai — Gradle
+    // 'app-release-unsigned.apk' deta hai (server khud apksigner se sign
+    // karta hai, packers se pehle bhi). Isliye 'unsigned' APKs ko bhi
+    // candidate maano — pehle wala filter unhe chhod raha tha, isi se
+    // 'No APK found after Gradle' aata tha (BUILD SUCCESSFUL ke baad bhi).
     const apkCandidates = findApks(path.join(projectDir, 'app', 'build', 'outputs'))
-      .filter(f => !f.toLowerCase().includes('unsigned') && !f.toLowerCase().includes('unaligned'));
-    // signed > normal priority
+      .filter(f => !f.toLowerCase().includes('unaligned'));
+    // priority: signed > app-*.apk (signed name) > unsigned > koi bhi
     let builtApk = apkCandidates.find(f => f.toLowerCase().includes('signed'))
-      || apkCandidates.find(f => /app-.*\.apk$/.test(f))
+      || apkCandidates.find(f => /app-.*\.apk$/i.test(f) && !f.toLowerCase().includes('unsigned'))
+      || apkCandidates.find(f => f.toLowerCase().includes('unsigned'))
       || apkCandidates[0];
     if (!builtApk) {
       const gmsg = gradleError ? String(gradleError.message).slice(0, 800) : 'unknown';
       const tail = gradleOut ? gradleOut.slice(-1500) : '(no gradle output)';
-      throw new Error('No APK found after Gradle. ' + gmsg + ' || gradle tail: ' + tail);
+      const outs = findApks(path.join(projectDir, 'app', 'build', 'outputs'))
+        .map(f => path.relative(projectDir, f)).join(', ') || '(outputs tree khali)';
+      throw new Error('No APK found after Gradle. ' + gmsg + ' || outputs me mile: ' + outs + ' || gradle tail: ' + tail);
     }
     log('APK mila: ' + path.basename(builtApk));
 
