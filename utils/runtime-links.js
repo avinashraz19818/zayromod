@@ -21,55 +21,49 @@ const DEFAULT_FIREBASE_DATABASE_URL = 'https://zayrodev-195f3-default-rtdb.fireb
 // fail hoga (rules usse block karti hain), jo ki theek hai kyunki wahi
 // hacker ka darwaza tha.
 // ───────────────────────────────────────────────────────────────────────────
-let _saCache = null, _saLoaded = false;
+let _saCache = null;
 function loadServiceAccount() {
-  // CRITICAL FIX: fail ko hamesha cache nahi karte — agar pehli baar file
-  // nahi thi/corrupt thi to har call pe dobara try hota hai. (Pehle null
-  // cache ho jata tha aur file banane ke baad bhi token kabhi nahi banta
-  // tha — har Firebase write 401 deta tha.)
-  if (_saLoaded && _saCache) return _saCache;
-  _saLoaded = true;
+  // DIAG-VERIFIED SIMPLE VERSION: koi stale cache nahi — har call pe file
+  // dobara padhte hain. (diag-firebase-auth.js isi tarah karta tha aur
+  // Firebase write 200 de chuka hai.)
   try {
+    if (_saCache && _saCache.client_email && _saCache.private_key) return _saCache;
     const filePath = process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT;
     const inline = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    let parsed = null;
     if (filePath && fs.existsSync(filePath)) {
-      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      if (parsed && parsed.client_email && parsed.private_key) _saCache = parsed;
+      parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     } else if (inline) {
-      const parsed = JSON.parse(inline);
-      if (parsed && parsed.client_email && parsed.private_key) _saCache = parsed;
+      parsed = JSON.parse(inline);
     }
+    if (parsed && parsed.client_email && parsed.private_key) {
+      _saCache = parsed;
+      console.log('[fb-sa] service account loaded:', parsed.client_email);
+      return parsed;
+    }
+    console.error('[fb-sa] service account NAHI mila — file:', filePath || '(env me path nahi)');
+    return null;
   } catch (e) {
     console.error('[fb-sa] service account load fail:', e.message);
+    return null;
   }
-  return _saCache;
 }
 
 function b64url(buf) {
   return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-let _tokenCache = null, _tokenExp = 0;
-let _tokenPromise = null; // single-flight: ek saath sirf EK token exchange
 async function getFirebaseAccessToken() {
-  if (_tokenCache && Date.now() < _tokenExp - 60000) return _tokenCache;
-  if (_tokenPromise) return _tokenPromise;
-  _tokenPromise = _doTokenExchange();
-  try { return await _tokenPromise; } finally { _tokenPromise = null; }
-}
-async function _doTokenExchange() {
-  // BULLETPROOF: service account file corrupt ho, network down ho, ya kuch
-  // bhi fail ho — hamesha null return hota hai. Firebase request phir bina
-  // token ke chalti hai (rules na lagi ho to sab waise hi chalta hai).
+  // DIAG-VERIFIED SIMPLE VERSION: koi token cache nahi — har baar naya
+  // token. Wahi scope jo diag script me tha (200 prove ho chuka).
   try {
     const sa = loadServiceAccount();
     if (!sa || !sa.client_email || !sa.private_key) return null;
     const now = Date.now();
-    if (_tokenCache && now < _tokenExp - 60000) return _tokenCache;
     const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
     const payload = b64url(JSON.stringify({
       iss: sa.client_email,
-      scope: 'https://www.googleapis.com/auth/firebase.database',
+      scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email',
       aud: 'https://oauth2.googleapis.com/token',
       iat: Math.floor(now / 1000),
       exp: Math.floor(now / 1000) + 3600
@@ -89,15 +83,12 @@ async function _doTokenExchange() {
     });
     const j = await res.json();
     if (j && j.access_token) {
-      _tokenCache = j.access_token;
-      _tokenExp = now + ((j.expires_in || 3600) * 1000);
       console.log('[fb-token] access token mila —', j.access_token.slice(0, 12) + '...');
-      return _tokenCache;
+      return j.access_token;
     }
     console.error('[fb-token] exchange FAIL:', JSON.stringify(j).slice(0, 250));
     return null;
   } catch (e) {
-    // token exchange fail — token ke bina aage badho (request khud chalti hai)
     console.error('[fb-token] exchange ERROR:', e.message);
     return null;
   }
@@ -174,8 +165,7 @@ async function firebaseRequest(parts, method = 'GET', body) {
   // token le kar EK baar retry — admin link change kabhi silently fail
   // na ho.
   if (needsAuth && response.status === 401) {
-    console.error('[fb-request] 401 — token cache clear, naya token leke retry...');
-    _tokenCache = null; _tokenExp = 0; _tokenPromise = null;
+    console.error('[fb-request] 401 — naya token leke retry...');
     try { token = await getFirebaseAccessToken(); } catch (e) { token = null; }
     if (token) response = await doFetch(token);
   }
