@@ -1761,29 +1761,38 @@ async function loadFirebaseManager() {
   const fakeOpt = document.getElementById('fbVariantFakeOpt');
   if (fakeOpt) fakeOpt.style.display = 'none';
   usersBox.innerHTML = '<div style="padding:16px;color:var(--dim)"><span class="spinner"></span> Loading Firebase…</div>';
-  const data = await api(`/api/admin/orders/${orderId}/firebase?variant=${encodeURIComponent(variant)}`);
+  // 20 sec timeout — kabhi atke nahi (pehle token-exchange slow ho jata tha,
+  // ab server side GET bina token ke turant chalta hai)
+  const data = await Promise.race([
+    api(`/api/admin/orders/${orderId}/firebase?variant=${encodeURIComponent(variant)}`),
+    new Promise(res => setTimeout(() => res({ error: 'Firebase load timeout (20s) — dobara try karein' }), 20000))
+  ]);
   if (data.error) {
     usersBox.innerHTML = `<div style="padding:16px;color:var(--danger)">${adminEsc(data.error)}</div>`;
     return toast(data.error, true);
   }
-  if (fakeOpt) fakeOpt.style.display = data.order.has_fake ? '' : 'none';
-  if (variant === 'fake' && !data.order.has_fake) {
-    document.getElementById('fbVariant').value = 'real';
-    return loadFirebaseManager();
+  try {
+    if (fakeOpt) fakeOpt.style.display = data.order.has_fake ? '' : 'none';
+    if (variant === 'fake' && !data.order.has_fake) {
+      document.getElementById('fbVariant').value = 'real';
+      return loadFirebaseManager();
+    }
+    _firebaseManagerState = data;
+    document.getElementById('fbManagerTitle').textContent = `${data.order.app_name} (#${data.order.id})`;
+    document.getElementById('fbPathBadge').textContent = `Path: ${data.firebase_path}/config`;
+    document.getElementById('fbLiveBadge').textContent = data.order.live_link_enabled ? 'Firebase Live' : 'Legacy APK — upgrade required';
+    document.getElementById('fbLiveBadge').className = `badge ${data.order.live_link_enabled ? 'badge-ok' : 'badge-pending'}`;
+    // wrap + fake option upar dynamic ho chuke hain
+    document.getElementById('fbMinDeposit').value = data.config.minDeposit ?? 0;
+    document.getElementById('fbDepositCondition').value = String(data.config.depositCondition !== false);
+    document.getElementById('fbRegisterCondition').value = String(data.config.registerCondition !== false);
+    document.getElementById('fbLinkType').value = 'domain';
+    document.getElementById('fbNewUrl').value = '';
+    syncAdminFirebaseLinkMode();
+    renderFirebaseUsers(Array.isArray(data.users) ? data.users : []);
+  } catch (e) {
+    usersBox.innerHTML = `<div style="padding:16px;color:var(--danger)">Render error: ${adminEsc(String(e && e.message || e))}</div>`;
   }
-  _firebaseManagerState = data;
-  document.getElementById('fbManagerTitle').textContent = `${data.order.app_name} (#${data.order.id})`;
-  document.getElementById('fbPathBadge').textContent = `Path: ${data.firebase_path}/config`;
-  document.getElementById('fbLiveBadge').textContent = data.order.live_link_enabled ? 'Firebase Live' : 'Legacy APK — upgrade required';
-  document.getElementById('fbLiveBadge').className = `badge ${data.order.live_link_enabled ? 'badge-ok' : 'badge-pending'}`;
-  // wrap + fake option upar dynamic ho chuke hain
-  document.getElementById('fbMinDeposit').value = data.config.minDeposit ?? 0;
-  document.getElementById('fbDepositCondition').value = String(data.config.depositCondition !== false);
-  document.getElementById('fbRegisterCondition').value = String(data.config.registerCondition !== false);
-  document.getElementById('fbLinkType').value = 'domain';
-  document.getElementById('fbNewUrl').value = '';
-  syncAdminFirebaseLinkMode();
-  renderFirebaseUsers(data.users || []);
 }
 
 function syncAdminFirebaseLinkMode() {

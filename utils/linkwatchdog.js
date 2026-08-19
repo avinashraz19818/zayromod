@@ -156,10 +156,12 @@ async function runWatchdogCycle() {
 }
 
 function startWatchdog() {
-  runWatchdogCycle(); // turant ek cycle
+  // Pehli cycle 10 sec BAAD (server startup ke saath race na ho — admin
+  // panel ki Firebase reads pehle turant chalti hain).
+  setTimeout(() => { runWatchdogCycle(); }, 10000).unref?.();
   const timer = setInterval(runWatchdogCycle, WATCH_INTERVAL_MS);
   timer.unref?.();
-  console.log('[watchdog] Firebase self-heal started (45s cycle).');
+  console.log('[watchdog] Firebase self-heal started (45s cycle, first run in 10s).');
   return timer;
 }
 
