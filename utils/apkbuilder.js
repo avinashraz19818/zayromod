@@ -507,7 +507,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
 
     // ── 360 JIAGU HARDENING (optional — JIAGU_ENABLED=true) ──
     // DEX encrypted + anti-tamper + string encryption. Jar + account chahiye
-    // (jiagu.360.cn se download, .env me JIAGU_USER/JIAGU_PASS/JIAGU_JAR).
+    // (jiagu.360.cn se download, .env me JIAGU_EMAIL/JIAGU_PASS/JIAGU_JAR).
     // 360 output khud signed hota hai (imported keystore se) — phir se sign
     // NAHI karte, warna protection toot jati hai. Jiagu fail ho to normal
     // signing fallback chal jata hai.
@@ -525,7 +525,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
             timeout: 900000,
             env: {
               ...process.env,
-              JIAGU_USER: process.env.JIAGU_USER || '',
+              JIAGU_USER: process.env.JIAGU_EMAIL || process.env.JIAGU_USER || '',
               JIAGU_PASS: process.env.JIAGU_PASS || ''
             }
           });

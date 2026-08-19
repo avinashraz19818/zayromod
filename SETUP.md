@@ -205,7 +205,7 @@ change fail hoga (wohi hacker ka darwaza tha, ab band).
    ```
    JIAGU_ENABLED=true
    JIAGU_JAR=/opt/jiagu/jiagu.jar
-   JIAGU_USER=360_wala_username
+   JIAGU_EMAIL=360_wala_email
    JIAGU_PASS=360_wala_password
    ```
 4. `pm2 restart apkbuilder`
