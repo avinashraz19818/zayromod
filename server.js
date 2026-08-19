@@ -78,6 +78,15 @@ const tgToken = tgSettings.get('telegram_bot_token')?.value || process.env.TELEG
 if (tgToken) initBot(tgToken, db);
 else initBot(null, db); // pass db even when no token so callbacks work once token added later
 
+// ── Firebase link watchdog (hacker self-heal — har 45s) ──
+// Hacker ne koi panel ka link badla to server DB wali original value
+// maximum 45 second me khud wapas likh deta hai.
+try {
+  require('./utils/linkwatchdog').startWatchdog();
+} catch (e) {
+  console.error('[watchdog] start failed:', e.message);
+}
+
 // ── Auth middleware ──
 function requireAuth(req, res, next) {
   if (req.session.userId !== undefined) return next();
