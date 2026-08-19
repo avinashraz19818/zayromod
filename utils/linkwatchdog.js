@@ -19,10 +19,23 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const db = require('../database/db');
-const { getFirebaseControl, updateFirebaseLinks, updateFirebaseControl, normalizeHttpUrl } = require('./runtime-links');
+const { getFirebaseControl, updateFirebaseLinks, updateFirebaseControl, normalizeHttpUrl, firebaseRequest } = require('./runtime-links');
 
 const BAD_MARKERS = ['goavideo', 'watchglb']; // hacker ke domains — naya mile to add karo
 const WATCH_INTERVAL_MS = 45_000;
+
+// In paths ke original codes humare paas nahi the (Asad/other sellers ke ya
+// deleted orders) — hacker inhe baar-baar use kar raha tha. Ye ab BANNED
+// hain: Firebase se DELETE kar diye gaye, aur agar dobara kahin aayein to
+// watchdog khud delete kar dega.
+const BANNED_PATHS = [
+  'Asadzrodx',
+  'asadzrodx',
+  'zayroapex6clubsumit3',
+  'zayroasaam',
+  'zayronexustashansam',
+  'zayronexustashsam'
+];
 
 function looksBad(url) {
   if (!url) return true;
@@ -106,6 +119,13 @@ async function runWatchdogCycle() {
     `).all();
   } catch (e) {
     return;
+  }
+
+  // ── BANNED PATHS: agar dobara aayein to DELETE (hacker ke purane tools) ──
+  for (const bp of BANNED_PATHS) {
+    try {
+      await firebaseRequest([bp], 'DELETE');
+    } catch (e) { /* path hai hi nahi to bhi theek */ }
   }
 
   let healed = 0;
