@@ -1,0 +1,9 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "config": {
+      ".write": "auth != null"
+    }
+  }
+}
