@@ -1,3 +1,4 @@
+.env
 backups/*.db
 backups/*.sqlite
 database/*.db-shm

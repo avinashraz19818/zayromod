@@ -1,6 +1,79 @@
 'use strict';
 
+const fs = require('fs');
+const crypto = require('crypto');
+
 const DEFAULT_FIREBASE_DATABASE_URL = 'https://zayrodev-195f3-default-rtdb.firebaseio.com';
+
+// ───────────────────────────────────────────────────────────────────────────
+// FIREBASE SERVICE ACCOUNT AUTH (hack lock)
+//
+// Firebase rules ab /config ki write sirf authenticated requests ko allow
+// karti hai ("auth != null"). Isliye server ab Google service account se
+// OAuth access token banata hai aur har Firebase request me use lagata hai.
+//
+// Setup: Firebase Console → Project settings → Service accounts →
+//   "Generate new private key" → JSON download karo → VPS pe rakho.
+// .env me:
+//   GOOGLE_APPLICATION_CREDENTIALS=/root/apkbuilder/firebase-service-account.json
+//
+// Service account na ho to bhi app chalta hai — sirf admin link change
+// fail hoga (rules usse block karti hain), jo ki theek hai kyunki wahi
+// hacker ka darwaza tha.
+// ───────────────────────────────────────────────────────────────────────────
+let _saCache = null, _saLoaded = false;
+function loadServiceAccount() {
+  if (_saLoaded) return _saCache;
+  _saLoaded = true;
+  try {
+    const filePath = process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT;
+    const inline = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    if (filePath && fs.existsSync(filePath)) _saCache = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    else if (inline) _saCache = JSON.parse(inline);
+    else _saCache = null;
+  } catch (e) { _saCache = null; }
+  return _saCache;
+}
+
+function b64url(buf) {
+  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+let _tokenCache = null, _tokenExp = 0;
+async function getFirebaseAccessToken() {
+  const sa = loadServiceAccount();
+  if (!sa || !sa.client_email || !sa.private_key) return null;
+  const now = Date.now();
+  if (_tokenCache && now < _tokenExp - 60000) return _tokenCache;
+  const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const payload = b64url(JSON.stringify({
+    iss: sa.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.database',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: Math.floor(now / 1000),
+    exp: Math.floor(now / 1000) + 3600
+  }));
+  const sign = crypto.createSign('RSA-SHA256');
+  sign.update(header + '.' + payload);
+  const sig = b64url(sign.sign(sa.private_key));
+  const assertion = header + '.' + payload + '.' + sig;
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion
+    }).toString(),
+    signal: AbortSignal.timeout(15_000)
+  });
+  const j = await res.json();
+  if (j && j.access_token) {
+    _tokenCache = j.access_token;
+    _tokenExp = now + ((j.expires_in || 3600) * 1000);
+    return _tokenCache;
+  }
+  return null;
+}
 
 function normalizeHttpUrl(value) {
   const raw = String(value || '').trim();
@@ -43,7 +116,10 @@ function firebaseEndpoint(parts) {
 }
 
 async function firebaseRequest(parts, method = 'GET', body) {
-  const response = await fetch(firebaseEndpoint(parts), {
+  let url = firebaseEndpoint(parts);
+  const token = await getFirebaseAccessToken();
+  if (token) url += (url.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
+  const response = await fetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),

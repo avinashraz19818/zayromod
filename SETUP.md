@@ -160,6 +160,33 @@ Bas itna protection hai:
 Native key vault / signature integrity check NAHI hai (hata diya gaya — purana
 simple style, jaise pehle chalta tha).
 
+## Firebase Security (HACK LOCK — zaroori)
+
+Firebase database pe **Rules** lagana hai warna koi bhi kisi bhi panel ke
+links badal sakta hai (goavideo hack isi se hua tha).
+
+1. Firebase Console → apna project → Realtime Database → **Rules** tab
+2. `firebase.rules.json` (repo me hai) ka content paste karo → **Publish**
+
+Iske baad:
+- Apps config READ karte rahenge (sab chalta hai)
+- Apps users/ me likh sakte hain (registration tracking chalta hai)
+- **config ki write sirf SERVER kar sakta hai** (service account se)
+
+### Server ko service account lagao (taaki admin link change chalta rahe)
+
+1. Firebase Console → Project settings → **Service accounts** →
+   "Generate new private key" → JSON download karo
+2. VPS pe rakho: `/root/apkbuilder/firebase-service-account.json`
+3. `.env` me add karo:
+   ```
+   GOOGLE_APPLICATION_CREDENTIALS=/root/apkbuilder/firebase-service-account.json
+   ```
+4. `pm2 restart apkbuilder`
+
+Service account ke bina bhi sab chalega — sirf admin panel ka link
+change fail hoga (wohi hacker ka darwaza tha, ab band).
+
 ## Admin Login
 Default: admin / admin123 (change in .env)
 Admin URL: yourdomain.com/admin/
