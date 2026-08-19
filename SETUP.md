@@ -235,6 +235,11 @@ Jiagu fail ho to normal signing fallback — build kabhi nahi atakta.
 Note: 360 ke flags version ke hisaab se thode alag ho sakte hain
 (scripts/jiagu-protect.sh me adjust kar lena).
 
+## Security
+
+Pura protection system docs: **SECURITY.md** (repo root me) — layers,
+build variants, verification, troubleshooting.
+
 ## Admin Login
 Default: admin / admin123 (change in .env)
 Admin URL: yourdomain.com/admin/

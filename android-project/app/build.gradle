@@ -2,11 +2,20 @@ plugins {
 	id 'com.android.application'
 }
 
+// ── ADVANCED APK PROTECTION — build variants ──
+//   debug             : developer friendly, koi minify nahi
+//   release           : R8 + resource shrink (standard production)
+//   protectedRelease  : MAXIMUM — R8 aggressive rules + resource shrink +
+//                       protected-rules.pro + (optional) native security
+// Native security module sirf tab compile hota hai jab:
+//   ./gradlew assembleProtectedRelease -PenableNativeSecurity
+// (NDK chahiye; bina NDK ke bhi saare Java-level checks active rehte hain.)
+
 android {
 	compileSdk 34
-	
+
 	useLibrary 'org.apache.http.legacy'
-	
+
 	defaultConfig {
 		applicationId "com.zayro.wingsyttt"
 		namespace "com.zayro.wingsyttt"
@@ -15,17 +24,39 @@ android {
 		versionCode 1
 		versionName "1.0"
 	}
-	
+
 	buildTypes {
+		debug {
+			minifyEnabled false
+			shrinkResources false
+			debuggable true
+		}
+
 		release {
 			minifyEnabled true
 			shrinkResources true
+			debuggable false
+			jniDebuggable false
 			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 		}
+
+		protectedRelease {
+			minifyEnabled true
+			shrinkResources true
+			debuggable false
+			jniDebuggable false
+			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'security/protected-rules.pro'
+		}
 	}
+
 	buildFeatures {
 		viewBinding true
 	}
+}
+
+// Optional native security module (sirf -PenableNativeSecurity ke saath)
+if (project.hasProperty("enableNativeSecurity")) {
+	apply from: 'native-security.gradle'
 }
 
 dependencies {

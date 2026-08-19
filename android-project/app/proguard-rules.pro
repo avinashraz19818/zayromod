@@ -66,3 +66,20 @@
 # Additional optimization
 -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
 -optimizationpasses 5
+
+# ── WebView JavaScript bridge (ZAYRO / ZAYROUI) ──
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# ── Native security module (agar enable ho) ──
+-keepclasseswithmembernames,includedescriptorclasses class * {
+    native <methods>;
+}
+
+# ── SecurityManager ka state access reflection se nahi hota — obfuscation OK,
+#    par class remove na ho (MainActivity directly use karta hai) ──
+-keep class com.zayro.wingsyttt.SecurityManager { *; }
+
+# ── JSON parsing (org.json) reflection-safe ──
+-keep class org.json.** { *; }

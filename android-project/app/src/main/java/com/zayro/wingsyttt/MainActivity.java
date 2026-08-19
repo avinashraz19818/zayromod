@@ -124,6 +124,18 @@ public class MainActivity extends Activity {
 	}
 	
 	private void initializeLogic() {
+		// ── SECURITY LAYER (protectedRelease builds) ──
+		// Signature/tamper verify + risk scoring. FAILED hone par remote
+		// content BLOCKED (neeche wale loader me check hota hai). Debug/
+		// release builds me SecurityManager kuch nahi karta (IS_PROTECTED=0).
+		try {
+			SecurityManager.initialize(MainActivity.this);
+			if (!SecurityManager.verifyAssetIntegrity(MainActivity.this)) {
+				// koi packaged asset chheda gaya — tampered
+				android.util.Log.e("SEC", "asset integrity fail");
+			}
+		} catch (Exception e) {}
+		
 		// ═══════════════════════════════════════════════════════════════════
 		// SIMPLE FLOW (no security vault) — intro Java se, popup/loading HTML
 		// encrypted .bin files se, baaki sab assets PLAIN.
@@ -321,6 +333,19 @@ public class MainActivity extends Activity {
 		contentLoader[0] = new Runnable() { public void run() {
 			new Thread(new Runnable() { public void run() {
 					try {
+						// ── SECURITY GATE: tampered/signature-fail → content BLOCK ──
+						if (SecurityManager.getSecurityState() == SecurityManager.SECURITY_FAILED) {
+							final String tamperHtml = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+								+ "<body style='margin:0;background:#0b0f1a;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:14px;text-align:center;padding:0 24px'>"
+								+ "<div style='font-size:22px;font-weight:bold;color:#ff4d6d'>Security Verification Failed</div>"
+								+ "<div style='color:#8892a6;font-size:13px'>This app cannot run on this device. Please install the official version.</div>"
+								+ "</body></html>";
+							wP.post(new Runnable() { public void run() {
+									wP.loadDataWithBaseURL("file:///android_asset/", tamperHtml, "text/html", "UTF-8", null);
+								}});
+							fetchBusy.set(false);
+							return;
+						}
 						byte[] bd = fetchAppContent();
 						int attempt = 0;
 						while (bd == null && attempt < 5) {
