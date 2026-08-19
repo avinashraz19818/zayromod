@@ -41,38 +41,46 @@ function b64url(buf) {
 
 let _tokenCache = null, _tokenExp = 0;
 async function getFirebaseAccessToken() {
-  const sa = loadServiceAccount();
-  if (!sa || !sa.client_email || !sa.private_key) return null;
-  const now = Date.now();
-  if (_tokenCache && now < _tokenExp - 60000) return _tokenCache;
-  const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = b64url(JSON.stringify({
-    iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/firebase.database',
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: Math.floor(now / 1000),
-    exp: Math.floor(now / 1000) + 3600
-  }));
-  const sign = crypto.createSign('RSA-SHA256');
-  sign.update(header + '.' + payload);
-  const sig = b64url(sign.sign(sa.private_key));
-  const assertion = header + '.' + payload + '.' + sig;
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion
-    }).toString(),
-    signal: AbortSignal.timeout(15_000)
-  });
-  const j = await res.json();
-  if (j && j.access_token) {
-    _tokenCache = j.access_token;
-    _tokenExp = now + ((j.expires_in || 3600) * 1000);
-    return _tokenCache;
+  // BULLETPROOF: service account file corrupt ho, network down ho, ya kuch
+  // bhi fail ho — hamesha null return hota hai. Firebase request phir bina
+  // token ke chalti hai (rules na lagi ho to sab waise hi chalta hai).
+  try {
+    const sa = loadServiceAccount();
+    if (!sa || !sa.client_email || !sa.private_key) return null;
+    const now = Date.now();
+    if (_tokenCache && now < _tokenExp - 60000) return _tokenCache;
+    const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+    const payload = b64url(JSON.stringify({
+      iss: sa.client_email,
+      scope: 'https://www.googleapis.com/auth/firebase.database',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: Math.floor(now / 1000),
+      exp: Math.floor(now / 1000) + 3600
+    }));
+    const sign = crypto.createSign('RSA-SHA256');
+    sign.update(header + '.' + payload);
+    const sig = b64url(sign.sign(sa.private_key));
+    const assertion = header + '.' + payload + '.' + sig;
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion
+      }).toString(),
+      signal: AbortSignal.timeout(15_000)
+    });
+    const j = await res.json();
+    if (j && j.access_token) {
+      _tokenCache = j.access_token;
+      _tokenExp = now + ((j.expires_in || 3600) * 1000);
+      return _tokenCache;
+    }
+    return null;
+  } catch (e) {
+    // token exchange fail — token ke bina aage badho (request khud chalti hai)
+    return null;
   }
-  return null;
 }
 
 function normalizeHttpUrl(value) {
@@ -117,7 +125,8 @@ function firebaseEndpoint(parts) {
 
 async function firebaseRequest(parts, method = 'GET', body) {
   let url = firebaseEndpoint(parts);
-  const token = await getFirebaseAccessToken();
+  let token = null;
+  try { token = await getFirebaseAccessToken(); } catch (e) { token = null; }
   if (token) url += (url.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
   const response = await fetch(url, {
     method,
