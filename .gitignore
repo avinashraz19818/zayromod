@@ -1,4 +1,7 @@
 .env
+.env.bak
+.env.*
+!.env.example
 backups/*.db
 backups/*.sqlite
 database/*.db-shm
