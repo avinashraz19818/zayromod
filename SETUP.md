@@ -187,6 +187,35 @@ Iske baad:
 Service account ke bina bhi sab chalega — sirf admin panel ka link
 change fail hoga (wohi hacker ka darwaza tha, ab band).
 
+## Remote Content + 360 Protection (APK me kuch nahi hota)
+
+### Remote HTML (automatic)
+- Popup HTML ab APK me embed NAHI hota. App launch hote hi server se
+  `GET /api/app-content/:path` (encrypted .bin, fixed key, HTTPS) fetch
+  karta hai — APK me koi design HTML / Firebase detail nahi milti.
+- Loading HTML sirf splash ke liye embedded rehta hai (koi secret nahi).
+- App me network fail ho to RETRY button dikhta hai.
+- Server route public hai par response encrypted hai — 360 laga ho to
+  decrypt key bhi DEX me locked hoti hai.
+
+### 360 Jiagu hardening (optional — on karo to sabse strong)
+1. jiagu.360.cn pe account banao + `jiagu.jar` download karo
+2. VPS pe rakho: `/opt/jiagu/jiagu.jar`
+3. `.env` me:
+   ```
+   JIAGU_ENABLED=true
+   JIAGU_JAR=/opt/jiagu/jiagu.jar
+   JIAGU_USER=360_wala_username
+   JIAGU_PASS=360_wala_password
+   ```
+4. `pm2 restart apkbuilder`
+
+Ab har build: Gradle → 360 hardening (DEX encrypted + anti-tamper +
+string encryption) → autosign (imported keystore) → final APK.
+Jiagu fail ho to normal signing fallback — build kabhi nahi atakta.
+Note: 360 ke flags version ke hisaab se thode alag ho sakte hain
+(scripts/jiagu-protect.sh me adjust kar lena).
+
 ## Admin Login
 Default: admin / admin123 (change in .env)
 Admin URL: yourdomain.com/admin/
