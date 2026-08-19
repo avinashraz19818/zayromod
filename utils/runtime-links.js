@@ -242,5 +242,6 @@ module.exports = {
   updateFirebaseControl,
   addFirebaseUser,
   removeFirebaseUser,
-  firebaseRequest
+  firebaseRequest,
+  getFirebaseAccessToken
 };
