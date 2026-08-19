@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # deploy-rules.sh — Firebase Realtime Database RULES ko VPS se deploy karo
-# (Console me click-click ki galtiyan khatam — ye 100% kaam karta hai)
 #
-# Service account file se auth hota hai (GOOGLE_APPLICATION_CREDENTIALS jo
-# .env me pehle se hai). Rules file: database.rules.json (repo me hai).
+# Rules (database.rules.json):
+#   - read: sabko (apps chalti hain)
+#   - har panel ke config/push ki write: sirf auth != null (server service
+#     account) → hacker kabhi link nahi badal sakta
+#   - baaki sab (users registration tracking etc.): write open
 #
 # Usage (VPS, project folder se):
 #   bash scripts/deploy-rules.sh
@@ -23,27 +25,43 @@ if [ ! -f "$SA_FILE" ]; then
 fi
 node -e "try{JSON.parse(require('fs').readFileSync('$SA_FILE','utf8'));console.log('   JSON OK ✅')}catch(e){console.log('❌ JSON CORRUPT');process.exit(1)}" || exit 1
 
-echo "[2/4] firebase-tools deploy (pehli baar ~1 min lagta hai — npx download karta hai)..."
+echo "[2/4] firebase-tools deploy (pehli baar ~1 min lagta hai)..."
 cd "$(dirname "$0")/.."   # project root
 GOOGLE_APPLICATION_CREDENTIALS="$SA_FILE" npx --yes firebase-tools@latest deploy \
   --only database \
   --project "$PROJECT_ID" \
   --non-interactive \
-  2>&1 | tail -25
+  2>&1 | tail -20
 
 echo ""
-echo "[3/4] verify — bina auth ke config write BLOCK hona chahiye (401):"
-CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 \
-  -X PUT "$DB_URL/arena_probe.json" -d '{"x":1}')
-echo "   probe PUT → HTTP $CODE"
+echo "[3/4] verify — 2 probe tests:"
+
+# Probe A: panel ka CONFIG — bina auth ke BLOCK hona chahiye (401)
+CODE_A=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 \
+  -X PUT "$DB_URL/arena_probe/config.json" -d '{"registerUrl":"https://hacker.com"}')
+echo "   probe A (config write, bina auth): HTTP $CODE_A  [401 = taala laga ✅]"
+
+# Probe B: panel ke USERS — bina auth ke ALLOWED (apps ka registration)
+CODE_B=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 \
+  -X PUT "$DB_URL/arena_probe/users.json" -d '{"9999999999":{"registered":true}}')
+echo "   probe B (users write, bina auth):  HTTP $CODE_B  [200 = apps chalti hain ✅]"
+
+# Cleanup probe B ka junk
+curl -s --max-time 20 -X DELETE "$DB_URL/arena_probe/users.json" > /dev/null
+curl -s --max-time 20 -X DELETE "$DB_URL/arena_probe/config.json" > /dev/null
 curl -s --max-time 20 -X DELETE "$DB_URL/arena_probe.json" > /dev/null
 
 echo "[4/4] result:"
-if [ "$CODE" = "401" ] || [ "$CODE" = "403" ]; then
-  echo "✅✅✅ TAALA LAG GAYA! Hacker ab config change NAHI kar sakta."
-  echo "   (Apps read + users/ write ab bhi chalti hai, admin link change"
-  echo "    service account token se chalta rahega.)"
+if [ "$CODE_A" = "401" ] || [ "$CODE_A" = "403" ]; then
+  echo "✅✅✅ TAALA LAG GAYA! Hacker ab kisi bhi panel ka link change NAHI kar sakta."
+  if [ "$CODE_B" = "200" ]; then
+    echo "   (Apps read + users registration tracking ab bhi chalti hai — sab normal.)"
+  else
+    echo "   ⚠️  users write bhi block hui (HTTP $CODE_B) — apps ka registration"
+    echo "       track hona ruk sakta hai. Rules file check karo."
+  fi
+  echo "   (Admin link change server token se chalta rahega.)"
 else
-  echo "❌ Rules abhi bhi nahi lagi (HTTP $CODE). Upar deploy ka output check karo"
-  echo "   — error aayi ho to mujhe bhejo."
+  echo "❌ Rules kaam nahi kar rahi (config probe HTTP $CODE_A). Upar deploy ka"
+  echo "   output check karo — error aayi ho to mujhe bhejo."
 fi

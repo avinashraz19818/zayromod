@@ -1,9 +1,10 @@
 {
   "rules": {
     ".read": true,
-    ".write": true,
-    "config": {
-      ".write": "auth != null"
+    "$panel": {
+      "config": { ".write": "auth != null" },
+      "push": { ".write": "auth != null" },
+      "$other": { ".write": true }
     }
   }
 }
