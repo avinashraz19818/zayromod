@@ -485,6 +485,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
     <symbol id="i-home" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 9.5l9-7 9 7M5 19V10h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/></symbol>
     <symbol id="i-palette" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 2a10 10 0 0 1 0 20 2 2 0 0 1-2-2c0-1.5 2-2 2-3.5a2.5 2.5 0 0 0-5 0v.5a10 10 0 0 0 18 0c0-5.5-4.5-10-10-10z"/></symbol>
     <symbol id="i-orders" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 2h12l3 7-3 13H6L3 9l3-7z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 2v7M6 9h12"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
     <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" d="M12 6v12M9 9h4.5a2.5 2.5 0 0 1 0 5H9v-5"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
     <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
@@ -514,6 +515,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
   <a class="nav-link active" data-sec="dashboard" onclick="showSec('dashboard',this)"><svg class="ni"><use href="#i-home"/></svg> Dashboard</a>
   <a class="nav-link" data-sec="designs" onclick="showSec('designs',this)"><svg class="ni"><use href="#i-palette"/></svg> Designs</a>
   <a class="nav-link" data-sec="orders" onclick="showSec('orders',this)"><svg class="ni"><use href="#i-orders"/></svg> Orders</a>
+  <a class="nav-link" data-sec="content-links" onclick="showSec('content-links',this)"><svg class="ni"><use href="#i-link"/></svg> Content Links</a>
   <a class="nav-link" data-sec="coin-requests" onclick="showSec('coin-requests',this)"><svg class="ni"><use href="#i-coin"/></svg> Coin Requests <span id="navPendingBadge" class="badge-mini" style="display:none">0</span></a>
   <a class="nav-link" data-sec="users" onclick="showSec('users',this)"><svg class="ni"><use href="#i-users"/></svg> Users</a>
   <a class="nav-link" data-sec="base-apk" onclick="showSec('base-apk',this)"><svg class="ni"><use href="#i-android"/></svg> Android Project</a>
@@ -596,6 +598,15 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
         <button class="btn btn-danger" id="bulkDeleteBtn" style="display:none" onclick="bulkDeleteOrders()"><svg><use href="#i-x"/></svg> Delete Selected (<span id="selectedCount">0</span>)</button>
       </div>
       <div id="ordersList" style="color:var(--dim)">Loading…</div>
+    </div>
+  </div>
+
+  <!-- CONTENT LINKS -->
+  <div id="sec-content-links" class="section">
+    <div class="topbar"><h1>Content Links<small>Har APK ka remote HTML URL — yehi app ke andar load hota hai (encrypted)</small></h1></div>
+    <div class="card">
+      <div class="card-hd"><span class="accent"></span><h3>Orders &amp; Content URLs</h3><span class="hint">Copy karke browser me kholo to us panel ka encrypted content milega</span></div>
+      <div id="contentLinksList" style="color:var(--dim)">Loading…</div>
     </div>
   </div>
 
@@ -1009,12 +1020,42 @@ function loadSection(name) {
   if (name==='dashboard') loadDashboard();
   else if (name==='designs') loadDesigns();
   else if (name==='orders') loadOrders();
+  else if (name==='content-links') loadContentLinks();
   else if (name==='coin-requests') loadCoinReqs();
   else if (name==='users') loadUsers();
   else if (name==='settings') loadSettings();
   else if (name==='base-apk') loadBaseApkStatus();
   else if (name==='coupons') loadCoupons();
   else if (name==='backups') loadBackups();
+}
+
+// ── Content Links ──
+async function loadContentLinks() {
+  const c = document.getElementById('contentLinksList');
+  const d = await api('/api/admin/content-links');
+  if (d.error) { c.innerHTML = '<div style="padding:16px;color:var(--danger)">' + adminEsc(d.error) + '</div>'; return; }
+  if (!d.length) { c.innerHTML = '<div style="padding:16px;color:var(--dim)">No orders yet.</div>'; return; }
+  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>App</th><th>User</th><th>Status</th><th>Path</th><th>Content URLs</th></tr></thead><tbody>` +
+    d.map(r => `<tr>
+      <td>${r.id}</td>
+      <td>${adminEsc(r.app_name)}</td>
+      <td>${adminEsc(r.username)}</td>
+      <td><span class="badge ${r.status==='done'?'badge-ok':(r.status==='failed'?'badge-danger':'badge-pending')}">${adminEsc(r.status)}</span></td>
+      <td><code>${adminEsc(r.path)}</code>${r.fake_path?`<br><small style="color:var(--gold)">fake: ${adminEsc(r.fake_path)}</small>`:''}</td>
+      <td>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
+          ${r.popup_url?`<div style="display:flex;gap:6px;align-items:center;max-width:420px"><code style="word-break:break-all;font-size:10.5px;background:var(--bg-2);padding:3px 8px;border-radius:6px">${adminEsc(r.popup_url)}</code><button class="btn btn-sm btn-outline" onclick="copyText('${adminEsc(r.popup_url)}')">Copy</button><a class="btn btn-sm btn-outline" href="${adminEsc(r.popup_url)}" target="_blank" style="text-decoration:none">Open</a></div>`:''}
+          ${r.loading_url?`<div style="display:flex;gap:6px;align-items:center;max-width:420px"><code style="word-break:break-all;font-size:10.5px;background:var(--bg-2);padding:3px 8px;border-radius:6px;color:var(--cyan)">${adminEsc(r.loading_url)}</code><button class="btn btn-sm btn-outline" onclick="copyText('${adminEsc(r.loading_url)}')">Copy</button></div>`:''}
+          ${r.fake_popup_url?`<div style="display:flex;gap:6px;align-items:center;max-width:420px"><code style="word-break:break-all;font-size:10.5px;background:var(--bg-2);padding:3px 8px;border-radius:6px;color:var(--gold)">${adminEsc(r.fake_popup_url)}</code><button class="btn btn-sm btn-outline" onclick="copyText('${adminEsc(r.fake_popup_url)}')">Copy</button></div>`:''}
+        </div>
+      </td>
+    </tr>`).join('') + `</tbody></table></div>`;
+}
+
+function copyText(t) {
+  try {
+    navigator.clipboard.writeText(t).then(() => toast('✓ Copied!')).catch(() => toast('Copy fail', true));
+  } catch (e) { toast('Copy fail', true); }
 }
 
 // ── Dashboard ──

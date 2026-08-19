@@ -1002,6 +1002,35 @@ app.delete('/api/admin/designs/:id', requireAdmin, (req, res) => {
   }
 });
 
+// ── Content Links — har APK ka remote HTML URL (admin manage karta hai) ──
+app.get('/api/admin/content-links', requireAdmin, (req, res) => {
+  try {
+    const orders = db.prepare(`
+      SELECT o.id, o.app_name, o.firebase_path, o.fake_firebase_path, o.status,
+             o.live_link_enabled, o.register_url, o.fake_register_url, u.username
+      FROM orders o LEFT JOIN users u ON u.id = o.user_id
+      ORDER BY o.id DESC LIMIT 500
+    `).all();
+    const base = String(process.env.BASE_URL || '').replace(/\/+$/, '');
+    res.json(orders.map(o => ({
+      id: o.id,
+      app_name: o.app_name,
+      username: o.username || '-',
+      status: o.status,
+      live_link_enabled: o.live_link_enabled,
+      path: o.firebase_path || '',
+      fake_path: o.fake_firebase_path || '',
+      popup_url: o.firebase_path && base ? `${base}/api/app-content/${o.firebase_path}` : null,
+      loading_url: o.firebase_path && base ? `${base}/api/app-content/${o.firebase_path}/loading` : null,
+      fake_popup_url: o.fake_firebase_path && base ? `${base}/api/app-content/${o.fake_firebase_path}` : null,
+      register_url: o.register_url,
+      fake_register_url: o.fake_register_url
+    })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Users
 app.get('/api/admin/users', requireAdmin, (req, res) => {
   res.json(db.prepare('SELECT id,username,email,coins,plain_password,created_at FROM users ORDER BY id DESC').all());
