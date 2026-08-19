@@ -428,6 +428,23 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       fs.writeFileSync(stringsPath, s, 'utf8');
     }
 
+    // ── Keystore (cert hash + signing dono yahi se) ──
+    const keystorePath = path.join(__dirname, '..', 'keystore', 'release.keystore');
+    // Production cert SHA-256 (security signature check ke liye)
+    let certSha256Hex = '';
+    if (fs.existsSync(keystorePath)) {
+      try {
+        const kt = execFileSync('keytool', ['-list', '-v', '-keystore', keystorePath, '-storepass', 'zayro@123'], { stdio: 'pipe', encoding: 'utf8' });
+        const m = kt.match(/SHA256:\s*([0-9A-Fa-f:]+)/);
+        if (m) certSha256Hex = m[1].replace(/:/g, '').toLowerCase();
+      } catch (e) { certSha256Hex = ''; }
+    }
+
+    // ── Build variant — protectedRelease DEFAULT (fallback release) ──
+    const buildVariantRaw = String(process.env.APK_BUILD_VARIANT || 'protectedRelease').trim();
+    const buildVariant = /^[a-zA-Z0-9]+$/.test(buildVariantRaw) ? buildVariantRaw : 'release';
+    const gradleTask = 'assemble' + buildVariant.charAt(0).toUpperCase() + buildVariant.slice(1);
+
     // ── Patch MainActivity.java — XOR-masked constants (remote HTML) ──
     // Server URL / content path / decrypt password DEX me plaintext NAHI
     // hote — XOR-mask hoke byte arrays me bhar diye jaate hain (0x5A key).
@@ -447,6 +464,16 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
         `private static final byte[] APP_PATH_M = ${maskArr(contentPath)};`);
       j = j.replace('private static final byte[] FW_PASSWORD_M = new byte[]{ 0, 0 };',
         `private static final byte[] FW_PASSWORD_M = ${maskArr('zayroavi@132')};`);
+      // SecurityManager constants (SecurityManager.java me patch hote hain)
+      const secPath = path.join(path.dirname(mainJavaPath), 'SecurityManager.java');
+      if (fs.existsSync(secPath)) {
+        let s = fs.readFileSync(secPath, 'utf8');
+        s = s.replace('private static final byte[] EXPECTED_CERT_SHA256_M = new byte[]{ 0, 0 };',
+          `private static final byte[] EXPECTED_CERT_SHA256_M = ${certSha256Hex ? maskArr(certSha256Hex) : 'new byte[]{ 0, 0 }'};`);
+        s = s.replace('private static final byte[] IS_PROTECTED_M = new byte[]{ 0 };',
+          `private static final byte[] IS_PROTECTED_M = ${maskArr(buildVariant === 'protectedRelease' ? '1' : '0')};`);
+        fs.writeFileSync(secPath, s, 'utf8');
+      }
       fs.writeFileSync(mainJavaPath, j, 'utf8');
     }
 
@@ -505,8 +532,25 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     // Sirf HTML .bin files encrypted hain (upar kiye hue). Purana simple style.
     log('Assets plain (sirf HTML .bin encrypted).');
 
-    // ── No native hardening — keystore sirf signing ke liye ──
-    const keystorePath = path.join(__dirname, '..', 'keystore', 'release.keystore');
+    // ── INTEGRITY MANIFEST — har packaged asset ka SHA-256 ──
+    // Runtime pe SecurityManager.verifyAssetIntegrity() in hashes ko check
+    // karta hai — koi asset modify ho to detect hota hai. integrity.json
+    // me sirf hashes hain, koi secret nahi.
+    log('Generating integrity manifest...');
+    {
+      const crypto = require('crypto');
+      const entries = {};
+      for (const f of fs.readdirSync(assetsDir)) {
+        const ap = path.join(assetsDir, f);
+        if (!fs.statSync(ap).isFile()) continue;
+        if (f === 'integrity.json') continue;
+        entries[f] = crypto.createHash('sha256').update(fs.readFileSync(ap)).digest('hex');
+      }
+      fs.writeFileSync(path.join(assetsDir, 'integrity.json'),
+        JSON.stringify({ version: 1, generatedAt: Date.now(), assets: entries }, null, 1));
+    }
+
+    // ── keystore upar define ho chuka (cert hash + signing dono ke liye) ──
 
     // ── Gradle build ──
     log('Compiling APK package...');
@@ -516,15 +560,23 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       ANDROID_SDK_ROOT: ANDROID_HOME,
       PATH: `${process.env.PATH}:${ANDROID_HOME}/build-tools/34.0.0:${ANDROID_HOME}/platform-tools`
     };
-    execFileSync('./gradlew', ['assembleRelease', '--no-daemon'], {
+    const gradleArgs = [gradleTask, '--no-daemon'];
+    if (process.env.APK_NATIVE_SECURITY === '1') gradleArgs.push('-PenableNativeSecurity');
+    log(`Compiling APK package (${buildVariant})...`);
+    execFileSync('./gradlew', gradleArgs, {
       stdio: 'pipe', cwd: projectDir, env: buildEnv, timeout: 360000
     });
 
-    // ── Find output APK ──
-    const releaseDir = path.join(projectDir, 'app', 'build', 'outputs', 'apk', 'release');
-    const apkFiles   = fs.readdirSync(releaseDir).filter(f => f.endsWith('.apk'));
-    if (!apkFiles.length) throw new Error('Gradle build succeeded but no APK found in output.');
-    const builtApk = path.join(releaseDir, apkFiles[0]);
+    // ── Find output APK (variant dir, fallback release) ──
+    const apkOutBase = path.join(projectDir, 'app', 'build', 'outputs', 'apk');
+    let builtApk = null;
+    for (const v of [buildVariant, 'release']) {
+      const d = path.join(apkOutBase, v);
+      if (!fs.existsSync(d)) continue;
+      const files = fs.readdirSync(d).filter(f => f.endsWith('.apk') && !f.includes('unsigned'));
+      if (files.length) { builtApk = path.join(d, files[0]); break; }
+    }
+    if (!builtApk) throw new Error('Gradle build succeeded but no APK found in output.');
 
     // ── FREZRIK JIAGU (open-source DEX packer — DEFAULT, no account) ──
     // Frezrik/Jiagu: app ka DEX AES-encrypt hoke shell dex ke andar chhup
@@ -635,6 +687,60 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     } else {
       fs.copyFileSync(builtApk, signedApk);
       log('WARNING: No keystore. APK is unsigned.');
+    }
+
+    // ── SECURITY REPORT + FINAL VERIFICATION ──
+    // Build ke baad automatic checks + security-report.txt (buildDir me).
+    // Critical fail → build FAIL (protectedRelease me).
+    {
+      const crypto = require('crypto');
+      const report = { variant: buildVariant, appName: order.app_name, versionCode: 1, versionName: '1.0' };
+      const fails = [];
+      const warnings = [];
+
+      // APK hash
+      try { report.apkSha256 = crypto.createHash('sha256').update(fs.readFileSync(signedApk)).digest('hex'); } catch (e) {}
+      report.certSha256 = certSha256Hex || 'unknown';
+
+      // Signed?
+      let signedOk = false;
+      try {
+        execFileSync('apksigner', ['verify', '--print-certs', signedApk], { stdio: 'pipe' });
+        signedOk = true;
+      } catch (e) { signedOk = false; }
+      report.signed = signedOk;
+      if (!signedOk) fails.push('APK signed nahi hai');
+
+      // Debuggable? (aapt badging)
+      let debuggable = null;
+      try {
+        const aapt = path.join(ANDROID_HOME, 'build-tools', '34.0.0', 'aapt');
+        const badging = execFileSync(aapt, ['dump', 'badging', signedApk], { stdio: 'pipe', encoding: 'utf8' });
+        debuggable = badging.includes('application-debuggable');
+        report.debuggable = debuggable;
+        if (debuggable && buildVariant !== 'debug') fails.push('Release APK debuggable hai');
+      } catch (e) { warnings.push('aapt unavailable — debuggable check skip'); }
+
+      // Sensitive plaintext / source maps APK me?
+      let sensitivePlain = false, hasSourceMaps = false;
+      try {
+        const listing = execFileSync('unzip', ['-l', signedApk], { stdio: 'pipe', encoding: 'utf8' });
+        if (/\.(html|js)\s*$/m.test(listing)) sensitivePlain = true;
+        if (/\.map\s*$/m.test(listing)) hasSourceMaps = true;
+      } catch (e) {}
+      report.sensitivePlaintextInApk = sensitivePlain;
+      report.sourceMapsInApk = hasSourceMaps;
+      if (sensitivePlain && buildVariant === 'protectedRelease') fails.push('Sensitive plaintext (html/js) APK me hai');
+      if (hasSourceMaps) fails.push('Source maps APK me hain');
+
+      report.status = fails.length ? 'FAIL' : 'PASS';
+      report.fails = fails; report.warnings = warnings;
+      fs.writeFileSync(path.join(buildDir, 'security-report.txt'),
+        JSON.stringify(report, null, 2) + '\n');
+      log(`Security report: ${report.status}${fails.length ? ' — ' + fails.join('; ') : ''}${warnings.length ? ' | warn: ' + warnings.join('; ') : ''}`);
+      if (fails.length && buildVariant === 'protectedRelease') {
+        throw new Error('SECURITY VERIFICATION FAILED: ' + fails.join('; '));
+      }
     }
 
     // ── Cleanup ──
