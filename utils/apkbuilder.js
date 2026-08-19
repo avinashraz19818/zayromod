@@ -602,6 +602,31 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       throw new Error('No APK found after Gradle. ' + gmsg);
     }
 
+    // ── PRE-SIGN — packers ko SIGNED input chahiye (Gradle unsigned deta
+    // hai, isi se Frezrik 'packed output missing' de raha tha) ──
+    let preSignedApk = builtApk;
+    let preSignedOk = false;
+    if (fs.existsSync(keystorePath)) {
+      try {
+        const preAligned = path.join(buildDir, `${buildId}_pre_aligned.apk`);
+        preSignedApk = path.join(buildDir, `${buildId}_pre_signed.apk`);
+        execFileSync('zipalign', ['-f', '4', builtApk, preAligned], { stdio: 'pipe' });
+        execFileSync('apksigner', [
+          'sign',
+          '--ks', keystorePath,
+          '--ks-pass', 'pass:zayro@123',
+          '--key-pass', 'pass:zayro@123',
+          '--out', preSignedApk,
+          preAligned
+        ], { stdio: 'pipe' });
+        fs.unlinkSync(preAligned);
+        preSignedOk = fs.existsSync(preSignedApk);
+        if (preSignedOk) log('Pre-signed APK ready (packer input).');
+      } catch (e) {
+        preSignedApk = builtApk; preSignedOk = false;
+      }
+    }
+
     // ── FREZRIK JIAGU (open-source DEX packer — DEFAULT, no account) ──
     // Frezrik/Jiagu: app ka DEX AES-encrypt hoke shell dex ke andar chhup
     // jata hai. Decompile karne pe sirf shell dikhta hai — asli code kuch
@@ -618,12 +643,12 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
           log('Frezrik Jiagu: packing (DEX encrypt)...');
           execFileSync('java', [
             '-jar', frezrikJar,
-            '-apk', builtApk,
+            '-apk', preSignedApk,
             '-key', keystorePath,
             '-kp', 'zayro@123',
             '-alias', process.env.FREZRIK_ALIAS || 'zayro',
             '-ap', 'zayro@123'
-          ], { stdio: 'pipe', cwd: buildDir, timeout: 600000 });
+          ], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', cwd: buildDir, timeout: 600000 });
           const outDir = path.join(buildDir, 'output');
           let packed = null;
           if (fs.existsSync(outDir)) {
@@ -641,8 +666,9 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
             throw new Error('packed output missing');
           }
         } catch (e) {
-          apkToSign = builtApk;
-          log(`Frezrik Jiagu FAILED (${e.message}) — normal build fallback.`);
+          apkToSign = preSignedOk ? preSignedApk : builtApk;
+          const errDetail = (e && (e.stderr || e.stdout)) ? String(e.stderr || e.stdout).slice(0, 600) : '';
+          log(`Frezrik Jiagu FAILED (${e.message})${errDetail ? ' | ' + errDetail : ''} — fallback.`);
         }
       } else if (process.env.FREZRIK_ENABLED === 'true') {
         log(`Frezrik Jiagu: ENABLED par pack.jar/keystore nahi mila (${frezrikJar}). Normal build.`);
@@ -693,6 +719,10 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       // 360 ne khud sign kar diya — wahi final hai
       fs.copyFileSync(apkToSign, signedApk);
       log('APK ready (360 protected).');
+    } else if (preSignedOk && apkToSign === preSignedApk) {
+      // Pre-signed already hai (packer fallback path) — wahi final
+      fs.copyFileSync(preSignedApk, signedApk);
+      log('APK ready (pre-signed).');
     } else if (fs.existsSync(keystorePath)) {
       log('Signing with keystore...');
       const alignedApk = path.join(buildDir, `${buildId}_aligned.apk`);
@@ -709,7 +739,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       fs.unlinkSync(alignedApk);
       log('APK signed successfully.');
     } else {
-      fs.copyFileSync(builtApk, signedApk);
+      fs.copyFileSync(preSignedOk ? preSignedApk : builtApk, signedApk);
       log('WARNING: No keystore. APK is unsigned.');
     }
 
