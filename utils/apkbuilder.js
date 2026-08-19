@@ -679,36 +679,54 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     if (process.env.FREZRIK_ENABLED !== 'false') {
       const frezrikJar = process.env.FREZRIK_JAR || '/opt/frezrik/pack.jar';
       if (fs.existsSync(frezrikJar) && fs.existsSync(keystorePath)) {
+        let fzOut = '';
         try {
           log('Frezrik Jiagu: packing (DEX encrypt)...');
-          execFileSync('java', [
+          // pack.jar apna final output cwd ke 'output/' folder me likhta
+          // hai — wo folder KHUD NAHI banata (FileNotFoundException:
+          // output/unsigned.apk). Isi se 'packed output missing' aa raha
+          // tha. Folder pehle se bana do, phir run karo.
+          const outDir = path.join(buildDir, 'output');
+          fs.mkdirSync(outDir, { recursive: true });
+          fzOut = String(execFileSync('java', [
             '-jar', frezrikJar,
             '-apk', preSignedApk,
             '-key', keystorePath,
             '-kp', 'zayro@123',
             '-alias', process.env.FREZRIK_ALIAS || 'zayro',
             '-ap', 'zayro@123'
-          ], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', cwd: buildDir, timeout: 600000 });
-          const outDir = path.join(buildDir, 'output');
+          ], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', cwd: buildDir, timeout: 600000 }) || '');
           let packed = null;
-          if (fs.existsSync(outDir)) {
-            const files = fs.readdirSync(outDir);
-            const signed = files.find(f => f.endsWith('_signed.apk'));
-            const unsigned = files.find(f => f === 'unsigned.apk');
-            if (signed) packed = path.join(outDir, signed);
-            else if (unsigned) packed = path.join(outDir, unsigned);
+          // Final output cwd/output me aata hai; fallback: pack.jar ke
+          // paas waala output folder bhi check karo (kuch versions waha
+          // intermediates likhte hain).
+          const candidates = [outDir, path.join(path.dirname(frezrikJar), 'output')];
+          for (const dir of candidates) {
+            if (!packed && fs.existsSync(dir)) {
+              const files = fs.readdirSync(dir).filter(f => f.endsWith('.apk'));
+              const signed = files.find(f => f.endsWith('_signed.apk'));
+              const unsigned = files.find(f => f === 'unsigned.apk');
+              if (signed) packed = path.join(dir, signed);
+              else if (unsigned) packed = path.join(dir, unsigned);
+            }
           }
           if (packed && fs.existsSync(packed) && fs.statSync(packed).size > 1000) {
             apkToSign = packed;
             frezrikUsed = true;
-            log('Frezrik Jiagu: packed — ab signing...');
+            if (path.basename(packed) === 'unsigned.apk') {
+              log('Frezrik Jiagu: packed (unsigned) — apksigner se sign karenge...');
+            } else {
+              log('Frezrik Jiagu: packed — ab signing...');
+            }
           } else {
-            throw new Error('packed output missing');
+            const err = new Error('packed output missing');
+            err.fzOut = fzOut;
+            throw err;
           }
         } catch (e) {
           apkToSign = preSignedOk ? preSignedApk : builtApk;
-          const errDetail = (e && (e.stderr || e.stdout)) ? String(e.stderr || e.stdout).slice(0, 600) : '';
-          log(`Frezrik Jiagu FAILED (${e.message})${errDetail ? ' | ' + errDetail : ''} — fallback.`);
+          const errDetail = (e && (e.fzOut || e.stderr || e.stdout)) ? String(e.fzOut || e.stderr || e.stdout).slice(-600) : '';
+          log(`Frezrik Jiagu FAILED (${e.message})${errDetail ? ' | pack.jar output: ' + errDetail : ''} — fallback.`);
         }
       } else if (process.env.FREZRIK_ENABLED === 'true') {
         log(`Frezrik Jiagu: ENABLED par pack.jar/keystore nahi mila (${frezrikJar}). Normal build.`);
