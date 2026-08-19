@@ -38,7 +38,20 @@ public class MainActivity extends Activity {
 		void speak(String t);
 		void playSound(String f);
 		void stopSound();
+		void retryContent();
 	}
+	
+	// ── REMOTE CONTENT (build time pe apkbuilder.js inhe patch karta hai) ──
+	// Popup HTML ab APK me nahi hota — app launch pe panel server se
+	// encrypted HTML fetch karta hai. APK me koi Firebase detail nahi hoti.
+	private static final String APP_SERVER_URL = "";
+	private static final String APP_PATH = "";
+	
+	// Fixed decrypt password (char-array se banate hain taaki DEX strings
+	// table me ek saath plaintext na mile; 360 laga ho to aur bhi locked).
+	private static final String FW_PASSWORD = new String(new char[]{
+		'z','a','y','r','o','a','v','i','@','1','3','2'
+	});
 	
 	private MainBinding binding;
 	
@@ -68,6 +81,39 @@ public class MainActivity extends Activity {
 				super.onPageFinished(_param1, _param2);
 			}
 		});
+	}
+	
+	// ── Remote content helpers ──
+	// contentLoader + fetchBusy initializeLogic se pehle hi ready rehte hain
+	// (final array holder — lambdas ke andar reassign karna aasan ho).
+	private final Runnable[] contentLoader = new Runnable[1];
+	private final java.util.concurrent.atomic.AtomicBoolean fetchBusy = new java.util.concurrent.atomic.AtomicBoolean(true);
+	
+	private byte[] fetchAppContent() {
+		java.net.HttpURLConnection c = null;
+		try {
+			if (APP_SERVER_URL.length() == 0 || APP_PATH.length() == 0) return null;
+			String url = APP_SERVER_URL + "/api/app-content/" + APP_PATH;
+			c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+			c.setConnectTimeout(10000);
+			c.setReadTimeout(20000);
+			c.setRequestProperty("User-Agent", "ZayroApp/1.0");
+			c.setRequestProperty("Accept", "application/octet-stream");
+			int code = c.getResponseCode();
+			if (code != 200) return null;
+			java.io.InputStream is = c.getInputStream();
+			java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+			byte[] b = new byte[8192];
+			int n;
+			while ((n = is.read(b)) != -1) bos.write(b, 0, n);
+			is.close();
+			return bos.toByteArray();
+		} catch (Exception e) {
+			android.util.Log.e("DW", "fetch: " + e.getMessage());
+			return null;
+		} finally {
+			if (c != null) { try { c.disconnect(); } catch (Exception e) {} }
+		}
 	}
 	
 	private void initializeLogic() {
@@ -208,6 +254,14 @@ public class MainActivity extends Activity {
 				// MP3 ko YAHAN nahi rokta — sound hamesha pura bajta hai.
 				// Naya playSound() aane par purana khud stop ho jata hai.
 			}
+			
+			@android.webkit.JavascriptInterface
+			public void retryContent() {
+				// Error screen ka RETRY button — dobara fetch karo
+				if (fetchBusy.compareAndSet(false, true)) {
+					try { if (contentLoader[0] != null) contentLoader[0].run(); } catch (Exception e) {}
+				}
+			}
 		};
 		
 		wP.addJavascriptInterface(BR, "ZAYRO");
@@ -249,18 +303,37 @@ public class MainActivity extends Activity {
 			introPlayer.start();
 		} catch (Exception e) {}
 		
-		// ── HTML .bin DECRYPT (fixed key) ──
+		// ── POPUP HTML — REMOTE FETCH (APK me kuch nahi hota) ──
+		// Server se encrypted .bin aata hai → fixed password se decrypt →
+		// wP me load. Fail ho to retry (5 attempts), phir bhi fail ho to
+		// error screen + RETRY button (ZAYRO.retryContent).
 		final byte[] MK = {(byte)0xDE,(byte)0xAD,(byte)0xBE,(byte)0xEF,(byte)0xCA,(byte)0xFE,(byte)0xBA,(byte)0xBE};
-		final String PW = "zayroavi@132";
+		final String PW = FW_PASSWORD;
 		byte[] _buf = new byte[8192]; int _n;
 		
-		try {
-			java.io.InputStream is = getAssets().open("zayro.bin");
-			java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-			while ((_n = is.read(_buf)) != -1) bos.write(_buf, 0, _n); is.close();
-			final byte[] bd = bos.toByteArray();
+		contentLoader[0] = new Runnable() { public void run() {
 			new Thread(new Runnable() { public void run() {
 					try {
+						byte[] bd = fetchAppContent();
+						int attempt = 0;
+						while (bd == null && attempt < 5) {
+							attempt++;
+							try { Thread.sleep(2500); } catch (Exception e) {}
+							bd = fetchAppContent();
+						}
+						if (bd == null) {
+							final String errHtml = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+								+ "<body style='margin:0;background:#050310;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:14px'>"
+								+ "<div style='font-size:20px;font-weight:bold'>Network Problem</div>"
+								+ "<div style='color:#aaa;font-size:13px;text-align:center;padding:0 24px'>Internet check karke retry karein</div>"
+								+ "<button onclick='window.ZAYRO.retryContent()' style='background:#ff1e1e;color:#fff;border:none;padding:12px 34px;border-radius:999px;font-size:15px;font-weight:bold'>RETRY</button>"
+								+ "</body></html>";
+							wP.post(new Runnable() { public void run() {
+									wP.loadDataWithBaseURL("file:///android_asset/", errHtml, "text/html", "UTF-8", null);
+								}});
+							fetchBusy.set(false);
+							return;
+						}
 						int mp = -1;
 						for (int i = 0; i <= bd.length - 8; i++) {
 							boolean ok = true;
@@ -279,9 +352,13 @@ public class MainActivity extends Activity {
 						wP.post(new Runnable() { public void run() {
 								wP.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null);
 							}});
-					} catch (Exception e) { android.util.Log.e("DW", "popup dec: " + e.getMessage()); }
+					} catch (Exception e) {
+						android.util.Log.e("DW", "popup dec: " + e.getMessage());
+					}
+					fetchBusy.set(false);
 				}}).start();
-		} catch (Exception e) { android.util.Log.e("DW", "popup open: " + e.getMessage()); }
+		}};
+		contentLoader[0].run();
 		
 		try {
 			java.io.InputStream is2 = getAssets().open("loading.bin");

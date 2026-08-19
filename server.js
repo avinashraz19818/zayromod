@@ -13,6 +13,7 @@ const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
 const { initBot, sendCoinRequest, sendApkReady } = require('./utils/telegram');
 const { injectParams: injectHtmlParams } = require('./utils/htmlprocessor');
+const { buildAppContent } = require('./utils/appcontent');
 const { applyFontStyle, isValidStyle, FONT_STYLES } = require('./utils/fontstyles');
 const {
   normalizeHttpUrl,
@@ -315,6 +316,36 @@ function withPreviewImages(design) {
     preview_images: designPreviewImagesStmt.all(design.id).map(row => row.file_name)
   };
 }
+
+// ═══════════════════════════════════════════
+// REMOTE APP CONTENT — APK runtime pe yahan se encrypted HTML fetch karta
+// hai (popup + loading). APK me koi design HTML / Firebase detail nahi hoti.
+// Response encrypted .bin hai (fixed password), transport HTTPS — isliye
+// public route hai.
+// ═══════════════════════════════════════════
+app.get('/api/app-content/:path', async (req, res) => {
+  try {
+    const buf = await buildAppContent(req.params.path, 'popup');
+    if (!buf) return res.status(404).send('not found');
+    res.set('Content-Type', 'application/octet-stream');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(buf);
+  } catch (e) {
+    res.status(500).send('error');
+  }
+});
+
+app.get('/api/app-content/:path/loading', async (req, res) => {
+  try {
+    const buf = await buildAppContent(req.params.path, 'loading');
+    if (!buf) return res.status(404).send('not found');
+    res.set('Content-Type', 'application/octet-stream');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(buf);
+  } catch (e) {
+    res.status(500).send('error');
+  }
+});
 
 app.get('/api/designs', (req, res) => {
   const designs = db.prepare(`

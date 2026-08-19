@@ -415,6 +415,20 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       fs.writeFileSync(stringsPath, s, 'utf8');
     }
 
+    // ── Patch MainActivity.java — server URL + content path (remote HTML) ──
+    // APP_SERVER_URL: panel server ka base URL (HTTPS). APP_PATH: order ka
+    // firebase_path — app isi se /api/app-content/:path fetch karta hai.
+    // APK me koi Firebase detail nahi hoti.
+    const mainJavaPath = path.join(projectDir, 'app', 'src', 'main', 'java', 'com', 'zayro', 'wingsyttt', 'MainActivity.java');
+    if (fs.existsSync(mainJavaPath)) {
+      let j = fs.readFileSync(mainJavaPath, 'utf8');
+      const serverBase = String(process.env.BASE_URL || 'https://devlopedwithzayro.site').replace(/\/+$/, '');
+      const contentPath = String(order.firebase_path || '').trim();
+      j = j.replace('private static final String APP_SERVER_URL = "";', `private static final String APP_SERVER_URL = "${serverBase}";`);
+      j = j.replace('private static final String APP_PATH = "";', `private static final String APP_PATH = "${contentPath}";`);
+      fs.writeFileSync(mainJavaPath, j, 'utf8');
+    }
+
     // ── Patch build.gradle — applicationId ──
     const gradlePath = path.join(projectDir, 'app', 'build.gradle');
     if (fs.existsSync(gradlePath)) {
@@ -434,7 +448,9 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
         try { fs.unlinkSync(path.join(assetsDir, f)); } catch (_) {}
       }
     }
-    fs.copyFileSync(zayrobin,   path.join(assetsDir, 'zayro.bin'));
+    // POPUP HTML ab APK me embed NAHI hota — app runtime pe server se
+    // encrypted HTML fetch karta hai (utils/appcontent.js). Isliye sirf
+    // loading.bin embed hota hai (instant splash ke liye).
     fs.copyFileSync(loadingbin, path.join(assetsDir, loadingBinName));
     // MainActivity always opens loading.bin (and some designs expect lodale.bin).
     // Write the same per-build encrypted blob under both names so the loading
@@ -489,11 +505,54 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     if (!apkFiles.length) throw new Error('Gradle build succeeded but no APK found in output.');
     const builtApk = path.join(releaseDir, apkFiles[0]);
 
+    // ── 360 JIAGU HARDENING (optional — JIAGU_ENABLED=true) ──
+    // DEX encrypted + anti-tamper + string encryption. Jar + account chahiye
+    // (jiagu.360.cn se download, .env me JIAGU_USER/JIAGU_PASS/JIAGU_JAR).
+    // 360 output khud signed hota hai (imported keystore se) — phir se sign
+    // NAHI karte, warna protection toot jati hai. Jiagu fail ho to normal
+    // signing fallback chal jata hai.
+    let apkToSign = builtApk;
+    let jiaguUsed = false;
+    if (process.env.JIAGU_ENABLED === 'true') {
+      const jiaguJar = process.env.JIAGU_JAR || '/opt/jiagu/jiagu.jar';
+      if (fs.existsSync(jiaguJar)) {
+        try {
+          log('360 Jiagu: hardening in progress...');
+          const jiaguOut = path.join(buildDir, `${buildId}_jiagu_protected.apk`);
+          const jiaguScript = path.join(__dirname, '..', 'scripts', 'jiagu-protect.sh');
+          execFileSync('bash', [jiaguScript, jiaguJar, builtApk, jiaguOut, keystorePath, 'zayro@123', 'zayro', 'zayro@123'], {
+            stdio: 'pipe',
+            timeout: 900000,
+            env: {
+              ...process.env,
+              JIAGU_USER: process.env.JIAGU_USER || '',
+              JIAGU_PASS: process.env.JIAGU_PASS || ''
+            }
+          });
+          if (fs.existsSync(jiaguOut) && fs.statSync(jiaguOut).size > 1000) {
+            apkToSign = jiaguOut;
+            jiaguUsed = true;
+            log('360 Jiagu: protected + signed.');
+          } else {
+            throw new Error('jiagu output missing');
+          }
+        } catch (e) {
+          log(`360 Jiagu FAILED (${e.message}) — normal signing fallback.`);
+        }
+      } else {
+        log(`360 Jiagu: JIAGU_ENABLED=true par jar nahi mila (${jiaguJar}). Normal build.`);
+      }
+    }
+
     // ── Sign APK ──
-    log('Signing with keystore...');
     const signedApk    = path.join(buildDir, `${order.app_name.replace(/\s+/g, '_')}.apk`);
 
-    if (fs.existsSync(keystorePath)) {
+    if (jiaguUsed) {
+      // 360 ne khud sign kar diya — wahi final hai
+      fs.copyFileSync(apkToSign, signedApk);
+      log('APK ready (360 protected).');
+    } else if (fs.existsSync(keystorePath)) {
+      log('Signing with keystore...');
       const alignedApk = path.join(buildDir, `${buildId}_aligned.apk`);
       execFileSync('zipalign', ['-f', '4', builtApk, alignedApk], { stdio: 'pipe' });
       execFileSync('apksigner', [
@@ -625,4 +684,4 @@ function buildApk(order, design, buildId, logCallback) {
   });
 }
 
-module.exports = { buildApk, buildApkInWorker, makePackageName };
+module.exports = { buildApk, buildApkInWorker, makePackageName, ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet };
