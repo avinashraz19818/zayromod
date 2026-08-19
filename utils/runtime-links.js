@@ -138,9 +138,12 @@ function normalizeFirebaseUserKey(value) {
 
 function firebaseEndpoint(parts) {
   const databaseUrl = String(process.env.FIREBASE_DATABASE_URL || DEFAULT_FIREBASE_DATABASE_URL).replace(/\/$/, '');
-  const auth = String(process.env.FIREBASE_DATABASE_AUTH || '').trim();
   const path = parts.map(part => encodeURIComponent(part)).join('/');
-  return `${databaseUrl}/${path}.json${auth ? `?auth=${encodeURIComponent(auth)}` : ''}`;
+  // LEGACY AUTH HATA DIYA — purana FIREBASE_DATABASE_AUTH secret Firebase
+  // reset ke baad revoked ho chuka tha. Server ab sirf access_token
+  // (service account OAuth) use karta hai; purana ?auth= param saath me
+  // hone par Firebase 401 "Unauthorized request" deta tha.
+  return `${databaseUrl}/${path}.json`;
 }
 
 async function firebaseRequest(parts, method = 'GET', body) {
