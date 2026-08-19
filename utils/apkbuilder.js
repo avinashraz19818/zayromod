@@ -554,53 +554,85 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     // ── keystore upar define ho chuka (cert hash + signing dono ke liye) ──
 
     // ── Gradle build ──
-    log('Compiling APK package...');
     const buildEnv = {
       ...process.env,
       ANDROID_HOME,
       ANDROID_SDK_ROOT: ANDROID_HOME,
       PATH: `${process.env.PATH}:${ANDROID_HOME}/build-tools/34.0.0:${ANDROID_HOME}/platform-tools`
     };
-    const gradleArgs = [gradleTask, '--no-daemon'];
+
+    // STALE CACHE FIX: template me purana .gradle/app-build hota hai —
+    // use hatao taaki Gradle clean build kare (isi se 'No APK found after
+    // Gradle' aa raha tha — gradle up-to-date samajh kar output skip kar
+    // deta tha).
+    log('Cleaning stale gradle cache...');
+    try { fs.rmSync(path.join(projectDir, '.gradle'), { recursive: true, force: true }); } catch (e) {}
+    try { fs.rmSync(path.join(projectDir, 'app', 'build'), { recursive: true, force: true }); } catch (e) {}
+
+    const gradleArgs = [gradleTask, '--no-daemon', '--rerun-tasks'];
     if (process.env.APK_NATIVE_SECURITY === '1') gradleArgs.push('-PenableNativeSecurity');
     log(`Compiling APK package (${buildVariant})...`);
     let gradleError = null;
+    let gradleOut = '';
     let usedVariant = buildVariant;
-    try {
-      execFileSync('./gradlew', gradleArgs, {
-        stdio: 'pipe', cwd: projectDir, env: buildEnv, timeout: 360000
-      });
-    } catch (e) {
-      gradleError = e;
+    const runGradle = (args) => {
+      try {
+        const r = execFileSync('./gradlew', args, {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          maxBuffer: 16 * 1024 * 1024,
+          cwd: projectDir, env: buildEnv, timeout: 480000
+        });
+        return { ok: true, out: String(r) };
+      } catch (e) {
+        return { ok: false, out: String(e.stdout || '') + String(e.stderr || '') + String(e.message || '') };
+      }
+    };
+    let g1 = runGradle(gradleArgs);
+    gradleOut = g1.out;
+    if (!g1.ok) {
+      gradleError = new Error(g1.out.slice(-1500));
       if (buildVariant !== 'release') {
         log('Gradle ' + buildVariant + ' FAILED — release fallback try karte hain...');
-        try {
-          execFileSync('./gradlew', ['assembleRelease', '--no-daemon'], {
-            stdio: 'pipe', cwd: projectDir, env: buildEnv, timeout: 360000
-          });
+        let g2 = runGradle(['assembleRelease', '--no-daemon', '--rerun-tasks']);
+        gradleOut = g2.out;
+        if (g2.ok) {
           usedVariant = 'release';
           log('Release fallback build OK.');
-        } catch (e2) {
-          throw e;
+        } else {
+          throw new Error('Gradle fail (' + buildVariant + ' + release fallback): ' + g2.out.slice(-2000));
         }
       } else {
-        throw e;
+        throw new Error('Gradle fail (release): ' + g1.out.slice(-2000));
       }
+    } else {
+      log('Gradle build OK.');
     }
 
-    // ── Find output APK (used variant dir, phir release) ──
-    const apkOutBase = path.join(projectDir, 'app', 'build', 'outputs', 'apk');
-    let builtApk = null;
-    for (const v of [usedVariant, 'release']) {
-      const d = path.join(apkOutBase, v);
-      if (!fs.existsSync(d)) continue;
-      const files = fs.readdirSync(d).filter(f => f.endsWith('.apk') && !f.includes('unsigned'));
-      if (files.length) { builtApk = path.join(d, files[0]); break; }
-    }
+    // ── Find output APK (poore project me kisi bhi .apk ko dhundo) ──
+    const findApks = (dir) => {
+      const out = [];
+      if (!fs.existsSync(dir)) return out;
+      for (const f of fs.readdirSync(dir)) {
+        const fp = path.join(dir, f);
+        try {
+          if (fs.statSync(fp).isDirectory()) out.push(...findApks(fp));
+          else if (f.toLowerCase().endsWith('.apk')) out.push(fp);
+        } catch (e) {}
+      }
+      return out;
+    };
+    const apkCandidates = findApks(path.join(projectDir, 'app', 'build', 'outputs'))
+      .filter(f => !f.toLowerCase().includes('unsigned') && !f.toLowerCase().includes('unaligned'));
+    // signed > normal priority
+    let builtApk = apkCandidates.find(f => f.toLowerCase().includes('signed'))
+      || apkCandidates.find(f => /app-.*\.apk$/.test(f))
+      || apkCandidates[0];
     if (!builtApk) {
-      const gmsg = gradleError ? String(gradleError.message).slice(0, 500) : 'unknown';
-      throw new Error('No APK found after Gradle. ' + gmsg);
+      const gmsg = gradleError ? String(gradleError.message).slice(0, 800) : 'unknown';
+      const tail = gradleOut ? gradleOut.slice(-1500) : '(no gradle output)';
+      throw new Error('No APK found after Gradle. ' + gmsg + ' || gradle tail: ' + tail);
     }
+    log('APK mila: ' + path.basename(builtApk));
 
     // ── PRE-SIGN — packers ko SIGNED input chahiye (Gradle unsigned deta
     // hai, isi se Frezrik 'packed output missing' de raha tha) ──
