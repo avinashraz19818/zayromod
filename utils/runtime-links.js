@@ -144,25 +144,42 @@ function firebaseEndpoint(parts) {
 }
 
 async function firebaseRequest(parts, method = 'GET', body) {
-  let url = firebaseEndpoint(parts);
   // Token SIRF writes ke liye — GET (admin users list / watchdog reads)
   // public rules se bina token ke turant chalti hai. Isse pehle har read
   // token exchange ka wait karta tha (slow "Loading Firebase...").
   const needsAuth = method === 'PATCH' || method === 'PUT';
+  let token = null;
   if (needsAuth) {
-    try {
-      const token = await getFirebaseAccessToken();
-      if (token) url += (url.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
-    } catch (e) { /* bina token try — 401 aayega to caller handle karega */ }
+    try { token = await getFirebaseAccessToken(); }
+    catch (e) { token = null; }
   }
-  const response = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(15_000)
-  });
+
+  const doFetch = async (tok) => {
+    let url = firebaseEndpoint(parts);
+    if (tok) url += (url.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(tok);
+    return fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000)
+    });
+  };
+
+  let response = await doFetch(token);
+
+  // ── 401 RETRY: token kharab/expired nikla to cache clear karke naya
+  // token le kar EK baar retry — admin link change kabhi silently fail
+  // na ho.
+  if (needsAuth && response.status === 401) {
+    console.error('[fb-request] 401 — token cache clear, naya token leke retry...');
+    _tokenCache = null; _tokenExp = 0; _tokenPromise = null;
+    try { token = await getFirebaseAccessToken(); } catch (e) { token = null; }
+    if (token) response = await doFetch(token);
+  }
+
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 300);
+    console.error(`[fb-request] ${method} ${parts.join('/')} → HTTP ${response.status}${detail ? ' ' + detail : ''}`);
     throw new Error(`Firebase request failed (${response.status})${detail ? `: ${detail}` : ''}`);
   }
   const text = await response.text();
