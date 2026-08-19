@@ -199,14 +199,14 @@ change fail hoga (wohi hacker ka darwaza tha, ab band).
   decrypt key bhi DEX me locked hoti hai.
 
 ### 360 Jiagu hardening (optional — on karo to sabse strong)
-**AUTO SETUP (recommended):** VPS pe ye chalao — jar + dependencies khud
-download ho jayengi:
+**AUTO SETUP (recommended):** VPS pe ye chalao — OFFICIAL tool khud
+download hoga (360 ke apne server se, ~270MB Linux package):
 ```
 bash scripts/setup-jiagu.sh
 ```
-(Official download link login ke bina nahi milta, isliye GitHub mirror se
-wahi official jar aati hai. Official site se manual chahiye to neeche wala
-manual tareeka bhi hai.)
+(Link: down.360safe.com/360Jiagu/360jiagubao_linux_64.zip — official.
+Docker wrapper repo idocking/360jiagu ke Dockerfile se ye link mila.)
+Official site se manual chahiye to neeche wala tareeka bhi hai.
 
 **MANUAL:** jiagu.360.cn pe account banao + `jiagu.jar` download karo
 2. VPS pe rakho: `/opt/jiagu/jiagu.jar`
