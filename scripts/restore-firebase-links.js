@@ -31,7 +31,33 @@ const CLEAN_JUNK = process.argv.includes('--clean-junk');
 const FB_URL = (process.env.FIREBASE_DATABASE_URL || 'https://zayrodev-195f3-default-rtdb.firebaseio.com').replace(/\/+$/, '');
 const DB_PATH = path.join(__dirname, '..', 'database', 'apkbuilder.db');
 
-function httpJson(method, urlPath, body) {
+// ── Service account token (rules lagi ho to config write isi se hoti hai) ──
+const crypto = require('crypto');
+let _tok = null, _tokExp = 0;
+function b64url(b) { return Buffer.from(b).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+async function getToken() {
+  try {
+    const saFile = process.env.GOOGLE_APPLICATION_CREDENTIALS || '/root/apkbuilder/firebase-service-account.json';
+    if (!fs.existsSync(saFile)) return null;
+    const sa = JSON.parse(fs.readFileSync(saFile, 'utf8'));
+    const now = Date.now();
+    if (_tok && now < _tokExp - 60000) return _tok;
+    const h = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+    const p = b64url(JSON.stringify({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.database', aud: 'https://oauth2.googleapis.com/token', iat: Math.floor(now/1000), exp: Math.floor(now/1000)+3600 }));
+    const s = crypto.createSign('RSA-SHA256'); s.update(h + '.' + p);
+    const sig = b64url(s.sign(sa.private_key));
+    const res = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: h + '.' + p + '.' + sig }).toString() });
+    const j = await res.json();
+    if (j && j.access_token) { _tok = j.access_token; _tokExp = now + ((j.expires_in || 3600) * 1000); return _tok; }
+    return null;
+  } catch (e) { return null; }
+}
+
+async function httpJson(method, urlPath, body) {
+  let u = FB_URL + urlPath + '.json';
+  let token = null;
+  try { token = await getToken(); } catch (e) {}
+  if (token) u += (u.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
   return new Promise((resolve, reject) => {
     const data = body === undefined ? undefined : JSON.stringify(body);
     const opts = {
@@ -39,7 +65,7 @@ function httpJson(method, urlPath, body) {
       headers: { 'Content-Type': 'application/json' },
       ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {})
     };
-    const req = https.request(FB_URL + urlPath + '.json', opts, (res) => {
+    const req = https.request(u, opts, (res) => {
       let b = '';
       res.on('data', c => b += c);
       res.on('end', () => {

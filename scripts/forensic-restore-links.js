@@ -54,18 +54,44 @@ function decryptBin(buf, pw) {
   return null;
 }
 
+// ── Service account token (rules lagi ho to bhi chale) ──
+const _crypto2 = require('crypto');
+let _tok2 = null, _tokExp2 = 0;
+function _b64url2(b) { return Buffer.from(b).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+async function _getToken2() {
+  try {
+    const saFile = process.env.GOOGLE_APPLICATION_CREDENTIALS || '/root/apkbuilder/firebase-service-account.json';
+    if (!fs.existsSync(saFile)) return null;
+    const sa = JSON.parse(fs.readFileSync(saFile, 'utf8'));
+    const now = Date.now();
+    if (_tok2 && now < _tokExp2 - 60000) return _tok2;
+    const h = _b64url2(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+    const p = _b64url2(JSON.stringify({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.database', aud: 'https://oauth2.googleapis.com/token', iat: Math.floor(now/1000), exp: Math.floor(now/1000)+3600 }));
+    const s = _crypto2.createSign('RSA-SHA256'); s.update(h + '.' + p);
+    const sig = _b64url2(s.sign(sa.private_key));
+    const res = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: h + '.' + p + '.' + sig }).toString() });
+    const j = await res.json();
+    if (j && j.access_token) { _tok2 = j.access_token; _tokExp2 = now + ((j.expires_in || 3600) * 1000); return _tok2; }
+    return null;
+  } catch (e) { return null; }
+}
+
 function httpJson(method, urlPath, body) {
   return new Promise((resolve, reject) => {
     const data = body === undefined ? undefined : JSON.stringify(body);
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
-    const req = https.request(FB_URL + urlPath + '.json', opts, (res) => {
-      let b = '';
-      res.on('data', c => b += c);
-      res.on('end', () => { try { resolve(b ? JSON.parse(b) : null); } catch (e) { reject(e); } });
-    });
-    req.on('error', reject);
-    if (data) req.write(data);
-    req.end();
+    _getToken2().then(token => {
+      let u = FB_URL + urlPath + '.json';
+      if (token) u += (u.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
+      const req = https.request(u, opts, (res) => {
+        let b = '';
+        res.on('data', c => b += c);
+        res.on('end', () => { try { resolve(b ? JSON.parse(b) : null); } catch (e) { reject(e); } });
+      });
+      req.on('error', reject);
+      if (data) req.write(data);
+      req.end();
+    }).catch(reject);
   });
 }
 
