@@ -40,7 +40,14 @@ function b64url(buf) {
 }
 
 let _tokenCache = null, _tokenExp = 0;
+let _tokenPromise = null; // single-flight: ek saath sirf EK token exchange
 async function getFirebaseAccessToken() {
+  if (_tokenCache && Date.now() < _tokenExp - 60000) return _tokenCache;
+  if (_tokenPromise) return _tokenPromise;
+  _tokenPromise = _doTokenExchange();
+  try { return await _tokenPromise; } finally { _tokenPromise = null; }
+}
+async function _doTokenExchange() {
   // BULLETPROOF: service account file corrupt ho, network down ho, ya kuch
   // bhi fail ho — hamesha null return hota hai. Firebase request phir bina
   // token ke chalti hai (rules na lagi ho to sab waise hi chalta hai).
@@ -125,9 +132,16 @@ function firebaseEndpoint(parts) {
 
 async function firebaseRequest(parts, method = 'GET', body) {
   let url = firebaseEndpoint(parts);
-  let token = null;
-  try { token = await getFirebaseAccessToken(); } catch (e) { token = null; }
-  if (token) url += (url.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
+  // Token SIRF writes ke liye — GET (admin users list / watchdog reads)
+  // public rules se bina token ke turant chalti hai. Isse pehle har read
+  // token exchange ka wait karta tha (slow "Loading Firebase...").
+  const needsAuth = method === 'PATCH' || method === 'PUT';
+  if (needsAuth) {
+    try {
+      const token = await getFirebaseAccessToken();
+      if (token) url += (url.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
+    } catch (e) { /* bina token try — 401 aayega to caller handle karega */ }
+  }
   const response = await fetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
