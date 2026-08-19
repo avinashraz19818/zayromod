@@ -526,15 +526,60 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     if (!apkFiles.length) throw new Error('Gradle build succeeded but no APK found in output.');
     const builtApk = path.join(releaseDir, apkFiles[0]);
 
+    // ── FREZRIK JIAGU (open-source DEX packer — DEFAULT, no account) ──
+    // Frezrik/Jiagu: app ka DEX AES-encrypt hoke shell dex ke andar chhup
+    // jata hai. Decompile karne pe sirf shell dikhta hai — asli code kuch
+    // nahi. Koi login nahi chahiye. pack.jar output/unsigned.apk banata
+    // hai (khud sign fail ho jaye to bhi packed file aa jati hai) — phir
+    // hum apne zipalign+apksigner se sign karte hain.
+    let apkToSign = builtApk;
+    let jiaguUsed = false;
+    let frezrikUsed = false;
+    if (process.env.FREZRIK_ENABLED !== 'false') {
+      const frezrikJar = process.env.FREZRIK_JAR || '/opt/frezrik/pack.jar';
+      if (fs.existsSync(frezrikJar) && fs.existsSync(keystorePath)) {
+        try {
+          log('Frezrik Jiagu: packing (DEX encrypt)...');
+          execFileSync('java', [
+            '-jar', frezrikJar,
+            '-apk', builtApk,
+            '-key', keystorePath,
+            '-kp', 'zayro@123',
+            '-alias', process.env.FREZRIK_ALIAS || 'zayro',
+            '-ap', 'zayro@123'
+          ], { stdio: 'pipe', cwd: buildDir, timeout: 600000 });
+          const outDir = path.join(buildDir, 'output');
+          let packed = null;
+          if (fs.existsSync(outDir)) {
+            const files = fs.readdirSync(outDir);
+            const signed = files.find(f => f.endsWith('_signed.apk'));
+            const unsigned = files.find(f => f === 'unsigned.apk');
+            if (signed) packed = path.join(outDir, signed);
+            else if (unsigned) packed = path.join(outDir, unsigned);
+          }
+          if (packed && fs.existsSync(packed) && fs.statSync(packed).size > 1000) {
+            apkToSign = packed;
+            frezrikUsed = true;
+            log('Frezrik Jiagu: packed — ab signing...');
+          } else {
+            throw new Error('packed output missing');
+          }
+        } catch (e) {
+          apkToSign = builtApk;
+          log(`Frezrik Jiagu FAILED (${e.message}) — normal build fallback.`);
+        }
+      } else if (process.env.FREZRIK_ENABLED === 'true') {
+        log(`Frezrik Jiagu: ENABLED par pack.jar/keystore nahi mila (${frezrikJar}). Normal build.`);
+      }
+    }
+
     // ── 360 JIAGU HARDENING (optional — JIAGU_ENABLED=true) ──
     // DEX encrypted + anti-tamper + string encryption. Jar + account chahiye
     // (jiagu.360.cn se download, .env me JIAGU_EMAIL/JIAGU_PASS/JIAGU_JAR).
     // 360 output khud signed hota hai (imported keystore se) — phir se sign
     // NAHI karte, warna protection toot jati hai. Jiagu fail ho to normal
     // signing fallback chal jata hai.
-    let apkToSign = builtApk;
-    let jiaguUsed = false;
-    if (process.env.JIAGU_ENABLED === 'true') {
+    if (process.env.JIAGU_ENABLED === 'true' && !frezrikUsed) {
       const jiaguJar = process.env.JIAGU_JAR || '/opt/jiagu/jiagu.jar';
       if (fs.existsSync(jiaguJar)) {
         try {
@@ -575,7 +620,8 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     } else if (fs.existsSync(keystorePath)) {
       log('Signing with keystore...');
       const alignedApk = path.join(buildDir, `${buildId}_aligned.apk`);
-      execFileSync('zipalign', ['-f', '4', builtApk, alignedApk], { stdio: 'pipe' });
+      // apkToSign = packed (Frezrik) ya plain builtApk — jo bhi ho, wahi sign
+      execFileSync('zipalign', ['-f', '4', apkToSign, alignedApk], { stdio: 'pipe' });
       execFileSync('apksigner', [
         'sign',
         '--ks', keystorePath,

@@ -198,8 +198,18 @@ change fail hoga (wohi hacker ka darwaza tha, ab band).
 - Server route public hai par response encrypted hai — 360 laga ho to
   decrypt key bhi DEX me locked hoti hai.
 
-### 360 Jiagu hardening (optional — on karo to sabse strong)
-**AUTO SETUP (recommended):** VPS pe ye chalao — OFFICIAL tool khud
+### Frezrik Jiagu (DEFAULT — open-source DEX packer, koi account nahi)
+**AUTO SETUP:** VPS pe ye chalao — tool khud download hoga (~15MB):
+```
+bash scripts/setup-frezrik.sh
+```
+Ye har build me app ka DEX AES-encrypt karta hai (shell dex + 4 ABIs ke
+libjiagu). Decompile karne pe sirf shell dikhta hai — asli code kuch nahi.
+Pipeline khud pack.jar dhundti hai (/opt/frezrik/pack.jar); apne
+zipalign+apksigner se sign hoti hai. FREZRIK_ENABLED=false → band.
+
+### 360 Jiagu hardening (optional — account wala, backup option)
+**AUTO SETUP:** VPS pe ye chalao — OFFICIAL tool khud
 download hoga (360 ke apne server se, ~270MB Linux package):
 ```
 bash scripts/setup-jiagu.sh
