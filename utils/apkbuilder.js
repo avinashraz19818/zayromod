@@ -682,6 +682,19 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
         let fzOut = '';
         try {
           log('Frezrik Jiagu: packing (DEX encrypt)...');
+          // ── STALE WORKDIR FIX (permanent) ──
+          // pack.jar apna kaam jar ke paas wale SHARED 'output/' folder me
+          // karta hai (unzip/manifest/res/classes wahan bante hain). Agar
+          // wahan purane build ka data bacha ho to naya APK purane
+          // manifest + resources.arsc + assets ke saath MIX ho jata hai —
+          // isi se naye APKs me '6CLUB ADMIN PANEL' label / purana package
+          // / purana icon aa raha tha. Har build se pehle ye folder puri
+          // tarah delete karo (manually rm karne ki zaroorat nahi).
+          const fzSharedOut = path.join(path.dirname(frezrikJar), 'output');
+          if (fs.existsSync(fzSharedOut)) {
+            fs.rmSync(fzSharedOut, { recursive: true, force: true });
+            log('Frezrik stale workdir cleared.');
+          }
           // pack.jar apna final output cwd ke 'output/' folder me likhta
           // hai — wo folder KHUD NAHI banata (FileNotFoundException:
           // output/unsigned.apk). Isi se 'packed output missing' aa raha
@@ -711,6 +724,32 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
             }
           }
           if (packed && fs.existsSync(packed) && fs.statSync(packed).size > 1000) {
+            // ── SAFETY NET: packed APK ka package sahi hona chahiye ──
+            // Agar kahin se phir stale data ghus gaya to packed APK ka
+            // package order ke package se MATCH nahi karega — tab packed
+            // discard karke normal signing pe fallback hota hai (user ko
+            // kabhi purana label/icon wala APK nahi milega).
+            let packedOk = true;
+            const wantPkg = String(order.package_name || '').trim();
+            const aaptPath = path.join(ANDROID_HOME, 'build-tools', '34.0.0', 'aapt');
+            if (wantPkg && fs.existsSync(aaptPath)) {
+              try {
+                const badging = execFileSync(aaptPath, ['dump', 'badging', packed],
+                  { stdio: 'pipe', encoding: 'utf8', timeout: 60000 });
+                const pm = badging.match(/package: name='([^']+)'/);
+                if (pm && pm[1] !== wantPkg) {
+                  packedOk = false;
+                  log(`Frezrik verify FAIL: packed package '${pm[1]}' != expected '${wantPkg}' — packed discard.`);
+                }
+              } catch (e) {
+                // aapt verify skip — clean ke baad risk minimal hai
+              }
+            }
+            if (!packedOk) {
+              const err = new Error(`stale package in packed output (expected ${wantPkg})`);
+              err.fzOut = fzOut;
+              throw err;
+            }
             apkToSign = packed;
             frezrikUsed = true;
             if (path.basename(packed) === 'unsigned.apk') {
