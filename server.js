@@ -766,6 +766,9 @@ app.post('/api/orders/:id/change-domain', requireAuth, async (req, res) => {
     if (result.success) {
       db.prepare('UPDATE orders SET apk_file=?,status=?,build_log=? WHERE id=?')
         .run(result.apkFile, 'done', logs.concat('Firebase live-link upgrade complete!').join('\n'), order.id);
+      // Purane build folders clear — abhi wala naya folder (buildId) aur
+      // fake APK wala folder protect karte hain.
+      deleteAllOrderBuildFolders(order, logPush, order.fake_apk_file ? [order.fake_apk_file] : [], buildId);
       sendApkReady(user, db.prepare('SELECT * FROM orders WHERE id=?').get(order.id), [result.apkPath], []).catch(() => {});
     } else {
       await restoreOldOrder(result.error || 'Build failed');
@@ -1276,27 +1279,33 @@ app.get('/api/admin/orders', requireAdmin, (req, res) => {
 // Delete karte waqt sirf .apk file nahi — pura build folder hatate hain,
 // taaki .idsig files aur khali folders bhi na bachhein.
 
-function deleteOrderBuildFolders(order) {
+// Order ke SAARE build folders (build_<id>_*) — rebuild/new-build se
+// pehle ya delete pe. protectNames wale file names ka folder chhoda
+// jata hai (e.g. fake APK jo rebuild nahi ho raha), exceptDir kabhi
+// delete nahi hota (e.g. abhi wala naya build).
+function deleteAllOrderBuildFolders(order, logFn, protectNames, exceptDir) {
   const buildsDir = path.join(__dirname, 'builds');
-  if (!fs.existsSync(buildsDir)) return;
-  // Order ke saare build folders build_<id>_* pattern se match karte hain
-  // (original + rebuild + fake) — failed builds (bina APK) bhi isse hat
-  // jate hain. Purane folders jinke apk names hain wo bhi hatate hain.
+  if (!fs.existsSync(buildsDir)) return 0;
   const prefix = `build_${order.id}_`;
-  const names = [order.apk_file, order.fake_apk_file].filter(Boolean);
+  const protect = new Set((protectNames || []).filter(Boolean));
+  let removed = 0;
   for (const dir of fs.readdirSync(buildsDir)) {
+    if (!dir.startsWith(prefix)) continue;
+    if (exceptDir && dir === exceptDir) continue;
     const dirPath = path.join(buildsDir, dir);
-    let stat;
-    try { stat = fs.statSync(dirPath); } catch (_) { continue; }
-    if (!stat.isDirectory()) continue;
-    let matches = dir.startsWith(prefix);
-    if (!matches && names.length) {
-      try { matches = fs.readdirSync(dirPath).some(f => names.includes(f)); } catch (_) {}
+    if (protect.size) {
+      try {
+        if (fs.readdirSync(dirPath).some(f => protect.has(f))) continue;
+      } catch (_) {}
     }
-    if (matches) {
-      try { fs.rmSync(dirPath, { recursive: true, force: true }); } catch (_) {}
-    }
+    try { fs.rmSync(dirPath, { recursive: true, force: true }); removed++; } catch (_) {}
   }
+  if (logFn && removed) logFn(`Old build folders cleared (${removed}).`);
+  return removed;
+}
+
+function deleteOrderBuildFolders(order) {
+  deleteAllOrderBuildFolders(order);
 }
 
 // Purane deletes se bache hue folders (sirf .idsig wale ya bilkul khali)
@@ -1458,6 +1467,13 @@ function rebuildOrderInBackground(orderId, rebuildFake = true) {
   const logPush = msg => { logs.push(msg); db.prepare('UPDATE orders SET build_log=? WHERE id=?').run(logs.join('\n'), order.id); };
   db.prepare("UPDATE orders SET status='building',apk_file=NULL,fake_apk_file=CASE WHEN fake_register_url IS NOT NULL AND fake_register_url<>'' THEN NULL ELSE fake_apk_file END,build_log=? WHERE id=?")
     .run(logs.join('\n'), order.id);
+
+  // Har rebuild se pehle is order ke PURANE build folders saaf karo —
+  // warna har rebuild naya folder banata hai aur purane pade rehte hain
+  // (build_<id>_rebuild_<ts> ka dher lag jata hai). Fake APK rebuild nahi
+  // ho raha ho to uske folder ko protect karte hain.
+  const fakeProtected = order.fake_apk_file && !(order.fake_register_url && String(order.fake_register_url) !== '');
+  deleteAllOrderBuildFolders(order, logPush, fakeProtected ? [order.fake_apk_file] : []);
 
   buildApk(order, design, buildId, logPush).then(async result => {
     if (!result.success) {
