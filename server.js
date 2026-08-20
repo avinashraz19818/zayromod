@@ -1094,7 +1094,32 @@ app.post('/api/admin/firebase/restore-link', async (req, res) => {
 
 // Users
 app.get('/api/admin/users', requireAdmin, (req, res) => {
-  res.json(db.prepare('SELECT id,username,email,coins,plain_password,created_at FROM users ORDER BY id DESC').all());
+  res.json(db.prepare('SELECT id,username,email,coins,plain_password,telegram_id,created_at FROM users ORDER BY id DESC').all());
+});
+
+// ── TELEGRAM ID TRANSFER ──
+// Admin kisi bhi user ka telegram_id change kar sakta hai — uske baad
+// saare bot messages (APK ready, coin approvals, sab notifications) naye
+// Telegram ID pe jayenge. Orders/coins user account (id) ke saath hi
+// rehte hain, sirf delivery address badalta hai.
+app.post('/api/admin/users/:id/telegram', requireAdmin, (req, res) => {
+  const user = db.prepare('SELECT id,username,telegram_id FROM users WHERE id=?').get(req.params.id);
+  if (!user) return res.json({ error: 'User not found' });
+  const newId = String(req.body.telegram_id || '').trim();
+  if (newId !== '' && !/^[0-9]{5,15}$/.test(newId)) {
+    return res.json({ error: 'Telegram ID sirf numbers me ho sakta hai (5-15 digits)' });
+  }
+  if (newId === String(user.telegram_id || '')) {
+    return res.json({ error: 'Yahi purana ID hai — koi change nahi hua' });
+  }
+  if (newId !== '') {
+    const clash = db.prepare('SELECT id,username FROM users WHERE telegram_id=? AND id<>?').get(newId, user.id);
+    if (clash) {
+      return res.json({ error: `Ye ID pehle se "${clash.username}" (id ${clash.id}) ke saath judi hai — pehle us user se ID hatao` });
+    }
+  }
+  db.prepare('UPDATE users SET telegram_id=? WHERE id=?').run(newId === '' ? null : newId, user.id);
+  res.json({ success: true, userId: user.id, username: user.username, oldId: user.telegram_id || null, newId: newId === '' ? null : newId });
 });
 
 app.post('/api/admin/users/:id/coins', requireAdmin, (req, res) => {

@@ -873,6 +873,29 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
 <div id="toast"></div>
 
 <!-- ═══ Premium Edit Design Modal ═══ -->
+<div id="tgTransferModal" class="emodal">
+  <div class="esheet" style="max-width:440px" role="dialog" aria-modal="true">
+    <div class="ehead">
+      <h3>Telegram ID Transfer</h3>
+      <button class="close" onclick="closeTgTransfer()" aria-label="Close">✕</button>
+    </div>
+    <div class="ebody">
+      <input type="hidden" id="tgTransferUserId">
+      <div class="hint" style="margin-bottom:12px">Transfer user: <b id="tgTransferUserName" style="color:var(--cyan)"></b></div>
+      <label class="label">Old Telegram ID</label>
+      <input id="tgTransferOld" class="input" type="text" readonly style="background:var(--bg-2);opacity:.9">
+      <div style="height:12px"></div>
+      <label class="label">New Telegram ID</label>
+      <input id="tgTransferNew" class="input" type="text" placeholder="e.g. 1234567890" inputmode="numeric">
+      <div class="hint" style="margin-top:8px">⚠️ Naye Telegram account ko pehle bot pe <b>/start</b> karna hoga, warna bot wahan APK/messages nahi bhej payega. Purana ID hataane ke liye khali chhod ke transfer karo.</div>
+      <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeTgTransfer()">Cancel</button>
+        <button class="btn btn-primary" id="tgTransferBtn" onclick="tgTransferSubmit()">Transfer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="editDesignModal" class="emodal">
   <div class="esheet" role="dialog" aria-modal="true">
     <div class="ehead">
@@ -1495,11 +1518,15 @@ async function loadUsers() {
   const users = await api('/api/admin/users');
   const c = document.getElementById('usersList');
   if (!users.length) { c.innerHTML = '<div style="color:var(--dim);padding:16px 4px">No users yet.</div>'; return; }
-  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Username</th><th>Email</th><th>Password</th><th>Coins</th><th>Joined</th><th>Manage Coins</th><th>Actions</th></tr></thead><tbody>` +
+  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Username</th><th>Email</th><th>Password</th><th>Coins</th><th>Telegram ID</th><th>Joined</th><th>Manage Coins</th><th>Actions</th></tr></thead><tbody>` +
     users.map(u => `<tr>
       <td>${u.id}</td><td><button class="btn btn-sm btn-outline" onclick="openUserOrders(${u.id},'${u.username.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-users"/></svg> ${u.username}</button></td><td>${u.email}</td>
       <td><code style="background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--cyan)">${u.plain_password || '(hashed)'}</code></td>
       <td><span class="coin-chip">${u.coins}</span></td>
+      <td><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+        ${u.telegram_id ? `<code style="background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:11px;color:#8bdcff">${u.telegram_id}</code>` : `<span style="color:var(--dim);font-size:11px">—</span>`}
+        <button class="btn btn-sm" style="background:rgba(42,123,255,.18);color:var(--cyan);border:1px solid rgba(94,200,255,.3)" onclick="openTgTransfer(${u.id},'${u.username.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}','${(u.telegram_id || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Telegram ID transfer">⇄</button>
+      </div></td>
       <td><small>${new Date(u.created_at).toLocaleDateString()}</small></td>
       <td>
         <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
@@ -1536,6 +1563,38 @@ async function subUserCoins(userId) {
   setLoading(btn, false);
   if (d.error) return toast(d.error, true);
   toast('✓ ' + amount + ' coins subtracted!');
+  loadUsers();
+}
+
+/* ── TELEGRAM ID TRANSFER ── */
+function openTgTransfer(userId, username, currentId) {
+  document.getElementById('tgTransferUserId').value = userId;
+  document.getElementById('tgTransferUserName').textContent = username + ' (id ' + userId + ')';
+  document.getElementById('tgTransferOld').value = currentId || '(not set)';
+  document.getElementById('tgTransferNew').value = currentId || '';
+  const modal = document.getElementById('tgTransferModal');
+  modal.classList.add('show');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeTgTransfer() {
+  const modal = document.getElementById('tgTransferModal');
+  modal.classList.remove('show');
+  modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function tgTransferSubmit() {
+  const userId = document.getElementById('tgTransferUserId').value;
+  const newId = document.getElementById('tgTransferNew').value.trim();
+  const btn = document.getElementById('tgTransferBtn');
+  setLoading(btn, true, 'Transferring…');
+  const d = await api('/api/admin/users/' + userId + '/telegram', 'POST', { telegram_id: newId });
+  setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+  toast('✓ Telegram ID transferred: ' + (d.oldId || '(not set)') + ' → ' + (d.newId || '(removed)'));
+  closeTgTransfer();
   loadUsers();
 }
 
