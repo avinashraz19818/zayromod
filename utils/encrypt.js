@@ -48,9 +48,28 @@ async function encryptHtmlFileToBin(htmlFilePath, outputPath, password) {
   return encryptHtmlToBin(html, outputPath, password);
 }
 
+// ── Decrypt (diagnostic ke liye — server kya serve kar raha hai check) ──
+function decryptHtmlFromBin(input, password = FIXED_PASSWORD) {
+  const data = Buffer.isBuffer(input) ? input : fs.readFileSync(input);
+  let mp = -1;
+  for (let i = 0; i <= data.length - 8; i++) {
+    let ok = true;
+    for (let j = 0; j < 8; j++) if (data[i + j] !== MARKER[j]) { ok = false; break; }
+    if (ok) { mp = i; break; }
+  }
+  if (mp < 0) throw new Error('no marker — encrypted bin nahi hai');
+  const salt = data.slice(mp + 8, mp + 24);
+  const iv = data.slice(mp + 24, mp + 40);
+  const enc = data.slice(mp + 40, data.length - 64);
+  const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
+}
+
 module.exports = {
   MARKER,
   FIXED_PASSWORD,
   encryptHtmlToBin,
-  encryptHtmlFileToBin
+  encryptHtmlFileToBin,
+  decryptHtmlFromBin
 };
