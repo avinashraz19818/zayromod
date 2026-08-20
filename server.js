@@ -920,8 +920,8 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
     const uniqueName = `${Date.now()}_${f.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     fs.renameSync(f.path, path.join(templatesDir, uniqueName));
     fields.push('popup_html_file=?'); vals.push(uniqueName);
-    // Mark old file for deletion
-    if (currentDesign.popup_html_file) {
+    // Mark old file for deletion (agar koi aur design/share use nahi kar raha)
+    if (currentDesign.popup_html_file && !fileStillReferenced(currentDesign.popup_html_file, 'templates', currentDesign.id)) {
       oldFilesToDelete.push(path.join(templatesDir, currentDesign.popup_html_file));
     }
   }
@@ -930,7 +930,7 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
     const uniqueName = `fake_${Date.now()}_${f.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     fs.renameSync(f.path, path.join(templatesDir, uniqueName));
     fields.push('fake_popup_html_file=?'); vals.push(uniqueName);
-    if (currentDesign.fake_popup_html_file) {
+    if (currentDesign.fake_popup_html_file && !fileStillReferenced(currentDesign.fake_popup_html_file, 'templates', currentDesign.id)) {
       oldFilesToDelete.push(path.join(templatesDir, currentDesign.fake_popup_html_file));
     }
   }
@@ -938,7 +938,7 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
     fields.push('preview_image=?');
     const newFileName = path.basename(req.files.preview_image[0].path);
     vals.push(newFileName);
-    if (currentDesign.preview_image) {
+    if (currentDesign.preview_image && !fileStillReferenced(currentDesign.preview_image, 'uploads', currentDesign.id)) {
       oldFilesToDelete.push(path.join(uploadsDir, currentDesign.preview_image));
     }
   }
@@ -946,7 +946,7 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
     fields.push('preview_video=?');
     const newFileName = path.basename(req.files.preview_video[0].path);
     vals.push(newFileName);
-    if (currentDesign.preview_video) {
+    if (currentDesign.preview_video && !fileStillReferenced(currentDesign.preview_video, 'uploads', currentDesign.id)) {
       oldFilesToDelete.push(path.join(uploadsDir, currentDesign.preview_video));
     }
   }
@@ -956,7 +956,9 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
       // A legacy cover may also appear in the gallery. Keep it if the cover is
       // not being replaced, otherwise the design card would lose its image.
       if (row.file_name !== currentDesign.preview_image || req.files?.preview_image?.[0]) {
-        oldFilesToDelete.push(path.join(uploadsDir, row.file_name));
+        if (!fileStillReferenced(row.file_name, 'uploads', currentDesign.id)) {
+          oldFilesToDelete.push(path.join(uploadsDir, row.file_name));
+        }
       }
     }
   }
@@ -993,16 +995,47 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
 app.delete('/api/admin/designs/:id', requireAdmin, (req, res) => {
   try {
     const design = withPreviewImages(db.prepare('SELECT * FROM designs WHERE id=?').get(req.params.id));
+    if (!design) return res.status(404).json({ error: 'Design not found' });
+
+    // Is design ke orders ke build folders/icon cleanup ke liye pehle
+    // orders collect karo (rows delete hone ke baad nahi milenge)
+    const designOrders = db.prepare('SELECT * FROM orders WHERE design_id=?').all(req.params.id);
+
     db.prepare('DELETE FROM orders WHERE design_id=?').run(req.params.id);
     db.prepare('DELETE FROM designs WHERE id=?').run(req.params.id);
 
-    // Gallery rows are removed by ON DELETE CASCADE; remove their files too.
-    for (const fileName of new Set(design?.preview_images || [])) {
+    // Saare orders ke build folders + icons saaf karo
+    for (const o of designOrders) {
+      deleteOrderBuildFolders(o);
+      deleteOrderIconIfUnused(o);
+    }
+    cleanupOrphanBuildFolders();
+
+    // Design ke saare files delete karo — HTML (templates/), photo/video/
+    // gallery (uploads/). Agar koi AUR design/order/setting file use kar
+    // raha hai to use chhoda jata hai (shared files safe).
+    const seen = new Set();
+    const filesToDelete = [];
+    const pushFile = (name, dir) => {
+      if (!name) return;
+      const key = dir + '/' + name;
+      if (seen.has(key)) return;
+      seen.add(key);
+      filesToDelete.push({ name, dir });
+    };
+    pushFile(design.popup_html_file, 'templates');
+    pushFile(design.fake_popup_html_file, 'templates');
+    pushFile(design.preview_image, 'uploads');
+    pushFile(design.preview_video, 'uploads');
+    for (const fileName of (design?.preview_images || [])) pushFile(fileName, 'uploads');
+
+    for (const { name, dir } of filesToDelete) {
+      if (fileStillReferenced(name, dir, design.id)) continue;
       try {
-        const filePath = path.join(__dirname, 'uploads', fileName);
+        const filePath = path.join(__dirname, dir, name);
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       } catch (error) {
-        console.error('Failed to delete design preview image:', fileName, error.message);
+        console.error('Failed to delete design file:', name, error.message);
       }
     }
     res.json({ success: true });
@@ -1133,10 +1166,18 @@ app.post('/api/admin/users/:id/coins', requireAdmin, (req, res) => {
 
 app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
   const id = req.params.id;
+  // User ke saare orders ke build folders/icon cleanup ke liye pehle
+  // collect karo (rows delete hone ke baad nahi milenge)
+  const userOrders = db.prepare('SELECT * FROM orders WHERE user_id=?').all(id);
   db.prepare('DELETE FROM coin_requests WHERE user_id=?').run(id);
   db.prepare('DELETE FROM orders WHERE user_id=?').run(id);
   const info = db.prepare('DELETE FROM users WHERE id=?').run(id);
   if (!info.changes) return res.json({ error: 'User not found' });
+  for (const o of userOrders) {
+    deleteOrderBuildFolders(o);
+    deleteOrderIconIfUnused(o);
+  }
+  cleanupOrphanBuildFolders();
   res.json({ success: true });
 });
 
@@ -1237,16 +1278,22 @@ app.get('/api/admin/orders', requireAdmin, (req, res) => {
 
 function deleteOrderBuildFolders(order) {
   const buildsDir = path.join(__dirname, 'builds');
+  if (!fs.existsSync(buildsDir)) return;
+  // Order ke saare build folders build_<id>_* pattern se match karte hain
+  // (original + rebuild + fake) — failed builds (bina APK) bhi isse hat
+  // jate hain. Purane folders jinke apk names hain wo bhi hatate hain.
+  const prefix = `build_${order.id}_`;
   const names = [order.apk_file, order.fake_apk_file].filter(Boolean);
-  if (!names.length || !fs.existsSync(buildsDir)) return;
   for (const dir of fs.readdirSync(buildsDir)) {
     const dirPath = path.join(buildsDir, dir);
     let stat;
     try { stat = fs.statSync(dirPath); } catch (_) { continue; }
     if (!stat.isDirectory()) continue;
-    let has = false;
-    try { has = fs.readdirSync(dirPath).some(f => names.includes(f)); } catch (_) {}
-    if (has) {
+    let matches = dir.startsWith(prefix);
+    if (!matches && names.length) {
+      try { matches = fs.readdirSync(dirPath).some(f => names.includes(f)); } catch (_) {}
+    }
+    if (matches) {
       try { fs.rmSync(dirPath, { recursive: true, force: true }); } catch (_) {}
     }
   }
@@ -1271,14 +1318,47 @@ function cleanupOrphanBuildFolders() {
   }
 }
 
+// Kya ye file kisi AUR design/order/setting se abhi bhi use ho rahi hai?
+// Shared files ko galti se delete nahi karte.
+function fileStillReferenced(fileName, dir, ignoreDesignId) {
+  try {
+    if (dir === 'templates') {
+      if (db.prepare('SELECT 1 FROM designs WHERE id<>? AND (popup_html_file=? OR fake_popup_html_file=?)')
+        .get(ignoreDesignId, fileName, fileName)) return true;
+      const s = db.prepare('SELECT value FROM settings WHERE key=?').get('loading_html_file');
+      if (s && s.value === fileName) return true;
+    } else {
+      if (db.prepare('SELECT 1 FROM designs WHERE id<>? AND (preview_image=? OR preview_video=?)')
+        .get(ignoreDesignId, fileName, fileName)) return true;
+      if (db.prepare('SELECT 1 FROM design_preview_images WHERE file_name=? AND design_id<>?')
+        .get(fileName, ignoreDesignId)) return true;
+      if (db.prepare('SELECT 1 FROM orders WHERE icon_file=?').get(fileName)) return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+// Order delete hone par uski uploaded icon file bhi saaf karo — par sirf
+// agar koi AUR order usi icon ko use nahi kar raha.
+function deleteOrderIconIfUnused(order) {
+  const f = order?.icon_file;
+  if (!f) return;
+  try {
+    if (db.prepare('SELECT 1 FROM orders WHERE icon_file=? AND id<>?').get(f, order.id)) return;
+    const p = path.join(__dirname, 'uploads', f);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  } catch (_) {}
+}
+
 // Delete single order
 app.delete('/api/admin/orders/:id', requireAdmin, (req, res) => {
   try {
     const order = db.prepare('SELECT * FROM orders WHERE id=?').get(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    // Pura build folder + bache hue junk folders delete karo
+    // Pura build folder + bache hue junk folders + icon delete karo
     deleteOrderBuildFolders(order);
+    deleteOrderIconIfUnused(order);
     cleanupOrphanBuildFolders();
 
     // Delete order
@@ -1295,10 +1375,13 @@ app.delete('/api/admin/orders', requireAdmin, (req, res) => {
   if (!Array.isArray(ids) || !ids.length) return res.json({ error: 'No IDs provided' });
 
   try {
-    // Pura build folder delete karo har order ke liye
+    // Pura build folder + icon delete karo har order ke liye
     for (const id of ids) {
       const order = db.prepare('SELECT * FROM orders WHERE id=?').get(id);
-      if (order) deleteOrderBuildFolders(order);
+      if (order) {
+        deleteOrderBuildFolders(order);
+        deleteOrderIconIfUnused(order);
+      }
     }
     cleanupOrphanBuildFolders();
 
