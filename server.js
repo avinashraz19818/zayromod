@@ -578,10 +578,21 @@ function findBuiltApk(fileName) {
   const buildsDir = path.join(__dirname, 'builds');
   if (!fs.existsSync(buildsDir)) return null;
 
-  for (const dir of fs.readdirSync(buildsDir)) {
-    const dirPath = path.join(buildsDir, dir);
-    if (!fs.statSync(dirPath).isDirectory()) continue;
-    const apkPath = path.join(dirPath, safeFileName);
+  // Sabse NAYA build folder pehle check hota hai — same naam ki purani
+  // APKs (purane orders/rebuilds ki) galti se serve na ho jayein.
+  // Pehle readdir ke order pe bharosa tha — usme purana folder pehle aa
+  // jata tha to download/Telegram purani APK de deta tha.
+  const dirs = fs.readdirSync(buildsDir).filter(d => {
+    try { return fs.statSync(path.join(buildsDir, d)).isDirectory(); } catch (_) { return false; }
+  });
+  const dirTs = d => {
+    const m = String(d).match(/(\d{13})/g);
+    if (m && m.length) return parseInt(m[m.length - 1], 10);
+    try { return fs.statSync(path.join(buildsDir, d)).mtimeMs; } catch (_) { return 0; }
+  };
+  dirs.sort((a, b) => dirTs(b) - dirTs(a));
+  for (const dir of dirs) {
+    const apkPath = path.join(buildsDir, dir, safeFileName);
     if (fs.existsSync(apkPath)) return apkPath;
   }
   return null;
