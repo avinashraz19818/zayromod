@@ -34,6 +34,11 @@ const orders = {};
 for (const r of DB.prepare('SELECT id, apk_file, fake_apk_file, status FROM orders').all()) {
   orders[String(r.id)] = r;
 }
+// Extra fake sites ke APK bhi protect karo (multiple fake APKs)
+const fakeSiteApks = {};
+for (const r of DB.prepare('SELECT order_id, apk_file FROM order_fake_sites WHERE apk_file IS NOT NULL').all()) {
+  (fakeSiteApks[String(r.order_id)] = fakeSiteApks[String(r.order_id)] || []).push(r.apk_file);
+}
 
 // ── Folder ka timestamp: naam me aakhri 13-digit number, warna mtime ──
 function dirTs(dir) {
@@ -87,6 +92,11 @@ for (const [key, list] of Object.entries(groups)) {
   // Fake APK wala sabse naya folder
   if (o.fake_apk_file) {
     const d = sorted.find(x => contains(x, o.fake_apk_file));
+    if (d) keep.add(d);
+  }
+  // Extra fake sites ke APK wale folders
+  for (const apkName of (fakeSiteApks[key] || [])) {
+    const d = sorted.find(x => contains(x, apkName));
     if (d) keep.add(d);
   }
 
