@@ -72,6 +72,24 @@ db.exec(`
     FOREIGN KEY(design_id) REFERENCES designs(id)
   );
 
+  -- Multiple fake sites per order — har fake site ka apna APK banta hai
+  -- (apna register link + firebase path). Primary fake (orders.fake_*)
+  -- alag rehta hai, ye EXTRA fake sites hain (jitne chahe utne).
+  CREATE TABLE IF NOT EXISTS order_fake_sites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    register_url TEXT NOT NULL,
+    deposit_url TEXT,
+    wingo_url TEXT,
+    domain TEXT,
+    firebase_path TEXT,
+    apk_file TEXT,
+    status TEXT DEFAULT 'pending',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS coin_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

