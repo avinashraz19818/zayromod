@@ -100,7 +100,9 @@ public class MainActivity extends Activity {
 			String server = decodeX(APP_SERVER_URL_M);
 			String cpath = decodeX(APP_PATH_M);
 			if (server.length() == 0 || cpath.length() == 0) return null;
-			String url = server + "/api/app-content/" + cpath;
+			// Cache-buster: har fetch pe taya timestamp — purana cached
+			// content kabhi na mile (design edit turant dikhe).
+			String url = server + "/api/app-content/" + cpath + "?t=" + System.currentTimeMillis();
 			c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
 			c.setConnectTimeout(10000);
 			c.setReadTimeout(20000);

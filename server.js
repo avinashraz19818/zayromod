@@ -337,7 +337,13 @@ app.get('/api/app-content/:path', async (req, res) => {
     const buf = await buildAppContent(req.params.path, 'popup');
     if (!buf) return res.status(404).send('not found');
     res.set('Content-Type', 'application/octet-stream');
-    res.set('Cache-Control', 'public, max-age=3600');
+    // NO CACHE — design edit karte hi sab apps ko turant naya content
+    // milna chahiye. Pehle 'public, max-age=3600' tha — Cloudflare/phone
+    // 1 ghanta purana content serve karte the, isi se design edit ke baad
+    // bhi OLD design dikhta tha.
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     res.send(buf);
   } catch (e) {
     res.status(500).send('error');
@@ -349,7 +355,9 @@ app.get('/api/app-content/:path/loading', async (req, res) => {
     const buf = await buildAppContent(req.params.path, 'loading');
     if (!buf) return res.status(404).send('not found');
     res.set('Content-Type', 'application/octet-stream');
-    res.set('Cache-Control', 'public, max-age=3600');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     res.send(buf);
   } catch (e) {
     res.status(500).send('error');
