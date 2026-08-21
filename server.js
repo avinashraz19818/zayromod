@@ -1900,25 +1900,17 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
 
       let fakeResult = null;
       if (fakeAddonEnabled && cleanFakeRegisterUrl) {
-        logPush('\n--- Building Fake APK ---');
-        const fakeOrder = {
-          ...order,
-          is_fake: true,
-          app_name: order.app_name + ' Fake',
-          package_name: 'com.zayrof.' + packageName.split('.').pop(),
-          register_url: cleanFakeRegisterUrl,
-          deposit_url: buildUrls(cleanFakeRegisterUrl, isDhaniDesign).deposit,
-          wingo_url: buildUrls(cleanFakeRegisterUrl, isDhaniDesign).wingo,
-          domain: extractDomain(cleanFakeRegisterUrl),
-          firebase_path: order.fake_firebase_path
-            || `zayrof${extractDomain(cleanFakeRegisterUrl).replace(/[^a-z0-9]/gi, '').substring(0, 8)}`
-        };
+        logPush('\n--- Building Fake APK (Fake 1) ---');
+        const fakeOrder = makeFakeOrder(order, cleanFakeRegisterUrl,
+          order.fake_firebase_path
+            || `zayrof${extractDomain(cleanFakeRegisterUrl).replace(/[^a-z0-9]/gi, '').substring(0, 8)}`,
+          1, design);
         fakeResult = await buildApk(fakeOrder, design, buildId + '_fake', logPush);
         if (fakeResult.success) {
           db.prepare('UPDATE orders SET fake_apk_file=? WHERE id=?').run(fakeResult.apkFile, orderId);
-          logPush('Fake APK ready!');
+          logPush('Fake 1 APK ready!');
         } else {
-          logPush('Fake APK build failed: ' + fakeResult.error);
+          logPush('Fake 1 APK build failed: ' + fakeResult.error);
         }
       }
 

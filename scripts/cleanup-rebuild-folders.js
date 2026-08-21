@@ -36,8 +36,12 @@ for (const r of DB.prepare('SELECT id, apk_file, fake_apk_file, status FROM orde
 }
 // Extra fake sites ke APK bhi protect karo (multiple fake APKs)
 const fakeSiteApks = {};
-for (const r of DB.prepare('SELECT order_id, apk_file FROM order_fake_sites WHERE apk_file IS NOT NULL').all()) {
-  (fakeSiteApks[String(r.order_id)] = fakeSiteApks[String(r.order_id)] || []).push(r.apk_file);
+try {
+  for (const r of DB.prepare('SELECT order_id, apk_file FROM order_fake_sites WHERE apk_file IS NOT NULL').all()) {
+    (fakeSiteApks[String(r.order_id)] = fakeSiteApks[String(r.order_id)] || []).push(r.apk_file);
+  }
+} catch (e) {
+  // order_fake_sites table abhi nahi hai (server restart nahi hua) — skip
 }
 
 // ── Folder ka timestamp: naam me aakhri 13-digit number, warna mtime ──
