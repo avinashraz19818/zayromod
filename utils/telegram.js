@@ -61,6 +61,7 @@ function initBot(token, db) {
           `👋 Welcome *${firstName}*\\!\n\nBuild your custom APK in seconds\\.`,
           {
             parse_mode: 'MarkdownV2',
+            disable_web_page_preview: true,
             reply_markup: {
               inline_keyboard: [[
                 { text: '🔨 Open APK Builder', web_app: { url: siteUrl } }
@@ -239,7 +240,8 @@ async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
     try {
       statusMessage = await sender.sendMessage(
         telegramId,
-        `✅ ${appNamePlain} is ready. Uploading ${countText} now…\n\nYou can keep using the bot while files are uploading.`
+        `✅ ${appNamePlain} is ready. Uploading ${countText} now…\n\nYou can keep using the bot while files are uploading.`,
+        { disable_web_page_preview: true }
       );
     } catch (error) {
       console.error('Bot APK status message error:', error.message);
@@ -277,25 +279,10 @@ async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
     }
   }
 
-  // Send download links if URLs provided
-  if (downloadUrls.length > 0) {
-    const appName = appNamePlain.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
-    const linksMsg = downloadUrls.map((url, i) =>
-      `🔗 [Download APK ${i + 1}](${url})`
-    ).join('\n');
-    const finalMsg =
-      `✅ *Your APK is Ready\\!*\n\n` +
-      `📱 App: *${appName}*\n\n` +
-      linksMsg;
-    try {
-      await sender.sendMessage(telegramId, finalMsg, {
-        parse_mode: 'MarkdownV2',
-        disable_web_page_preview: false
-      });
-    } catch (error) {
-      console.error('Bot sendMessage links error:', error.message);
-    }
-  }
+  // ── SECURITY: bot me KOI LINK nahi bhejte ──
+  // Sirf APK files + app ka naam. Koi URL (download/site) message me nahi
+  // aata — long-press/copy karne pe bhi kuch nahi milega. Links sirf
+  // logged-in user apne account ke orders page se dekhte hain.
 }
 
 function sendApkReady(user, order, apkPaths = [], downloadUrls = []) {
