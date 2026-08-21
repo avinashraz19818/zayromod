@@ -119,9 +119,13 @@ function injectParams(htmlContent, params) {
   }
 
   // ── MIN DEPOSIT ──
+  // Kuch templates me fbMinDeposit/minDeposit COMMA-separated var list me
+  // hota hai ('var rtdb=null, fbDepositCondition=true, fbMinDeposit=500;')
+  // — pehle ka regex sirf 'var fbMinDeposit=500' dhundta tha, isliye ye
+  // kabhi replace nahi hote the. Ab \b se dono forms milte hain.
   html = html.replace(
-    /(var\s+(?:fbMinDeposit|minDeposit)\s*=\s*)(\d+)/g,
-    `$1${minDeposit}`
+    /(\b(?:fbMinDeposit|minDeposit)\s*=\s*)(\d+)/g,
+    (m, g1) => g1 + minDeposit
   );
   // rechargeAmt span default content
   html = html.replace(
@@ -133,9 +137,13 @@ function injectParams(htmlContent, params) {
   // Kuch templates ke title ke andar nested elements hote hain (<span>,
   // &nbsp; etc.) — isliye PURA inner content replace karte hain (lazy
   // match closing </div> tak), sirf opening tag ke baad wala text nahi.
+  // NOTE: 'card-title' pattern me lookahead (?=[\s"']) hai taaki
+  // card-title-block / card-title-line1 (alag meaning) match na ho.
   const brandAttrPatterns = [
     /class=["'][^"']*brand-name[^"']*["']/,
     /class=["'][^"']*card-title-line1[^"']*["']/,
+    /class=["'][^"']*card-title(?=[\s"'])[^"']*["']/,
+    /id=["']mainBrandText["']/,
     /class=["'][^"']*wo-title[^"']*["']/,
     /id=["']woTitle["']/
   ];
