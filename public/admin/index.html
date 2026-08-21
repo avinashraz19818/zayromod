@@ -2,6 +2,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+/* ── ZAYRO SHIELD: inspect/right-click/copy block ── */
+(function(){
+  if(window.__ZAYRO_SHIELD__) return; window.__ZAYRO_SHIELD__ = true;
+  function blocked(){
+    if(!document.body) return;
+    var ov = document.getElementById('__zayro_shield_ov__');
+    if(!ov){
+      ov = document.createElement('div');
+      ov.id = '__zayro_shield_ov__';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#05070f;color:#ff4d6d;display:none;align-items:center;justify-content:center;font:600 15px sans-serif;text-align:center;padding:24px;line-height:1.6';
+      ov.textContent = '⚠️ SECURITY LOCKED\nInspect / Developer Tools band hain. Console band karke page refresh karein.';
+      document.body.appendChild(ov);
+    }
+    ov.style.display = 'flex';
+  }
+  function unblock(){ var ov = document.getElementById('__zayro_shield_ov__'); if(ov) ov.style.display = 'none'; }
+  /* 1) right-click / long-press menu band */
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); return false; }, true);
+  /* 2) image/video drag-copy band */
+  document.addEventListener('dragstart', function(e){ if(e.target && (e.target.tagName==='IMG'||e.target.tagName==='VIDEO')){ e.preventDefault(); return false; } }, true);
+  /* 3) shortcut keys band: F12, Ctrl+U/S/P, Ctrl/Shift+I/J/C */
+  document.addEventListener('keydown', function(e){
+    var k = (e.key||'').toLowerCase();
+    var c = e.ctrlKey || e.metaKey;
+    if(k === 'f12'){ e.preventDefault(); e.stopPropagation(); return false; }
+    if(c && (k==='u'||k==='s'||k==='p')){ e.preventDefault(); e.stopPropagation(); return false; }
+    if((c||e.shiftKey) && (k==='i'||k==='j'||k==='c')){ e.preventDefault(); e.stopPropagation(); return false; }
+  }, true);
+  /* 4) text select band (inputs/table cells chhod ke — admin ko copy chahiye hota hai) */
+  var st = document.createElement('style');
+  st.textContent = '*{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}input,textarea,code,td,pre,input *,textarea *{-webkit-user-select:text!important;user-select:text!important;-webkit-touch-callout:default!important}img,video{-webkit-user-drag:none!important}';
+  document.head.appendChild(st);
+  /* 5) devtools detection — docked size check */
+  setInterval(function(){
+    try {
+      if(window.outerWidth - window.innerWidth > 180 || window.outerHeight - window.innerHeight > 180) blocked();
+      else unblock();
+    } catch(_) {}
+  }, 800);
+  /* 6) debugger pulse — devtools khule to pause hota hai, turant pakda jata hai */
+  setInterval(function(){ var t = Date.now(); try { debugger; } catch(_) {} if(Date.now() - t > 150) blocked(); }, 1600);
+})();
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Zayro Mod Builder — Admin Console</title>
@@ -1506,7 +1551,7 @@ function renderCoinReqs(reqs, containerId, onlyPending) {
       <td><b style="color:var(--ok)">₹${r.amount_paid}</b></td>
       <td><code>${r.utr}</code></td>
       <td>${r.screenshot_file
-        ? `<a href="/uploads/${r.screenshot_file}" target="_blank"><img src="/uploads/${r.screenshot_file}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer"></a>`
+        ? `<a href="/api/files/${r.screenshot_file}" target="_blank"><img src="/api/files/${r.screenshot_file}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer"></a>`
         : '<span style="color:var(--dim)">—</span>'}</td>
       <td><span class="badge ${r.status==='approved'?'badge-ok':r.status==='rejected'?'badge-danger':'badge-pending'}">${r.status}</span></td>
       <td>
@@ -2173,7 +2218,7 @@ async function loadSettings() {
   document.getElementById('sTgAdminId').value = s.telegram_admin_id || '';
   document.getElementById('currentLoadingHtml').textContent = s.loading_html_file || 'Not uploaded yet';
   if (s.upi_qr_image) {
-    document.getElementById('currentQr').innerHTML = `<img src="/uploads/${s.upi_qr_image}" style="width:110px;border-radius:10px;border:1px solid var(--border)">`;
+    document.getElementById('currentQr').innerHTML = `<img src="/api/files/${s.upi_qr_image}" style="width:110px;border-radius:10px;border:1px solid var(--border)">`;
   }
 }
 
@@ -2240,12 +2285,12 @@ function createPreviewCarousel(imageUrl, videoUrl, containerId) {
   let html = '<div class="preview-carousel">';
   
   if (hasImage) {
-    html += `<img src="/uploads/${imageUrl}" class="carousel-item active" alt="Preview Image" onerror="this.style.display='none'; checkCarouselFallback('${containerId}')">`;
+    html += `<img src="/api/files/${imageUrl}" class="carousel-item active" alt="Preview Image" onerror="this.style.display='none'; checkCarouselFallback('${containerId}')">`;
   }
   
   if (hasVideo) {
     html += `<video class="carousel-item ${!hasImage ? 'active' : ''}" muted playsinline preload="metadata" onerror="this.style.display='none'; checkCarouselFallback('${containerId}')">
-      <source src="/uploads/${videoUrl}" type="video/mp4">
+      <source src="/api/files/${videoUrl}" type="video/mp4">
     </video>`;
   }
   
