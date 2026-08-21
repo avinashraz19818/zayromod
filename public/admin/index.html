@@ -778,8 +778,8 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
             <label>APK Version (konsa APK manage karna hai)</label>
             <select id="fbVariant" class="input" onchange="loadFirebaseManager()">
               <option value="real">Real APK</option>
-              <option value="fake" id="fbVariantFakeOpt">Fake APK</option>
             </select>
+            <div class="hint" style="margin-top:6px">Fake APK wale orders me yahan Fake 1, Fake 2, Fake 3... sab alag-alag dikhenge — har ek ka apna link alag se change kar sakte ho.</div>
             <div class="hint">Fake option sirf tab dikhta hai jab order me fake APK ho.</div>
           </div>
 
@@ -1825,7 +1825,7 @@ async function loadUserOrders(userId) {
       <td>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           ${o.apk_file ? `<a href="/api/orders/${o.id}/download" class="btn btn-sm btn-primary" target="_blank" title="Download APK"><svg><use href="#i-download"/></svg></a>` : ''}
-          ${o.fake_apk_file ? `<a href="/api/orders/${o.id}/download-fake" class="btn btn-sm btn-gold" target="_blank" title="Download Fake APK"><svg><use href="#i-download"/></svg> Fake</a>` : ''}
+          ${o.fake_apk_file ? `<a href="/api/orders/${o.id}/download-fake" class="btn btn-sm btn-gold" target="_blank" title="Download Fake 1 APK"><svg><use href="#i-download"/></svg> Fake 1</a>` : ''}
           <button class="btn btn-sm" style="background:rgba(255,193,7,.15);color:var(--gold);border:1px solid rgba(255,193,7,.4)" onclick="openFakeSites(${o.id})" title="Manage fake sites (multiple)"><svg><use href="#i-layers"/></svg> Fake Sites${o.fake_sites_count ? ' (' + o.fake_sites_count + ')' : ''}</button>
           <button class="btn btn-sm btn-ok" onclick="openFirebaseManager(${o.id})" title="Manage Firebase"><svg><use href="#i-settings"/></svg> Firebase</button>
           <button class="btn btn-sm btn-primary" onclick="rebuildOrder(${o.id})" title="One-click rebuild"><svg><use href="#i-settings"/></svg> Rebuild</button>
@@ -1888,7 +1888,7 @@ async function loadFakeSites() {
   const esc = adminEsc;
   box.innerHTML = sites.map(s => `
     <div style="display:flex;gap:10px;align-items:center;background:var(--bg-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;flex-wrap:wrap">
-      <span class="badge badge-blue">#${s.id}</span>
+      <span class="badge badge-blue">Fake ${s.fake_number ?? ''}</span>
       <div style="flex:1;min-width:220px">
         <div style="font-size:12.5px;color:#fff;word-break:break-all">${esc(s.register_url || '')}</div>
         <div style="font-size:11px;color:var(--dim)">Path: ${esc(s.firebase_path || '—')} · ${new Date(s.created_at).toLocaleString()}</div>
@@ -1935,8 +1935,6 @@ async function loadFirebaseManager() {
   const totalBadge = document.getElementById('fbUsersTotal');
   if (totalBadge) totalBadge.style.display = 'none';
   document.getElementById('fbVariantWrap').style.display = 'block';
-  const fakeOpt = document.getElementById('fbVariantFakeOpt');
-  if (fakeOpt) fakeOpt.style.display = 'none';
   usersBox.innerHTML = '<div style="padding:16px;color:var(--dim)"><span class="spinner"></span> Loading Firebase…</div>';
   // 20 sec timeout — kabhi atke nahi (pehle token-exchange slow ho jata tha,
   // ab server side GET bina token ke turant chalta hai)
@@ -1949,13 +1947,18 @@ async function loadFirebaseManager() {
     return toast(data.error, true);
   }
   try {
-    if (fakeOpt) fakeOpt.style.display = data.order.has_fake ? '' : 'none';
-    if (variant === 'fake' && !data.order.has_fake) {
-      document.getElementById('fbVariant').value = 'real';
-      return loadFirebaseManager();
+    // Variant options DYNAMIC banate hain — Fake 1, Fake 2, Fake 3...
+    // har fake APK ka apna link alag se manage hota hai.
+    const sel = document.getElementById('fbVariant');
+    let opts = '<option value="real">Real APK</option>';
+    if (data.order.has_fake) opts += '<option value="fake">Fake 1</option>';
+    for (const s of (data.order.fake_sites || [])) {
+      opts += `<option value="fs${s.id}">Fake ${s.fake_number}</option>`;
     }
+    sel.innerHTML = opts;
+    sel.value = data.variant || 'real';
     _firebaseManagerState = data;
-    document.getElementById('fbManagerTitle').textContent = `${data.order.app_name} (#${data.order.id})`;
+    document.getElementById('fbManagerTitle').textContent = `${data.order.app_name} (#${data.order.id})${data.fake_number ? ' — Fake ' + data.fake_number : ''}`;
     document.getElementById('fbPathBadge').textContent = `Path: ${data.firebase_path}/config`;
     document.getElementById('fbLiveBadge').textContent = data.order.live_link_enabled ? 'Firebase Live' : 'Legacy APK — upgrade required';
     document.getElementById('fbLiveBadge').className = `badge ${data.order.live_link_enabled ? 'badge-ok' : 'badge-pending'}`;
