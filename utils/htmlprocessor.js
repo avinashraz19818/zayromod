@@ -129,18 +129,59 @@ function injectParams(htmlContent, params) {
     `$1&#8377;${minDeposit}`
   );
 
-  // ── BRAND TITLE (popup card header) ──
-  // Matches class="brand-name", class="card-title-line1", wo-head-title, etc.
-  const brandSelectors = [
+  // ── BRAND TITLE (popup card header / warning popup / <title>) ──
+  // Kuch templates ke title ke andar nested elements hote hain (<span>,
+  // &nbsp; etc.) — isliye PURA inner content replace karte hain (lazy
+  // match closing </div> tak), sirf opening tag ke baad wala text nahi.
+  const brandAttrPatterns = [
+    /class=["'][^"']*brand-name[^"']*["']/,
+    /class=["'][^"']*card-title-line1[^"']*["']/,
+    /class=["'][^"']*wo-title[^"']*["']/,
+    /id=["']woTitle["']/
+  ];
+  for (const attr of brandAttrPatterns) {
+    html = html.replace(
+      new RegExp(`(<div[^>]+(?:${attr.source})[^>]*>)[\\s\\S]*?<\\/div>`, 'g'),
+      (m, g1) => g1 + brandTitle + '</div>'
+    );
+  }
+  // wo-head-title / card-brand headers me sirf MAIN line (cb-main) change
+  // karo — subtitle (cb-sub) design ke hisaab se waisa hi rehta hai.
+  html = html.replace(
+    /(<(?:span|div)[^>]*class=["'][^"']*cb-main[^"']*["'][^>]*>)([\s\S]*?)(<\/(?:span|div)>)/g,
+    (m, g1, g2, g3) => g1 + brandTitle + g3
+  );
+  // Plain-text wo-head-title (jisme cb-main NAHI hai) — full inner replace.
+  // cb-main wale pehle se handle ho chuke hain, unhe skip karte hain
+  // (negative lookahead) taaki duplicate text na bane.
+  html = html.replace(
+    /(<div[^>]+class=["'][^"']*wo-head-title[^"']*["'][^>]*>)(?![^<]*<[^>]*cb-main)([\s\S]*?)<\/div>/g,
+    (m, g1, g2) => g1 + brandTitle + '</div>'
+  );
+  // ══ RED-CORE/DHANI TEMPLATE FIX ══
+  // Ye templates runtime pe JS se brand set karte hain:
+  //   s.textContent = s.getAttribute('data-brand-text') || window.BRAND_NAME;
+  // Agar data-brand-text / BRAND_NAME purana naam rakhte hain to inject
+  // hua naya naam JS overwrite kar deta hai — isi se "popup card me name
+  // nahi badla, warning popup me badal gaya" hota tha. Dono ko badlo.
+  html = html.replace(
+    /(data-brand-text=["'])[^"']*(["'])/g,
+    (m, g1, g2) => g1 + brandTitle + g2
+  );
+  html = html.replace(
+    /(window\.BRAND_NAME\s*=\s*window\.BRAND_NAME\s*\|\|\s*["'])[^"']*(["'])/g,
+    (m, g1, g2) => g1 + brandTitle + g2
+  );
+  // Backup: simple-text wale divs (agar upar wala match na hua ho)
+  const brandSimple = [
     /(<div[^>]+class=["'][^"']*brand-name[^"']*["'][^>]*>)[^<]*/g,
     /(<div[^>]+class=["'][^"']*card-title-line1[^"']*["'][^>]*>)[^<]*/g,
-    /(<div[^>]+class=["'][^"']*wo-head-title[^"']*["'][^>]*>)[^<]*/g,
-    /(<div[^>]+class=["'][^"']*wo-title["'][^>]*>)[^<]*/g,
-    /(<title>)[^<]*/g
+    /(<div[^>]+class=["'][^"']*wo-title["'][^>]*>)[^<]*/g
   ];
-  brandSelectors.forEach(rx => {
-    html = html.replace(rx, `$1${brandTitle}`);
+  brandSimple.forEach(rx => {
+    html = html.replace(rx, (m, g1) => g1 + brandTitle);
   });
+  html = html.replace(/(<title>)[^<]*/g, (m, g1) => g1 + brandTitle);
 
   // ── APP ICON (my_icon.png → base64 data URI embedded) ──
   if (appIconBase64) {
