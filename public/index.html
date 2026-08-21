@@ -979,7 +979,7 @@ async function loadDesigns(){
     const fallbackImage=Array.isArray(d.preview_images)?d.preview_images[0]:'';
     const cover=d.preview_image||fallbackImage;
     const media=cover
-      ?`<img class="preview" src="/api/files/${esc(cover)}" alt="${esc(d.name)} cover" loading="lazy" onerror="mediaFallback(this)">`
+      ?`<img class="preview" src="${esc(mediaSrc(cover))}" alt="${esc(d.name)} cover" loading="lazy" onerror="mediaFallback(this)">`
       :`<div class="no-preview">${icon('ic-image','i lg')}No Preview</div>`;
     return `<article class="design-card" role="button" tabindex="0" onclick="openDesignPreview(${d.id})" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openDesignPreview(${d.id})}">
       ${disc>0?`<div class="disc-badge">${disc}% OFF</div>`:''}
@@ -1011,20 +1011,20 @@ function renderDesignPreview(d){
   if(d.preview_video){
     media.push(`<div class="dp-media-item">
       <span class="dp-media-label">Video</span>
-      <video src="/api/files/${esc(d.preview_video)}" ${cover?`poster="/api/files/${esc(cover)}"`:''} autoplay muted loop controls playsinline preload="metadata"></video>
+      <video src="${esc(mediaSrc(d.preview_video))}" ${cover?`poster="${esc(mediaSrc(cover))}"`:''} autoplay muted loop controls playsinline preload="metadata"></video>
     </div>`);
   }
   gallery.forEach((file,index)=>{
     media.push(`<div class="dp-media-item">
       <span class="dp-media-label">Screenshot ${index+1}</span>
-      <img src="/api/files/${esc(file)}" alt="${esc(d.name)} screenshot ${index+1}" loading="lazy" onclick="openLightbox(this.src,'image')">
+      <img src="${esc(mediaSrc(file))}" alt="${esc(d.name)} screenshot ${index+1}" loading="lazy" onclick="openLightbox(this.src,'image')">
     </div>`);
   });
 
   $('designPreviewContent').innerHTML=`
     <div class="dp-identity">
       <div class="dp-cover">${cover
-        ?`<img src="/api/files/${esc(cover)}" alt="${esc(d.name)} cover">`
+        ?`<img src="${esc(mediaSrc(cover))}" alt="${esc(d.name)} cover">`
         :`<div class="no-preview">${icon('ic-image','i lg')}No cover</div>`}</div>
       <div>
         <div class="dp-name">${esc(d.name)}</div>
@@ -1504,6 +1504,7 @@ async function loadWalletPage(){
   renderAmountChips();
 }
 $('buyCoins').addEventListener('input',syncAmountUI);
+function mediaSrc(u){if(!u)return '';u=String(u);return (u.startsWith('/api/')||u.startsWith('http'))?u:('/api/files/'+u);}
 function mediaFallback(el){
   const m=el.closest('.media');if(!m)return;
   m.innerHTML='<div class="no-preview"><svg class="i lg"><use href="#ic-image"/></svg>No Preview</div>';
