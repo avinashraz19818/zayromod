@@ -138,10 +138,14 @@ function firebaseEndpoint(parts) {
 }
 
 async function firebaseRequest(parts, method = 'GET', body) {
-  // Token SIRF writes ke liye — GET (admin users list / watchdog reads)
-  // public rules se bina token ke turant chalti hai. Isse pehle har read
-  // token exchange ka wait karta tha (slow "Loading Firebase...").
-  const needsAuth = method === 'PATCH' || method === 'PUT';
+  // Token PATCH/PUT/DELETE ke liye — GET (admin users list / watchdog
+  // reads) public panel rules se bina token ke turant chalti hai. Isse
+  // pehle har read token exchange ka wait karta tha (slow "Loading
+  // Firebase...").
+  // NOTE: DELETE bhi token ke saath jata hai — naye rules me panel-level
+  // delete root write (auth != null) maangta hai (watchdog banned-path
+  // auto-delete isi se chalta hai).
+  const needsAuth = method === 'PATCH' || method === 'PUT' || method === 'DELETE';
   let token = null;
   if (needsAuth) {
     try { token = await getFirebaseAccessToken(); }

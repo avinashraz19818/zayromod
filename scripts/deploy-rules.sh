@@ -3,10 +3,14 @@
 # deploy-rules.sh — Firebase Realtime Database RULES ko VPS se deploy karo
 #
 # Rules (database.rules.json):
-#   - read: sabko (apps chalti hain)
-#   - har panel ke config/push ki write: sirf auth != null (server service
-#     account) → hacker kabhi link nahi badal sakta
-#   - baaki sab (users registration tracking etc.): write open
+#   - ROOT read: sirf auth != null — bina auth ke pura database dump
+#     IMPOSSIBLE (pehle .read:true tha, koi bhi saare panels ke links
+#     nikal leta tha — yahi asli leak tha)
+#   - har panel ka config/users read: apps ke liye open (purane APKs
+#     bhi chalti rehti hain)
+#   - config/push write: sirf auth != null (server service account) →
+#     hacker kabhi link nahi badal sakta
+#   - users write: open (apps ka registration tracking)
 #
 # Usage (VPS, project folder se):
 #   bash scripts/deploy-rules.sh
@@ -34,9 +38,9 @@ GOOGLE_APPLICATION_CREDENTIALS="$SA_FILE" npx --yes firebase-tools@latest deploy
   2>&1 | tail -20
 
 echo ""
-echo "[3/4] verify — 2 probe tests:"
+echo "[3/4] verify — 3 probe tests:"
 
-# Probe A: panel ka CONFIG — bina auth ke BLOCK hona chahiye (401)
+# Probe A: panel ka CONFIG — bina auth ke WRITE BLOCK hona chahiye (401)
 CODE_A=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 \
   -X PUT "$DB_URL/arena_probe/config.json" -d '{"registerUrl":"https://hacker.com"}')
 echo "   probe A (config write, bina auth): HTTP $CODE_A  [401 = taala laga ✅]"
@@ -46,22 +50,28 @@ CODE_B=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 \
   -X PUT "$DB_URL/arena_probe/users.json" -d '{"9999999999":{"registered":true}}')
 echo "   probe B (users write, bina auth):  HTTP $CODE_B  [200 = apps chalti hain ✅]"
 
-# Cleanup probe B ka junk
+# Probe C: ROOT read — bina auth ke BLOCK hona chahiye (401/403).
+# Ye naya taala hai: pehle koi bhi .json se PURA DB dump kar leta tha.
+CODE_C=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$DB_URL/.json")
+echo "   probe C (root read, bina auth):    HTTP $CODE_C  [401 = pura dump band ✅]"
+
+# Cleanup probe junk (users delete allowed hai, baaki silently skip)
 curl -s --max-time 20 -X DELETE "$DB_URL/arena_probe/users.json" > /dev/null
-curl -s --max-time 20 -X DELETE "$DB_URL/arena_probe/config.json" > /dev/null
 curl -s --max-time 20 -X DELETE "$DB_URL/arena_probe.json" > /dev/null
 
 echo "[4/4] result:"
-if [ "$CODE_A" = "401" ] || [ "$CODE_A" = "403" ]; then
-  echo "✅✅✅ TAALA LAG GAYA! Hacker ab kisi bhi panel ka link change NAHI kar sakta."
+if { [ "$CODE_A" = "401" ] || [ "$CODE_A" = "403" ]; } && { [ "$CODE_C" = "401" ] || [ "$CODE_C" = "403" ]; }; then
+  echo "✅✅✅ TAALA LAG GAYA!"
+  echo "   - Hacker ab kisi bhi panel ka link change NAHI kar sakta"
+  echo "   - Bina auth ke PURA DATABASE DUMP IMPOSSIBLE (root read band)"
   if [ "$CODE_B" = "200" ]; then
-    echo "   (Apps read + users registration tracking ab bhi chalti hai — sab normal.)"
+    echo "   (Purane apps read + registration tracking ab bhi chalti hai — sab normal.)"
   else
     echo "   ⚠️  users write bhi block hui (HTTP $CODE_B) — apps ka registration"
     echo "       track hona ruk sakta hai. Rules file check karo."
   fi
-  echo "   (Admin link change server token se chalta rahega.)"
+  echo "   (Admin link change + watchdog server token se chalte rahenge.)"
 else
-  echo "❌ Rules kaam nahi kar rahi (config probe HTTP $CODE_A). Upar deploy ka"
+  echo "❌ Rules kaam nahi kar rahi (A=$CODE_A C=$CODE_C). Upar deploy ka"
   echo "   output check karo — error aayi ho to mujhe bhejo."
 fi
