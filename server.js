@@ -76,10 +76,39 @@ app.use(session({
 }));
 
 // ── SECURE FILE SERVING ──
-// Uploads ab /api/files/:name se milti hain — sirf LOGGED-IN user (ya
-// admin) ko. Bina login ke direct URL se QR / design photos / APK kuch
-// nahi khulta (401). Browser me <img>/<video> same-origin cookie bhejta
-// hai isliye logged-in page pe sab normal render hota hai.
+// Files do tarike se milti hain:
+//  1) Logged-in session (user/admin) — browser <img>/<video> same-origin
+//     cookie bhejta hai isliye logged-in page pe sab normal render hota hai.
+//  2) SIGNED TOKEN URL (?s=&e=) — public design previews ke liye. Token
+//     1 ghanta valid rehta hai, phir link mar jata hai. Bina token/session
+//     ke direct URL se kuch nahi khulta (401) — long-press se copy kiya
+//     link bhi maximum 1 ghante me bekar ho jata hai.
+const FILE_TOKEN_SECRET = process.env.FILE_TOKEN_SECRET || 'zayro-file-token-2026';
+function fileTokenUrl(name, ttlMs = 3600 * 1000) {
+  const exp = Date.now() + ttlMs;
+  const sig = crypto.createHmac('sha256', FILE_TOKEN_SECRET).update(name + '|' + exp).digest('hex').slice(0, 32);
+  return `/api/files/${encodeURIComponent(name)}?s=${sig}&e=${exp}`;
+}
+function verifyFileToken(name, sig, exp) {
+  if (!sig || !exp) return false;
+  const e = Number(exp);
+  if (!Number.isFinite(e) || Date.now() > e) return false;
+  const expected = crypto.createHmac('sha256', FILE_TOKEN_SECRET).update(name + '|' + e).digest('hex').slice(0, 32);
+  if (String(sig).length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(String(sig)), Buffer.from(expected));
+}
+// Design media (public preview grid) ke liye tokenized URLs
+function tokenizeDesignMedia(d) {
+  if (!d) return d;
+  const out = { ...d };
+  if (out.preview_image) out.preview_image = fileTokenUrl(out.preview_image);
+  if (out.preview_video) out.preview_video = fileTokenUrl(out.preview_video);
+  if (Array.isArray(out.preview_images)) {
+    out.preview_images = out.preview_images.map(n => (n ? fileTokenUrl(n) : n));
+  }
+  return out;
+}
+
 const FILE_MIME = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
@@ -88,19 +117,20 @@ const FILE_MIME = {
   '.otf': 'font/otf', '.ttf': 'font/ttf', '.woff': 'font/woff', '.woff2': 'font/woff2'
 };
 app.get('/api/files/:name', (req, res) => {
-  const isAuth = req.session && (req.session.userId !== undefined || req.session.isAdmin);
-  if (!isAuth) return res.status(401).send('Login required');
   const safe = path.basename(String(req.params.name || ''));
   if (!safe || safe === '.' || safe === '..' || /[\u0000-\u001f]/.test(safe)) {
     return res.status(400).send('Bad filename');
   }
+  const hasSession = req.session && (req.session.userId !== undefined || req.session.isAdmin);
+  const tokenOk = verifyFileToken(safe, String(req.query.s || ''), String(req.query.e || ''));
+  if (!hasSession && !tokenOk) return res.status(401).send('Login required');
   const full = path.join(__dirname, 'uploads', safe);
   if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
     return res.status(404).send('Not found');
   }
   const ext = path.extname(safe).toLowerCase();
   res.set('Content-Type', FILE_MIME[ext] || 'application/octet-stream');
-  res.set('Cache-Control', 'private, max-age=3600');
+  res.set('Cache-Control', tokenOk && !hasSession ? 'public, max-age=300' : 'private, max-age=3600');
   // sendFile Range requests bhi sambhalta hai (video seek)
   res.sendFile(full, err => { if (err && !res.headersSent) res.status(404).end(); });
 });
@@ -407,14 +437,14 @@ app.get('/api/designs', (req, res) => {
     SELECT id,name,description,price_coins,original_price_coins,fake_price_coins,
            category,preview_image,preview_video
     FROM designs WHERE active=1 ORDER BY id DESC
-  `).all().map(withPreviewImages);
+  `).all().map(d => tokenizeDesignMedia(withPreviewImages(d)));
   res.json(designs);
 });
 
 app.get('/api/designs/:id', (req, res) => {
   const d = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(req.params.id);
   if (!d) return res.status(404).json({ error: 'Not found' });
-  res.json(withPreviewImages(d));
+  res.json(tokenizeDesignMedia(withPreviewImages(d)));
 });
 
 // App name font styles — live preview ke liye (user + admin form dono use
