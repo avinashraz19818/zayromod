@@ -116,21 +116,38 @@ const FILE_MIME = {
   '.pdf': 'application/pdf', '.ico': 'image/x-icon',
   '.otf': 'font/otf', '.ttf': 'font/ttf', '.woff': 'font/woff', '.woff2': 'font/woff2'
 };
+// Kya ye filename kisi design ka PUBLIC preview media hai? (design grid +
+// gallery — ye product catalog hai, sabko dikhna chahiye, login ke bina
+// bhi. Pehle jaisa.)
+function isDesignMediaFile(name) {
+  try {
+    if (db.prepare('SELECT 1 FROM designs WHERE preview_image=? OR preview_video=? LIMIT 1').get(name, name)) return true;
+    if (db.prepare('SELECT 1 FROM design_preview_images WHERE file_name=? LIMIT 1').get(name)) return true;
+  } catch (_) {}
+  return false;
+}
+
 app.get('/api/files/:name', (req, res) => {
   const safe = path.basename(String(req.params.name || ''));
   if (!safe || safe === '.' || safe === '..' || /[\u0000-\u001f]/.test(safe)) {
     return res.status(400).send('Bad filename');
   }
-  const hasSession = req.session && (req.session.userId !== undefined || req.session.isAdmin);
-  const tokenOk = verifyFileToken(safe, String(req.query.s || ''), String(req.query.e || ''));
-  if (!hasSession && !tokenOk) return res.status(401).send('Login required');
   const full = path.join(__dirname, 'uploads', safe);
   if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
     return res.status(404).send('Not found');
   }
+  // ── ACCESS RULES ──
+  // 1) DESIGN MEDIA (preview photos/videos/gallery) → PUBLIC — previews
+  //    har jagah dikhti hain (logged in ya nahi, Telegram mini-app bhi).
+  // 2) BAAKI sab (QR, APK, payment screenshots, icons) → sirf logged-in
+  //    session ya signed token — long-press se copy kiya link 401.
+  const isPublicMedia = isDesignMediaFile(safe);
+  const hasSession = req.session && (req.session.userId !== undefined || req.session.isAdmin);
+  const tokenOk = verifyFileToken(safe, String(req.query.s || ''), String(req.query.e || ''));
+  if (!isPublicMedia && !hasSession && !tokenOk) return res.status(401).send('Login required');
   const ext = path.extname(safe).toLowerCase();
   res.set('Content-Type', FILE_MIME[ext] || 'application/octet-stream');
-  res.set('Cache-Control', tokenOk && !hasSession ? 'public, max-age=300' : 'private, max-age=3600');
+  res.set('Cache-Control', isPublicMedia ? 'public, max-age=3600' : (tokenOk && !hasSession ? 'public, max-age=300' : 'private, max-age=3600'));
   // sendFile Range requests bhi sambhalta hai (video seek)
   res.sendFile(full, err => { if (err && !res.headersSent) res.status(404).end(); });
 });
