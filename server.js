@@ -459,8 +459,31 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
   const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(cleanRegisterUrl, isDhaniDesign);
   const domain = extractDomain(cleanRegisterUrl);
-  const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
+
+  _pkgCounter++;
+  const packageName = makePackageName(app_name, _pkgCounter);
+  const iconFile = req.file ? path.basename(req.file.path) : null;
+
+  // Pehle order INSERT karo (temp path ke saath) — orderId ke baad UNIQUE
+  // firebase path set hota hai. Same domain ke do orders ka path same
+  // nahi ho sakta — warna dono apps ka content ek hi jagah se serve hota
+  // hai (galat naam/content dikhne lagta hai).
+  const tempPath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
+  const orderResult = db.prepare(`
+    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,app_name_style,status,coins_spent,design_variant,coupon_code,discount_coins)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'building',?,?,?,?)
+  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, tempPath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, null, appNameStyle, totalCoins, 'real', couponResult.code, couponResult.discount);
+  const orderId = orderResult.lastInsertRowid;
+
+  // UNIQUE paths (order id ke saath) — collisions impossible
+  const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}${orderId}`;
   let fakeFirebasePath = null;
+  if (fakeAddonEnabled && cleanFakeRegisterUrl) {
+    const fakeDomain = extractDomain(cleanFakeRegisterUrl);
+    fakeFirebasePath = `zayrof${fakeDomain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}${orderId}`;
+  }
+  db.prepare('UPDATE orders SET firebase_path=?, fake_firebase_path=? WHERE id=?')
+    .run(firebasePath, fakeFirebasePath, orderId);
 
   try {
     await updateFirebaseLinks(firebasePath, {
@@ -469,9 +492,7 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
       wingoUrl
     });
     if (fakeAddonEnabled && cleanFakeRegisterUrl) {
-      const fakeDomain = extractDomain(cleanFakeRegisterUrl);
       const fakeUrls = buildUrls(cleanFakeRegisterUrl, isDhaniDesign);
-      fakeFirebasePath = `zayrof${fakeDomain.replace(/[^a-z0-9]/gi,'').substring(0,8)}`;
       await updateFirebaseLinks(fakeFirebasePath, {
         registerUrl: cleanFakeRegisterUrl,
         depositUrl: fakeUrls.deposit,
@@ -479,24 +500,16 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
       });
     }
   } catch (error) {
+    // Firebase fail — order row hatao, coins NAHI kate
+    db.prepare('DELETE FROM orders WHERE id=?').run(orderId);
     return res.json({ error: `${error.message}. APK was not started and no coins were deducted.` });
   }
 
-  _pkgCounter++;
-  const packageName = makePackageName(app_name, _pkgCounter);
-  const iconFile = req.file ? path.basename(req.file.path) : null;
-
   db.prepare('UPDATE users SET coins = coins - ? WHERE id=?').run(totalCoins, user.id);
-
-  const orderResult = db.prepare(`
-    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,app_name_style,status,coins_spent,design_variant,coupon_code,discount_coins)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'building',?,?,?,?)
-  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath, appNameStyle, totalCoins, 'real', couponResult.code, couponResult.discount);
   if (couponResult.code && couponResult.discount > 0) {
     db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=?').run(couponResult.coupon.id);
   }
 
-  const orderId = orderResult.lastInsertRowid;
   const buildId = `build_${orderId}_${Date.now()}`;
 
   res.json({ success: true, orderId, buildId, message: 'Build started' });
@@ -1577,7 +1590,42 @@ function rebuildOrderInBackground(orderId, rebuildFake = true) {
   const fakeProtected = order.fake_apk_file && !(order.fake_register_url && String(order.fake_register_url) !== '');
   deleteAllOrderBuildFolders(order, logPush, fakeProtected ? [order.fake_apk_file] : []);
 
-  buildApk(order, design, buildId, logPush).then(async result => {
+  // ── PATH COLLISION FIX ──
+  // Purane orders (domain se path bane the) me same domain ke do orders
+  // ka firebase_path SAME ho sakta hai — phir dono apps ka content ek hi
+  // jagah se serve hota hai (galat naam/content). Rebuild pe unique path
+  // (orderId ke saath) + Firebase config likh dete hain.
+  (async () => {
+    const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+    if (order.firebase_path) {
+      const clash = db.prepare('SELECT id FROM orders WHERE firebase_path=? AND id<>? LIMIT 1')
+        .get(order.firebase_path, order.id);
+      if (clash) {
+        const np = `zayro${String(order.domain || '').replace(/[^a-z0-9]/gi, '').substring(0, 8)}${order.id}`;
+        logPush(`Firebase path clash mila (order ${clash.id} ke saath) — unique path: ${np}`);
+        order.firebase_path = np;
+        db.prepare('UPDATE orders SET firebase_path=? WHERE id=?').run(np, order.id);
+        try {
+          await updateFirebaseLinks(np, { registerUrl: order.register_url, depositUrl: order.deposit_url, wingoUrl: order.wingo_url });
+        } catch (e) { logPush('Path fix Firebase write fail: ' + e.message); }
+      }
+    }
+    if (order.fake_firebase_path && order.fake_register_url) {
+      const clash = db.prepare('SELECT id FROM orders WHERE fake_firebase_path=? AND id<>? LIMIT 1')
+        .get(order.fake_firebase_path, order.id);
+      if (clash) {
+        const np = `zayrof${String(extractDomain(order.fake_register_url)).replace(/[^a-z0-9]/gi, '').substring(0, 8)}${order.id}`;
+        logPush(`Fake path clash mila (order ${clash.id} ke saath) — unique path: ${np}`);
+        order.fake_firebase_path = np;
+        db.prepare('UPDATE orders SET fake_firebase_path=? WHERE id=?').run(np, order.id);
+        const fu = buildUrls(order.fake_register_url, isDhaniOrder({ ...order, design_category: design.category, design_java_type: design.java_type }));
+        try {
+          await updateFirebaseLinks(np, { registerUrl: order.fake_register_url, depositUrl: fu.deposit, wingoUrl: fu.wingo });
+        } catch (e) { logPush('Fake path fix Firebase write fail: ' + e.message); }
+      }
+    }
+    return buildApk(order, design, buildId, logPush);
+  })().then(async result => {
     if (!result.success) {
       db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('failed', logs.concat('Rebuild failed: ' + (result.error || 'Build failed')).join('\n'), order.id);
       return;
@@ -1758,15 +1806,36 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
   const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
   const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(cleanRegisterUrl, isDhaniDesign);
   const domain = extractDomain(cleanRegisterUrl);
-  const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
+
+  _pkgCounter++;
+  const packageName = makePackageName(app_name, _pkgCounter);
+  const iconFile = req.file ? path.basename(req.file.path) : null;
+
+  // FREE order — coins_spent = 0, koi deduction nahi. Temp path ke saath
+  // INSERT, phir orderId wala UNIQUE path set hota hai.
+  const tempPath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
+  const orderResult = db.prepare(`
+    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,app_name_style,status,coins_spent,design_variant,coupon_code,discount_coins)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'building',0,'real','',0)
+  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, tempPath, parseInt(min_deposit) || 300, brand_title?.trim() || app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, null, appNameStyle);
+
+  const orderId = orderResult.lastInsertRowid;
+
+  // UNIQUE paths (order id ke saath) — same domain ke do orders clash
+  // nahi karenge, har app ko apna content milega
+  const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}${orderId}`;
   let fakeFirebasePath = null;
+  if (fakeAddonEnabled && cleanFakeRegisterUrl) {
+    const fakeDomain = extractDomain(cleanFakeRegisterUrl);
+    fakeFirebasePath = `zayrof${fakeDomain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}${orderId}`;
+  }
+  db.prepare('UPDATE orders SET firebase_path=?, fake_firebase_path=? WHERE id=?')
+    .run(firebasePath, fakeFirebasePath, orderId);
 
   try {
     await updateFirebaseLinks(firebasePath, { registerUrl: cleanRegisterUrl, depositUrl, wingoUrl });
     if (fakeAddonEnabled && cleanFakeRegisterUrl) {
-      const fakeDomain = extractDomain(cleanFakeRegisterUrl);
       const fakeUrls = buildUrls(cleanFakeRegisterUrl, isDhaniDesign);
-      fakeFirebasePath = `zayrof${fakeDomain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}`;
       await updateFirebaseLinks(fakeFirebasePath, {
         registerUrl: cleanFakeRegisterUrl,
         depositUrl: fakeUrls.deposit,
@@ -1774,20 +1843,10 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
       });
     }
   } catch (error) {
+    db.prepare('DELETE FROM orders WHERE id=?').run(orderId);
     return res.json({ error: `${error.message}. Order not created.` });
   }
 
-  _pkgCounter++;
-  const packageName = makePackageName(app_name, _pkgCounter);
-  const iconFile = req.file ? path.basename(req.file.path) : null;
-
-  // FREE order — coins_spent = 0, koi deduction nahi
-  const orderResult = db.prepare(`
-    INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,app_name_style,status,coins_spent,design_variant,coupon_code,discount_coins)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'building',0,'real','',0)
-  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, firebasePath, parseInt(min_deposit) || 300, brand_title?.trim() || app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, fakeFirebasePath, appNameStyle);
-
-  const orderId = orderResult.lastInsertRowid;
   const buildId = `build_${orderId}_${Date.now()}`;
 
   res.json({ success: true, orderId, buildId, message: 'FREE order created — build started' });
