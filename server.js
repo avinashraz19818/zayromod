@@ -57,8 +57,16 @@ try { createDatabaseBackup('startup'); } catch (error) { console.error('Startup 
 // ── Middleware ──
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/builds', express.static(path.join(__dirname, 'builds')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// ── SECURITY: /builds aur /uploads ka PUBLIC static access HATA diya ──
+// Pehle koi bhi /uploads/<file> ya /builds/<folder>/<apk> direct URL se
+// khol sakta tha (APKs tak public thin!). Ab files sirf authenticated
+// route /api/files/:name se milti hain (neeche) — bina login ke 401.
+// APK download pehle se hi requireAuth route se hota hai (res.download).
+app.use((req, res, next) => {
+  res.set('Referrer-Policy', 'no-referrer');
+  res.set('X-Content-Type-Options', 'nosniff');
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'zayro_secret',
@@ -66,6 +74,36 @@ app.use(session({
   saveUninitialized: false,
   cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
+
+// ── SECURE FILE SERVING ──
+// Uploads ab /api/files/:name se milti hain — sirf LOGGED-IN user (ya
+// admin) ko. Bina login ke direct URL se QR / design photos / APK kuch
+// nahi khulta (401). Browser me <img>/<video> same-origin cookie bhejta
+// hai isliye logged-in page pe sab normal render hota hai.
+const FILE_MIME = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg',
+  '.pdf': 'application/pdf', '.ico': 'image/x-icon',
+  '.otf': 'font/otf', '.ttf': 'font/ttf', '.woff': 'font/woff', '.woff2': 'font/woff2'
+};
+app.get('/api/files/:name', (req, res) => {
+  const isAuth = req.session && (req.session.userId !== undefined || req.session.isAdmin);
+  if (!isAuth) return res.status(401).send('Login required');
+  const safe = path.basename(String(req.params.name || ''));
+  if (!safe || safe === '.' || safe === '..' || /[\u0000-\u001f]/.test(safe)) {
+    return res.status(400).send('Bad filename');
+  }
+  const full = path.join(__dirname, 'uploads', safe);
+  if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
+    return res.status(404).send('Not found');
+  }
+  const ext = path.extname(safe).toLowerCase();
+  res.set('Content-Type', FILE_MIME[ext] || 'application/octet-stream');
+  res.set('Cache-Control', 'private, max-age=3600');
+  // sendFile Range requests bhi sambhalta hai (video seek)
+  res.sendFile(full, err => { if (err && !res.headersSent) res.status(404).end(); });
+});
 
 // ── Multer configs ──
 const iconUpload    = multer({ dest: path.join(__dirname, 'uploads'), limits: { fileSize: 5   * 1024 * 1024 } });

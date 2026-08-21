@@ -2,6 +2,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+/* ── ZAYRO SHIELD: inspect/right-click/copy block ── */
+(function(){
+  if(window.__ZAYRO_SHIELD__) return; window.__ZAYRO_SHIELD__ = true;
+  function blocked(){
+    if(!document.body) return;
+    var ov = document.getElementById('__zayro_shield_ov__');
+    if(!ov){
+      ov = document.createElement('div');
+      ov.id = '__zayro_shield_ov__';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#05070f;color:#ff4d6d;display:none;align-items:center;justify-content:center;font:600 15px sans-serif;text-align:center;padding:24px;line-height:1.6';
+      ov.textContent = '⚠️ SECURITY LOCKED\nInspect / Developer Tools band hain. Console band karke page refresh karein.';
+      document.body.appendChild(ov);
+    }
+    ov.style.display = 'flex';
+  }
+  function unblock(){ var ov = document.getElementById('__zayro_shield_ov__'); if(ov) ov.style.display = 'none'; }
+  /* 1) right-click / long-press menu band */
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); return false; }, true);
+  /* 2) image/video drag-copy band */
+  document.addEventListener('dragstart', function(e){ if(e.target && (e.target.tagName==='IMG'||e.target.tagName==='VIDEO')){ e.preventDefault(); return false; } }, true);
+  /* 3) shortcut keys band: F12, Ctrl+U/S/P, Ctrl/Shift+I/J/C */
+  document.addEventListener('keydown', function(e){
+    var k = (e.key||'').toLowerCase();
+    var c = e.ctrlKey || e.metaKey;
+    if(k === 'f12'){ e.preventDefault(); e.stopPropagation(); return false; }
+    if(c && (k==='u'||k==='s'||k==='p')){ e.preventDefault(); e.stopPropagation(); return false; }
+    if((c||e.shiftKey) && (k==='i'||k==='j'||k==='c')){ e.preventDefault(); e.stopPropagation(); return false; }
+  }, true);
+  /* 4) text select band (inputs/table cells chhod ke — admin ko copy chahiye hota hai) */
+  var st = document.createElement('style');
+  st.textContent = '*{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}input,textarea,code,td,pre,input *,textarea *{-webkit-user-select:text!important;user-select:text!important;-webkit-touch-callout:default!important}img,video{-webkit-user-drag:none!important}';
+  document.head.appendChild(st);
+  /* 5) devtools detection — docked size check */
+  setInterval(function(){
+    try {
+      if(window.outerWidth - window.innerWidth > 180 || window.outerHeight - window.innerHeight > 180) blocked();
+      else unblock();
+    } catch(_) {}
+  }, 800);
+  /* 6) debugger pulse — devtools khule to pause hota hai, turant pakda jata hai */
+  setInterval(function(){ var t = Date.now(); try { debugger; } catch(_) {} if(Date.now() - t > 150) blocked(); }, 1600);
+})();
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5">
 <meta name="theme-color" content="#05070f">
@@ -934,7 +979,7 @@ async function loadDesigns(){
     const fallbackImage=Array.isArray(d.preview_images)?d.preview_images[0]:'';
     const cover=d.preview_image||fallbackImage;
     const media=cover
-      ?`<img class="preview" src="/uploads/${esc(cover)}" alt="${esc(d.name)} cover" loading="lazy" onerror="mediaFallback(this)">`
+      ?`<img class="preview" src="/api/files/${esc(cover)}" alt="${esc(d.name)} cover" loading="lazy" onerror="mediaFallback(this)">`
       :`<div class="no-preview">${icon('ic-image','i lg')}No Preview</div>`;
     return `<article class="design-card" role="button" tabindex="0" onclick="openDesignPreview(${d.id})" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openDesignPreview(${d.id})}">
       ${disc>0?`<div class="disc-badge">${disc}% OFF</div>`:''}
@@ -966,20 +1011,20 @@ function renderDesignPreview(d){
   if(d.preview_video){
     media.push(`<div class="dp-media-item">
       <span class="dp-media-label">Video</span>
-      <video src="/uploads/${esc(d.preview_video)}" ${cover?`poster="/uploads/${esc(cover)}"`:''} autoplay muted loop controls playsinline preload="metadata"></video>
+      <video src="/api/files/${esc(d.preview_video)}" ${cover?`poster="/api/files/${esc(cover)}"`:''} autoplay muted loop controls playsinline preload="metadata"></video>
     </div>`);
   }
   gallery.forEach((file,index)=>{
     media.push(`<div class="dp-media-item">
       <span class="dp-media-label">Screenshot ${index+1}</span>
-      <img src="/uploads/${esc(file)}" alt="${esc(d.name)} screenshot ${index+1}" loading="lazy" onclick="openLightbox(this.src,'image')">
+      <img src="/api/files/${esc(file)}" alt="${esc(d.name)} screenshot ${index+1}" loading="lazy" onclick="openLightbox(this.src,'image')">
     </div>`);
   });
 
   $('designPreviewContent').innerHTML=`
     <div class="dp-identity">
       <div class="dp-cover">${cover
-        ?`<img src="/uploads/${esc(cover)}" alt="${esc(d.name)} cover">`
+        ?`<img src="/api/files/${esc(cover)}" alt="${esc(d.name)} cover">`
         :`<div class="no-preview">${icon('ic-image','i lg')}No cover</div>`}</div>
       <div>
         <div class="dp-name">${esc(d.name)}</div>
@@ -1455,7 +1500,7 @@ async function loadWalletPage(){
   coinRate=parseFloat(s.coin_rate||1)||1;
   $('balanceInr').textContent=`≈ ₹${(coins*coinRate).toFixed(0)} worth of build credits`;
   $('upiId').textContent=s.upi_id||'Contact admin';
-  if(s.upi_qr_image){$('qrImage').src='/uploads/'+s.upi_qr_image;$('qrFrame').style.display='block';}
+  if(s.upi_qr_image){$('qrImage').src='/api/files/'+s.upi_qr_image;$('qrFrame').style.display='block';}
   renderAmountChips();
 }
 $('buyCoins').addEventListener('input',syncAmountUI);
