@@ -20,7 +20,7 @@
   }
   function unblock(){ var ov = document.getElementById('__zayro_shield_ov__'); if(ov) ov.style.display = 'none'; }
   /* 1) right-click / long-press menu band */
-  document.addEventListener('contextmenu', function(e){ e.preventDefault(); return false; }, true);
+  document.addEventListener('contextmenu', function(e){var t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;e.preventDefault();return false;}, true);
   /* 2) image/video drag-copy band */
   document.addEventListener('dragstart', function(e){ if(e.target && (e.target.tagName==='IMG'||e.target.tagName==='VIDEO')){ e.preventDefault(); return false; } }, true);
   /* 3) shortcut keys band: F12, Ctrl+U/S/P, Ctrl/Shift+I/J/C */
@@ -520,7 +520,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
 .font-picker .fp-btn{padding:8px 12px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:#fff;font-size:13px;line-height:1.3;cursor:pointer;transition:.15s;min-width:56px;text-align:center}
 .font-picker .fp-btn:hover{border-color:var(--cyan)}
 .font-picker .fp-btn.sel{border-color:var(--cyan);background:rgba(56,189,248,.12);box-shadow:0 0 0 1px var(--cyan)}
-</style>
+.paste-btn{flex:none;background:transparent;border:1.5px solid rgba(126,224,255,.35);color:#7ee0ff;border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer;line-height:1.2}.paste-btn:active{background:rgba(126,224,255,.15)}</style>
 </head>
 <body>
 
@@ -675,7 +675,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
           <div class="card-hd"><span class="accent"></span><h3>1 · App Identity</h3></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div class="form-group" style="margin:0"><label>App Name *</label>
-              <input type="text" id="coAppName" class="input" placeholder="e.g. VIP Panel">
+              <div style="display:flex;gap:6px;align-items:center"><input type="text" id="coAppName" class="input" placeholder="e.g. VIP Panel"><button type="button" class="paste-btn" onclick="pasteInto(&quot;coAppName&quot;)" title="Paste">📋</button></div>
               <div class="hint">Package: com.zayro.&lt;appname&gt;</div></div>
             <div class="form-group" style="margin:0"><label>App Icon</label>
               <input type="file" id="coIcon" accept="image/*" class="input">
@@ -689,7 +689,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
         <div class="card" style="margin-bottom:14px">
           <div class="card-hd"><span class="accent"></span><h3>2 · Site &amp; Deposit</h3></div>
           <div class="form-group" style="margin:0"><label>Register URL *</label>
-            <input type="url" id="coRegisterUrl" class="input" placeholder="https://example.com/#/register?invitationCode=...">
+            <div style="display:flex;gap:6px;align-items:center"><input type="url" id="coRegisterUrl" class="input" placeholder="https://example.com/#/register?invitationCode=..."><button type="button" class="paste-btn" onclick="pasteInto(&quot;coRegisterUrl&quot;)" title="Paste">📋</button></div>
             <div class="hint">Deposit &amp; Wingo URLs auto-built from this domain.</div></div>
           <div class="form-group" style="margin:10px 0 0"><label>Minimum Deposit Amount (₹)</label>
             <input type="number" id="coMinDeposit" class="input" value="300" min="1"></div>
@@ -704,7 +704,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
           <div class="hint">Same design, different URL — 2 APKs milenge (real + fake).</div>
           <div id="coFakeUrlRow" style="display:none;margin-top:10px">
             <div class="form-group" style="margin:0"><label>Fake Site Register URL</label>
-              <input type="url" id="coFakeUrl" class="input" placeholder="https://fakesite.com/#/register?..."></div>
+              <div style="display:flex;gap:6px;align-items:center"><input type="url" id="coFakeUrl" class="input" placeholder="https://fakesite.com/#/register?..."><button type="button" class="paste-btn" onclick="pasteInto(&quot;coFakeUrl&quot;)" title="Paste">📋</button></div></div>
           </div>
           <div style="margin-top:12px;border-top:1px dashed var(--border);padding-top:12px">
             <label style="font-weight:600;color:var(--cyan);font-size:13px">Extra Fake Sites (multiple — jitne chahe utne APK, har ek apne link ke saath)</label>
@@ -797,7 +797,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
           <div class="form-group" style="margin-bottom:14px">
             <label>New Fake Site Register URL (add + auto build APK)</label>
             <div style="display:flex;gap:8px">
-              <input type="url" id="fsNewUrl" class="input" placeholder="https://fakesite.com/#/register?..." style="flex:1">
+              <input type="url" id="fsNewUrl" class="input" placeholder="https://fakesite.com/#/register?..." style="flex:1"><button type="button" class="paste-btn" onclick="pasteInto(&quot;fsNewUrl&quot;)" title="Paste">📋</button>
               <button class="btn btn-ok" id="fsAddBtn" onclick="addFakeSite()"><svg><use href="#i-plus"/></svg> Add &amp; Build</button>
             </div>
             <div class="hint" style="margin-top:6px">Ek saath multiple: comma se alag karke daalo (jaise url1, url2). Har fake site ka ALAG APK banega apne link ke saath.</div>
@@ -1672,6 +1672,35 @@ async function tgTransferSubmit() {
   loadUsers();
 }
 
+
+/* ── PASTE (clipboard) ──
+   SHIELD inputs pe long-press paste allow karta hai; ye button ek aur
+   asaan rasta hai — copied link/naam ek tap me field me aa jata hai. */
+function pasteInto(id){var el=document.getElementById(id);if(el)pasteIntoEl(el);}
+function pasteIntoEl(el){
+  if(!el)return;
+  function set(t){
+    if(!t)return toast('Clipboard khali hai',true);
+    el.value=t;el.focus();
+    try{el.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}
+    toast('\u2713 Pasted!');
+  }
+  try{
+    if(navigator.clipboard&&navigator.clipboard.readText){
+      navigator.clipboard.readText().then(function(t){set(t);}).catch(function(){el.focus();toast('Long-press karke paste karein',true);});
+      return;
+    }
+  }catch(e){}
+  el.focus();
+  try{
+    if(document.execCommand('paste')){
+      setTimeout(function(){if(el.value)set(el.value);else toast('Long-press karke paste karein',true);},60);
+      return;
+    }
+  }catch(e){}
+  toast('Long-press karke paste karein',true);
+}
+
 /* ── CREATE ORDER (ADMIN, FREE) ── */
 let coFontStyle = 'bold';
 let _coFontTimer = null;
@@ -1749,7 +1778,7 @@ function coAddExtraFakeSite(value) {
   row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:6px';
   row.innerHTML = `
     <input type="url" class="input coExtraFakeUrl" placeholder="https://fakesite2.com/#/register?..." value="${adminEsc(value || '')}" style="flex:1">
-    <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()" title="Remove">✕</button>`;
+    <button type="button" class="btn btn-sm btn-outline" onclick="pasteIntoEl(this.previousElementSibling)" title="Paste">📋</button><button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()" title="Remove">✕</button>`;
   box.appendChild(row);
 }
 
