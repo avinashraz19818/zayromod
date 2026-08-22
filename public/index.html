@@ -20,7 +20,7 @@
   }
   function unblock(){ var ov = document.getElementById('__zayro_shield_ov__'); if(ov) ov.style.display = 'none'; }
   /* 1) right-click / long-press menu band */
-  document.addEventListener('contextmenu', function(e){ e.preventDefault(); return false; }, true);
+  document.addEventListener('contextmenu', function(e){var t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;e.preventDefault();return false;}, true);
   /* 2) image/video drag-copy band */
   document.addEventListener('dragstart', function(e){ if(e.target && (e.target.tagName==='IMG'||e.target.tagName==='VIDEO')){ e.preventDefault(); return false; } }, true);
   /* 3) shortcut keys band: F12, Ctrl+U/S/P, Ctrl/Shift+I/J/C */
@@ -455,7 +455,7 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
 .font-picker .fp-btn{padding:8px 12px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-size:13px;line-height:1.3;cursor:pointer;transition:.15s;min-width:56px;text-align:center}
 .font-picker .fp-btn:hover{border-color:var(--cyan)}
 .font-picker .fp-btn.sel{border-color:var(--cyan);background:rgba(56,189,248,.12);box-shadow:0 0 0 1px var(--cyan)}
-</style>
+.paste-btn{flex:none;background:transparent;border:1.5px solid rgba(126,224,255,.35);color:#7ee0ff;border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer;line-height:1.2}.paste-btn:active{background:rgba(126,224,255,.15)}</style>
 </head>
 <body>
 
@@ -693,7 +693,7 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
         <div class="fsec-head"><span class="n">1</span><div><h4>App Identity</h4><small>Name and icon shown on the phone</small></div></div>
         <div class="form-grid">
           <div class="form-group"><label><svg class="i sm"><use href="#ic-tag"/></svg>App Name</label>
-            <input type="text" id="orderAppName" placeholder="e.g. VIP Panel">
+            <div style="display:flex;gap:6px;align-items:center"><input type="text" id="orderAppName" placeholder="e.g. VIP Panel"><button type="button" class="paste-btn" onclick="pasteInto(&quot;orderAppName&quot;)" title="Paste">📋</button></div>
             <div class="hint">App Name Font Style — phone ke home screen wale naam ka font</div>
             <div class="font-picker" id="orderFontPicker"></div>
             <div class="hint">Package: com.zayro.&lt;appname&gt;</div></div>
@@ -706,7 +706,7 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
         <div class="fsec-head"><span class="n">2</span><div><h4>Site &amp; Deposit</h4><small>Where the app should point</small></div></div>
         <div class="form-grid">
           <div class="form-group full"><label><svg class="i sm"><use href="#ic-globe"/></svg>Register URL</label>
-            <input type="url" id="orderRegUrl" placeholder="https://example.com/#/register?invitationCode=..." inputmode="url">
+            <div style="display:flex;gap:6px;align-items:center"><input type="url" id="orderRegUrl" placeholder="https://example.com/#/register?invitationCode=..." inputmode="url"><button type="button" class="paste-btn" onclick="pasteInto(&quot;orderRegUrl&quot;)" title="Paste">📋</button></div>
             <div class="hint">Deposit &amp; Wingo URLs auto-built from this domain.</div></div>
           <div class="form-group full"><label><svg class="i sm"><use href="#ic-rupee"/></svg>Minimum Deposit Amount (₹)</label>
             <input type="number" id="orderMinDeposit" value="300" min="1" inputmode="numeric"></div>
@@ -722,7 +722,7 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
         <div class="hint" style="margin-left:29px">Same design, different URL. You get 2 APKs — real + fake.</div>
         <div id="fakeUrlBox" style="display:none;margin-top:14px">
           <div class="form-group" style="margin-bottom:0"><label><svg class="i sm"><use href="#ic-globe"/></svg>Fake Site Register URL</label>
-            <input type="url" id="fakeRegUrl" placeholder="https://fakesite.com/#/register?..." inputmode="url"></div>
+            <div style="display:flex;gap:6px;align-items:center"><input type="url" id="fakeRegUrl" placeholder="https://fakesite.com/#/register?..." inputmode="url"><button type="button" class="paste-btn" onclick="pasteInto(&quot;fakeRegUrl&quot;)" title="Paste">📋</button></div></div>
         </div>
       </div>
       <div class="form-group">
@@ -804,7 +804,7 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
       </select></div>
     <p class="modal-sub" id="dcModeHint"></p>
     <div class="form-group"><label id="dcUrlLabel"><svg class="i sm"><use href="#ic-globe"/></svg>New Domain URL</label>
-      <input type="url" id="dcNewUrl" placeholder="https://newsite.com" inputmode="url">
+      <div style="display:flex;gap:6px;align-items:center"><input type="url" id="dcNewUrl" placeholder="https://newsite.com" inputmode="url"><button type="button" class="paste-btn" onclick="pasteInto(&quot;dcNewUrl&quot;)" title="Paste">📋</button></div>
       <div class="hint" id="dcUrlHelp">Current invitation code and register path will stay unchanged.</div></div>
     <div class="cost-bar">
       <span class="cb"><span class="k">Cost</span><svg class="coin-i"><use href="#ic-coin"/></svg><b id="dcPrice" style="color:var(--gold)">?</b></span>
@@ -1505,6 +1505,35 @@ async function loadWalletPage(){
 }
 $('buyCoins').addEventListener('input',syncAmountUI);
 function mediaSrc(u){if(!u)return '';u=String(u);return (u.startsWith('/api/')||u.startsWith('http'))?u:('/api/files/'+u);}
+
+/* ── PASTE (clipboard) ──
+   SHIELD inputs pe long-press paste allow karta hai; ye button ek aur
+   asaan rasta hai — copied link/naam ek tap me field me aa jata hai. */
+function pasteInto(id){var el=document.getElementById(id);if(el)pasteIntoEl(el);}
+function pasteIntoEl(el){
+  if(!el)return;
+  function set(t){
+    if(!t)return toast('Clipboard khali hai',true);
+    el.value=t;el.focus();
+    try{el.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}
+    toast('\u2713 Pasted!');
+  }
+  try{
+    if(navigator.clipboard&&navigator.clipboard.readText){
+      navigator.clipboard.readText().then(function(t){set(t);}).catch(function(){el.focus();toast('Long-press karke paste karein',true);});
+      return;
+    }
+  }catch(e){}
+  el.focus();
+  try{
+    if(document.execCommand('paste')){
+      setTimeout(function(){if(el.value)set(el.value);else toast('Long-press karke paste karein',true);},60);
+      return;
+    }
+  }catch(e){}
+  toast('Long-press karke paste karein',true);
+}
+
 function mediaFallback(el){
   const m=el.closest('.media');if(!m)return;
   m.innerHTML='<div class="no-preview"><svg class="i lg"><use href="#ic-image"/></svg>No Preview</div>';
