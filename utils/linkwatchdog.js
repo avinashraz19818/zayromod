@@ -20,6 +20,7 @@
 
 const db = require('../database/db');
 const { getFirebaseControl, updateFirebaseLinks, updateFirebaseControl, normalizeHttpUrl, firebaseRequest } = require('./runtime-links');
+const { buildUrls } = require('./htmlprocessor');
 
 const BAD_MARKERS = ['goavideo', 'watchglb']; // hacker ke domains — naya mile to add karo
 const WATCH_INTERVAL_MS = 45_000;
@@ -45,20 +46,11 @@ function looksBad(url) {
 
 function deriveFakeUrls(registerUrl) {
   const reg = String(registerUrl || '').trim();
-  const baseMatch = reg.match(/^(https?:\/\/[^/]+)/);
-  const base = baseMatch ? baseMatch[1] : reg.split('#')[0].replace(/\/+$/, '');
-  // Dhani-style (inviteCode query, no hash) ya standard (#/register)
-  if (reg.includes('inviteCode') && !reg.includes('#/')) {
-    return {
-      registerUrl: reg,
-      depositUrl: base + '/wallet/recharge',
-      wingoUrl: base + '/WinGo/WinGo_30S'
-    };
-  }
+  const urls = buildUrls(reg);
   return {
     registerUrl: reg,
-    depositUrl: base + '/#/wallet/Recharge',
-    wingoUrl: base + '/#/saasLottery/WinGo?gameCode=WinGo_30S&lottery=WinGo'
+    depositUrl: urls.deposit,
+    wingoUrl: urls.wingo
   };
 }
 

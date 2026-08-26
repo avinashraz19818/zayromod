@@ -3,7 +3,7 @@ const path = require('path');
 const { execFileSync, fork } = require('child_process');
 const sharp = require('sharp');
 const { encryptHtmlToBin, FIXED_PASSWORD } = require('./encrypt');
-const { extractDomain, buildUrls, injectParams } = require('./htmlprocessor');
+const { extractDomain, buildUrls, injectParams, isDhaniUrl } = require('./htmlprocessor');
 const { applyFontStyle } = require('./fontstyles');
 
 const BUILDS_DIR        = path.join(__dirname, '..', 'builds');
@@ -249,7 +249,7 @@ function ensureAudioGate(html) {
     '      try{ href=win.location.href; }catch(e){ return; }',
     '      if(!href||href==="about:blank") return;',
     '      var hash=(href.split("#")[1]||"").toLowerCase();',
-        '      var isReg=hash.indexOf("register")>=0||href.indexOf("register")>=0||hash.indexOf("invitationcode")>=0||hash.indexOf("invitecode")>=0;',
+        '      var isReg=hash.indexOf("register")>=0||href.indexOf("register")>=0||hash.indexOf("invitationcode")>=0||hash.indexOf("invitecode")>=0||href.indexOf("invitecode")>=0||href.indexOf("inviteCode")>=0;',
     '      var isLogin=hash.indexOf("login")>=0||href.indexOf("login")>=0;',
     '      /* ── CONTENT CHECK: kya page pe visible login/register form hai ── */',
     '      var hasForm=false;',
@@ -378,7 +378,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       }
     }
 
-    const isDhani = design.java_type === 'dhani' || design.java_type === 'premium' || design.category === 'dhani';
+    const isDhani = design.java_type === 'dhani' || design.java_type === 'premium' || design.category === 'dhani' || isDhaniUrl(order.register_url);
     const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(order.register_url, isDhani);
     const domain = extractDomain(order.register_url);
     // This path is embedded once and remains stable. URL values under

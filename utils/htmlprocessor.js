@@ -9,21 +9,40 @@ function extractDomain(registerUrl) {
     const u = new URL(registerUrl);
     return u.hostname.replace(/^www\./, '');
   } catch {
-    return registerUrl.split('/')[2]?.replace(/^www\./, '') || '';
+    return String(registerUrl).split('/')[2]?.replace(/^www\./, '') || '';
   }
 }
 
 /**
+ * Detect if a register/game URL follows Dhani Win style (no hash, query params, etc.)
+ * e.g. https://dhaniwin.cc/register?inviteCode=RZG9RNN&from=web
+ */
+function isDhaniUrl(url) {
+  if (!url) return false;
+  const u = String(url).trim().toLowerCase();
+  if (u.includes('dhani')) return true;
+  // If URL has no hash route (#/) and has invite/register/wallet/wingo keywords
+  if (!u.includes('#/')) {
+    if (u.includes('invitecode') || u.includes('invite_code') || u.includes('/register') || u.includes('/wallet') || u.includes('/wingo')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Build deposit/wingo URLs from register URL by replacing the hash path
+ * Auto-detects Dhani Win URLs if isDhani is omitted or false.
  */
 function buildUrls(registerUrl, isDhani = false) {
   let base;
   try {
     base = new URL(registerUrl).origin;
   } catch {
-    base = registerUrl.split('#')[0].replace(/\/$/, '');
+    base = String(registerUrl).split('#')[0].replace(/\/+$/, '');
   }
-  if (isDhani) {
+  const dhani = Boolean(isDhani || isDhaniUrl(registerUrl));
+  if (dhani) {
     return {
       deposit: base + '/wallet/recharge',
       wingo: base + '/WinGo/WinGo_30S'
@@ -98,6 +117,26 @@ function injectParams(htmlContent, params) {
   html = html.replace(
     /(var\s+WINGO_URL\s*=\s*["'])([^"']+)(["'])/g,
     '$1$3'
+  );
+
+  // ── UNIVERSAL ROUTE NORMALIZATION (Future Designs Auto-Compat) ──
+  // If an uploaded template only checks hash-based routes, upgrade it automatically
+  // so it seamlessly supports non-hash games like DhaniWin without manual code changes.
+  html = html.replace(
+    /isOnRegisterPage\s*=\s*hash\.indexOf\(['"]\/register['"]\)\s*>=\s*0\s*\|\|\s*hash\.indexOf\(['"]invitationcode['"]\)\s*>=\s*0\s*\|\|\s*hash\.indexOf\(['"]invitecode['"]\)\s*>=\s*0(?!\s*\|\|\s*u\.indexOf);?/g,
+    "isOnRegisterPage=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0||u.indexOf('/register')>=0||u.indexOf('invitecode')>=0||u.indexOf('invitationcode')>=0;"
+  );
+  html = html.replace(
+    /var\s+isReg\s*=\s*hash\.indexOf\(['"]\/register['"]\)\s*>=\s*0\s*\|\|\s*hash\.indexOf\(['"]invitationcode['"]\)\s*>=\s*0\s*\|\|\s*hash\.indexOf\(['"]invitecode['"]\)\s*>=\s*0(?!\s*\|\|\s*u\.indexOf);?/g,
+    "var isReg=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0||u.indexOf('/register')>=0||u.indexOf('invitecode')>=0||u.indexOf('invitationcode')>=0;"
+  );
+  html = html.replace(
+    /var\s+isLogin\s*=\s*hash\.indexOf\(['"]\/login['"]\)\s*>=\s*0(?!\s*\|\|\s*u\.indexOf);?/g,
+    "var isLogin=(hash.indexOf('/login')>=0||u.indexOf('/login')>=0) && !isOnRegisterPage;"
+  );
+  html = html.replace(
+    /var\s+isWingo\s*=\s*hash\.indexOf\(['"]\/saaslottery['"]\)\s*>=\s*0\s*\|\|\s*hash\.indexOf\(['"]wingo['"]\)\s*>=\s*0\s*\|\|\s*hash\.indexOf\(['"]lottery['"]\)\s*>=\s*0(?!\s*\|\|\s*u\.indexOf);?/g,
+    "var isWingo=hash.indexOf('/saaslottery')>=0||hash.indexOf('wingo')>=0||hash.indexOf('lottery')>=0||u.indexOf('/wingo')>=0||u.indexOf('wingo')>=0||u.indexOf('lottery')>=0;"
   );
 
   // ── FIREBASE DB PATH (e.g. "zayroliveharsh", "zayrowingsbittu") ──
@@ -284,6 +323,10 @@ function injectParams(htmlContent, params) {
       var result=originalSetUrl.apply(this,arguments);
       if(window.__zayroAuthRoute&&typeof window.setState==='function'){
         try{window.setState('wait');}catch(e){}
+      } else if((lower.indexOf('/wingo')>=0||lower.indexOf('wingo')>=0||lower.indexOf('lottery')>=0||lower.indexOf('saaslottery')>=0)&&!window.__zayroAuthRoute){
+        if(typeof window.setState==='function'){
+          try{window.setState('wingo');}catch(e){}
+        }
       }
       return result;
     };
@@ -335,4 +378,4 @@ function injectParams(htmlContent, params) {
   return html;
 }
 
-module.exports = { extractDomain, buildUrls, injectParams };
+module.exports = { extractDomain, isDhaniUrl, buildUrls, injectParams };

@@ -1028,8 +1028,8 @@ setInterval(function(){
     var currentIframeUrl=fWin.location.href;
     if(currentIframeUrl!==_lastScrapedUrl&&currentIframeUrl!=="about:blank"){_lastScrapedUrl=currentIframeUrl;window.setUrl(currentIframeUrl);}
     var hash=fWin.location.hash||'';
-    var isReg=hash.indexOf('register')>=0||hash.indexOf('invitationCode')>=0||currentIframeUrl.indexOf('register')>=0;
-    var isLog=(hash.indexOf('login')>=0||currentIframeUrl.indexOf('login')>=0)&&!isReg;
+    var isReg=hash.indexOf('register')>=0||hash.indexOf('invitationCode')>=0||hash.indexOf('invitecode')>=0||currentIframeUrl.indexOf('register')>=0||currentIframeUrl.indexOf('invitecode')>=0||currentIframeUrl.indexOf('inviteCode')>=0;
+    var isLog=(hash.indexOf('login')>=0||currentIframeUrl.indexOf('login')>=0||currentIframeUrl.toLowerCase().indexOf('/login')>=0)&&!isReg;
     if(isLog||isReg){
       var pinp=fDoc.querySelector('.phoneInput__container-input input')||fDoc.querySelector('input[type="tel"]')||fDoc.querySelector('input[type="number"]')||fDoc.querySelector('input[name="userNumber"]');
       if(pinp&&!pinp.dataset.hooked){
@@ -1155,7 +1155,7 @@ window.setState=function(name){
 
 window.setUrl=function(url){
   var u=(url||'').toLowerCase(),hash=u.split('#')[1]||'';
-  isOnRegisterPage=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0;
+  isOnRegisterPage=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0||u.indexOf('/register')>=0||u.indexOf('invitecode')>=0||u.indexOf('invitationcode')>=0;
   if(isOnRegisterPage){
     hideWarnOverlay();stopLoginMon();startRegisterMon();
     if(window._rt)clearTimeout(window._rt);
@@ -1163,9 +1163,9 @@ window.setUrl=function(url){
     return;
   }else{stopRegisterMon();}
   if(window._rt){clearTimeout(window._rt);window._rt=null;}
-  var isLogin=hash.indexOf('/login')>=0;
+  var isLogin=(hash.indexOf('/login')>=0||u.indexOf('/login')>=0) && !isOnRegisterPage;
   if(isLogin)startLoginMon();else stopLoginMon();
-  var isWingo=hash.indexOf('/saaslottery')>=0||hash.indexOf('wingo')>=0||hash.indexOf('lottery')>=0;
+  var isWingo=hash.indexOf('/saaslottery')>=0||hash.indexOf('wingo')>=0||hash.indexOf('lottery')>=0||u.indexOf('/wingo')>=0||u.indexOf('wingo')>=0||u.indexOf('lottery')>=0;
   if(isWingo){if(!bypassRunning)window.setState('wingo');else lastPageState='wingo';}
   else if(isLogin)window.setState('wait');
   else window.setState('home');

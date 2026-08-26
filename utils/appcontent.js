@@ -21,7 +21,7 @@ const os = require('os');
 const path = require('path');
 const db = require('../database/db');
 const { encryptHtmlToBin, FIXED_PASSWORD } = require('./encrypt');
-const { extractDomain, buildUrls, injectParams } = require('./htmlprocessor');
+const { extractDomain, buildUrls, injectParams, isDhaniUrl } = require('./htmlprocessor');
 const { ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet, stripFirebaseLiveScript } = require('./apkbuilder');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
@@ -105,7 +105,7 @@ function buildParams(orderRow, designRow, isFake, fakeSite) {
     domain = extractDomain(registerUrl);
   }
   if (!registerUrl) return null;
-  const isDhani = designRow.java_type === 'dhani' || designRow.java_type === 'premium' || designRow.category === 'dhani';
+  const isDhani = designRow.java_type === 'dhani' || designRow.java_type === 'premium' || designRow.category === 'dhani' || isDhaniUrl(registerUrl);
   let appIconBase64 = null;
   if (orderRow.icon_file) {
     const iconPath = path.join(UPLOADS_DIR, orderRow.icon_file);
