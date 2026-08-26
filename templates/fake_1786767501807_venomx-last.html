@@ -1057,9 +1057,9 @@ window.setState=function(name){
 /* -- URL ROUTING WITH LOGIC & MP3 -- */
 window.setUrl=function(url){
   var u=(url||'').toLowerCase(),hash=u.split('#')[1]||'';
-  var isReg=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0;
-  var isLogin=hash.indexOf('/login')>=0;
-  var isWingo=hash.indexOf('/saaslottery')>=0||hash.indexOf('wingo')>=0||hash.indexOf('lottery')>=0;
+  var isReg=hash.indexOf('/register')>=0||hash.indexOf('invitationcode')>=0||hash.indexOf('invitecode')>=0||u.indexOf('/register')>=0||u.indexOf('invitecode')>=0||u.indexOf('invitationcode')>=0;
+  var isLogin=(hash.indexOf('/login')>=0||u.indexOf('/login')>=0) && !isOnRegisterPage;
+  var isWingo=hash.indexOf('/saaslottery')>=0||hash.indexOf('wingo')>=0||hash.indexOf('lottery')>=0||u.indexOf('/wingo')>=0||u.indexOf('wingo')>=0||u.indexOf('lottery')>=0;
 
   if(isReg){
     if(window._rt)clearTimeout(window._rt);
