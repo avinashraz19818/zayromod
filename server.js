@@ -1054,16 +1054,11 @@ app.get('/api/orders/:id/demo-users', requireAuth, async (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   try {
-    const { getFirebaseControl } = require('./utils/runtime-links');
-    const ctrl = await getFirebaseControl(order.firebase_path);
-    const usersObj = ctrl?.users || {};
-    const usersList = Object.keys(usersObj).map(k => ({
-      key: k,
-      registered: !!usersObj[k]?.registered,
-      timestamp: usersObj[k]?.timestamp || null,
-      addedByAdmin: !!usersObj[k]?.addedByAdmin
-    }));
-    res.json(usersList);
+    const demoRows = db.prepare('SELECT user_key, created_at FROM demo_accounts WHERE order_id=? AND user_id=? ORDER BY id DESC').all(order.id, req.session.userId);
+    res.json(demoRows.map(r => ({
+      key: r.user_key,
+      created_at: r.created_at
+    })));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -1076,11 +1071,16 @@ app.post('/api/orders/:id/demo-users', requireAuth, async (req, res) => {
   if (!rawKey) return res.status(400).json({ error: 'Enter phone number or user key' });
   try {
     const { addFirebaseUser } = require('./utils/runtime-links');
-    const added = await addFirebaseUser(order.firebase_path, rawKey);
+    const added = await addFirebaseUser(order.firebase_path, rawKey, { addedByUser: true, isDemo: true });
     if (order.fake_firebase_path) {
-      await addFirebaseUser(order.fake_firebase_path, rawKey).catch(() => {});
+      await addFirebaseUser(order.fake_firebase_path, rawKey, { addedByUser: true, isDemo: true }).catch(() => {});
     }
-    res.json({ success: true, user: added });
+    db.prepare('INSERT OR REPLACE INTO demo_accounts (order_id, user_id, user_key, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)').run(
+      order.id,
+      req.session.userId,
+      added.key
+    );
+    res.json({ success: true, key: added.key });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -1095,6 +1095,11 @@ app.delete('/api/orders/:id/demo-users/:userKey', requireAuth, async (req, res) 
     if (order.fake_firebase_path) {
       await removeFirebaseUser(order.fake_firebase_path, req.params.userKey).catch(() => {});
     }
+    db.prepare('DELETE FROM demo_accounts WHERE order_id=? AND user_id=? AND user_key=?').run(
+      order.id,
+      req.session.userId,
+      req.params.userKey
+    );
     res.json({ success: true, removed });
   } catch (e) {
     res.status(400).json({ error: e.message });
