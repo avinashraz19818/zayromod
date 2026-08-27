@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "TASHAN VIP PANEL Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "1553866b7ef2af52774caf6147e66b24119934d4b697e53ca1d399df7de623eb",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

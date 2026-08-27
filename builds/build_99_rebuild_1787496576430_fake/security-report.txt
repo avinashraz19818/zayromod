@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "ADITI NUMBER PANNEL Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "eb2bb3b8a20bf4390af347f960735b8d818fc14c65d4b5f062e55be761180348",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

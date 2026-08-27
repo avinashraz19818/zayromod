@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "ADITI NUMBER PANNEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "d290d6c7505d7abaf14f0e3ad190ffdf41ec0f3ab00c44646e523e12f3eed255",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

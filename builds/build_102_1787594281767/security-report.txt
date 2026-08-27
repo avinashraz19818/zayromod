@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝐑𝐚𝐦 9𝐱 𝐏𝐚𝐧𝐞𝐥",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "7b7865a767365a935d63268f40764b52d027ba7b9c292d530a53a1e6a350a006",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

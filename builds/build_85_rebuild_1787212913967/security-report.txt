@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "Boss Vip Panel",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "04fec9467c03837961e488c414ceb06f9e323238a4cf0c54571dfe9b14209cb6",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

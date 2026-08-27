@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "Billuboss51 VIP hack",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "57fb30f53905a6fa635053f84020754d09744438f9dc257e0fa0d1476fdd44b0",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

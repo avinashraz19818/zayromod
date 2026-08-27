@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "VENOM AI TOOL Fake",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "97bfd0b6c46455458990c992cbb1433681de3b1c1f802a50581c5926e67c9c15",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

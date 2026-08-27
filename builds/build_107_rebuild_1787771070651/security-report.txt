@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "PRIYA AI TOOL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "f47d0a5c55fd478a5dd8db56c0f3183eeda1f08e70fa4c0f6f1fa3cc027dad46",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

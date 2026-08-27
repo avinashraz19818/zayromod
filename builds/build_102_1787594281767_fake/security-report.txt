@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝐑𝐚𝐦 9𝐱 𝐏𝐚𝐧𝐞𝐥 Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "73b47c324ab36741984949468c082414a9b404a40408508bc008dabe990b2346",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

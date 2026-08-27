@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝐤ʀɪꜱʜ𝙰ɴ🇦༗ 𝟗 𝐗 𝐏𝐀𝐍𝐄𝐋",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "ef6cb4d39539d3694b82b78dedcd8921d237ae3c717280a093978d89793816b9",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}
