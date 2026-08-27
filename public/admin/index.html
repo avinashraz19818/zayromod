@@ -50,6 +50,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Zayro Mod Builder — Admin Console</title>
+<script src="/js/audio-engine.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -566,6 +567,7 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
   <a class="nav-link" data-sec="users" onclick="showSec('users',this)"><svg class="ni"><use href="#i-users"/></svg> Users</a>
   <a class="nav-link" data-sec="base-apk" onclick="showSec('base-apk',this)"><svg class="ni"><use href="#i-android"/></svg> Android Project</a>
   <a class="nav-link" data-sec="coupons" onclick="showSec('coupons',this)"><svg class="ni"><use href="#i-coin"/></svg> Coupons</a>
+  <a class="nav-link" data-sec="announcements" onclick="showSec('announcements',this)"><svg class="ni"><use href="#i-link"/></svg> Announcements</a>
   <a class="nav-link" data-sec="backups" onclick="showSec('backups',this)"><svg class="ni"><use href="#i-file"/></svg> Backups</a>
   <a class="nav-link" data-sec="settings" onclick="showSec('settings',this)"><svg class="ni"><use href="#i-settings"/></svg> Settings</a>
   <div class="nav-foot">
@@ -878,6 +880,32 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
     <div class="card"><div class="card-hd"><span class="accent"></span><h3>All Coupons</h3></div><div id="couponsList" style="color:var(--dim)">Loading…</div></div>
   </div>
 
+  <!-- ANNOUNCEMENTS -->
+  <div id="sec-announcements" class="section">
+    <div class="topbar"><h1>Announcements &amp; Broadcast<small>Publish popup notices on website and send to all Telegram bot users</small></h1></div>
+    <div class="card" style="max-width:760px">
+      <div class="card-hd"><span class="accent"></span><h3>Create Announcement</h3></div>
+      <div class="form-group"><label>Announcement Title *</label><input id="annTitleInput" placeholder="e.g. ⚡ Flash Update: New Universal Engine Live!"></div>
+      <div class="form-group"><label>Notice Message * <small>(Supports multi-line)</small></label><textarea id="annMessageInput" rows="4" class="input" style="width:100%;resize:vertical" placeholder="Enter the full message to show to users on website & Telegram bot..."></textarea></div>
+      <div class="grid2">
+        <div class="form-group"><label>Banner Image URL <small>(Optional)</small></label><input id="annImageInput" placeholder="https://example.com/banner.jpg"></div>
+        <div class="form-group"><label>Popup Status on Website</label><select id="annActiveSelect"><option value="1">Active (Show to Website Users)</option><option value="0">Disabled (Saved only)</option></select></div>
+      </div>
+      <div class="grid2">
+        <div class="form-group"><label>Action Button Text <small>(Optional)</small></label><input id="annBtnTextInput" placeholder="e.g. 🚀 Check Now"></div>
+        <div class="form-group"><label>Action Button Link <small>(Optional)</small></label><input id="annBtnUrlInput" placeholder="e.g. https://t.me/zayromod"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn btn-primary" onclick="createAnnouncement(false)"><svg><use href="#i-check"/></svg> Save &amp; Activate on Website</button>
+        <button class="btn btn-gold" onclick="createAnnouncement(true)"><svg><use href="#i-link"/></svg> 🚀 Save &amp; Broadcast to All Telegram Bot Users</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><span class="accent"></span><h3>All Announcements</h3></div>
+      <div id="announcementsList" style="color:var(--dim)">Loading…</div>
+    </div>
+  </div>
+
   <!-- BACKUPS -->
   <div id="sec-backups" class="section">
     <div class="topbar"><h1>Backups<small>Database safety copies</small></h1></div>
@@ -903,13 +931,20 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
         <div class="form-group"><label>Domain Change Price <small>(coins)</small></label><input type="number" id="sDomainPrice" value="10" min="0"></div>
         <div class="form-group"><label>Invitation Code Change Price <small>(coins)</small></label><input type="number" id="sInvitePrice" value="10" min="0"></div>
       </div>
+    <div class="card" style="max-width:640px">
+      <div class="card-hd"><span class="accent"></span><h3>General &amp; URLs</h3></div>
       <div class="form-group"><label>Site Name</label><input type="text" id="sSiteName" value="Zayro Mod Builder"></div>
+      <div class="form-group"><label>Official Site URL</label><input type="text" id="sSiteUrl" placeholder="https://devlopedwithzayro.site"><div class="hint">Used in Telegram bot WebApp buttons.</div></div>
       <div class="form-group"><label>Keep Last Backups</label><input type="number" id="sBackupKeep" value="10" min="1"><div class="hint">Automatic startup backups are stored in /backups. Old backups are cleaned by this limit.</div></div>
     </div>
     <div class="card" style="max-width:640px">
-      <div class="card-hd"><span class="accent"></span><h3>Telegram Alerts</h3></div>
+      <div class="card-hd"><span class="accent"></span><h3>Telegram Bot &amp; Support</h3></div>
       <div class="form-group"><label>Bot Token</label><input type="text" id="sTgToken" placeholder="1234567890:AAxxxx…"></div>
       <div class="form-group"><label>Admin Chat ID</label><input type="text" id="sTgAdminId" placeholder="Your chat ID"></div>
+      <div class="grid2">
+        <div class="form-group"><label>Support Username</label><input type="text" id="sTgSupportUser" placeholder="e.g. @zayroadmin"></div>
+        <div class="form-group"><label>Official Channel URL</label><input type="text" id="sTgChannelUrl" placeholder="https://t.me/zayromod"></div>
+      </div>
     </div>
     <div class="card" style="max-width:640px">
       <div class="card-hd"><span class="accent"></span><h3>Assets</h3></div>
@@ -1125,6 +1160,7 @@ function loadSection(name) {
   else if (name==='settings') loadSettings();
   else if (name==='base-apk') loadBaseApkStatus();
   else if (name==='coupons') loadCoupons();
+  else if (name==='announcements') loadAnnouncements();
   else if (name==='backups') loadBackups();
 }
 
@@ -2224,6 +2260,88 @@ async function createCoupon(){
 async function toggleCoupon(id,active){const d=await api('/api/admin/coupons/'+id,'PATCH',{active});if(d.error)return toast(d.error,true);loadCoupons();}
 async function deleteCoupon(id){if(!confirm('Delete coupon?'))return;await api('/api/admin/coupons/'+id,'DELETE');loadCoupons();}
 
+// ── Announcements & Broadcast ──
+async function loadAnnouncements() {
+  const rows = await api('/api/admin/announcements');
+  const c = document.getElementById('announcementsList');
+  if (!Array.isArray(rows) || !rows.length) {
+    c.innerHTML = '<div style="color:var(--dim);padding:12px 0">No announcements yet. Create one above to display a popup notice on the website or broadcast via Telegram bot.</div>';
+    return;
+  }
+  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Title</th><th>Message</th><th>Button</th><th>Website Popup</th><th>Actions</th></tr></thead><tbody>${rows.map(r => `
+    <tr>
+      <td><b>#${r.id}</b></td>
+      <td><b>${adminEsc(r.title)}</b>${r.image_url ? '<br><small style="color:var(--cyan)">🖼️ Has Banner Image</small>' : ''}</td>
+      <td style="max-width:280px;white-space:pre-wrap;font-size:12px;color:var(--text)">${adminEsc(r.message)}</td>
+      <td>${r.button_text ? `<a href="${adminEsc(r.button_url || '#')}" target="_blank" class="badge badge-blue" style="text-decoration:none">${adminEsc(r.button_text)}</a>` : '<span style="color:var(--dim)">—</span>'}</td>
+      <td><span class="badge ${r.active ? 'badge-ok' : 'badge-danger'}">${r.active ? 'Active (Live)' : 'Disabled'}</span></td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-gold" onclick="broadcastExistingAnnouncement(${r.id})" title="Broadcast via Telegram"><svg><use href="#i-link"/></svg> Broadcast</button>
+          <button class="btn btn-sm" onclick="toggleAnnouncement(${r.id}, ${r.active ? 0 : 1})">${r.active ? 'Disable' : 'Activate'}</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteAnnouncement(${r.id})"><svg><use href="#i-x"/></svg></button>
+        </div>
+      </td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+async function createAnnouncement(broadcastNow) {
+  const btn = event.currentTarget || event.target;
+  const title = document.getElementById('annTitleInput').value.trim();
+  const message = document.getElementById('annMessageInput').value.trim();
+  const image_url = document.getElementById('annImageInput').value.trim();
+  const button_text = document.getElementById('annBtnTextInput').value.trim();
+  const button_url = document.getElementById('annBtnUrlInput').value.trim();
+  const active = document.getElementById('annActiveSelect').value === '1';
+
+  if (!title || !message) return toast('Title and Message are required', true);
+
+  setLoading(btn, true, broadcastNow ? 'Broadcasting…' : 'Saving…');
+  const d = await api('/api/admin/announcements', 'POST', {
+    title, message, image_url, button_text, button_url, active, broadcast_now: broadcastNow
+  });
+  setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+
+  if (broadcastNow && d.broadcast) {
+    toast(`✓ Saved & Broadcast to ${d.broadcast.sent}/${d.broadcast.total} Telegram users!`);
+  } else {
+    toast('✓ Announcement saved & active on website!');
+  }
+
+  document.getElementById('annTitleInput').value = '';
+  document.getElementById('annMessageInput').value = '';
+  document.getElementById('annImageInput').value = '';
+  document.getElementById('annBtnTextInput').value = '';
+  document.getElementById('annBtnUrlInput').value = '';
+  loadAnnouncements();
+}
+
+async function toggleAnnouncement(id, active) {
+  const d = await api('/api/admin/announcements/' + id, 'PATCH', { active });
+  if (d.error) return toast(d.error, true);
+  toast('Status updated');
+  loadAnnouncements();
+}
+
+async function deleteAnnouncement(id) {
+  if (!confirm('Delete this announcement?')) return;
+  const d = await api('/api/admin/announcements/' + id, 'DELETE');
+  if (d.error) return toast(d.error, true);
+  toast('Announcement deleted');
+  loadAnnouncements();
+}
+
+async function broadcastExistingAnnouncement(id) {
+  if (!confirm('Send this announcement to ALL Telegram Bot users now?')) return;
+  const btn = event.currentTarget || event.target;
+  setLoading(btn, true, 'Sending…');
+  const d = await api('/api/admin/announcements/' + id + '/broadcast', 'POST');
+  setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+  toast(`✓ Sent to ${d.result.sent}/${d.result.total} Telegram users!`);
+}
+
 // ── Backups ──
 async function loadBackups(){
   const rows=await api('/api/admin/backups');
@@ -2243,8 +2361,11 @@ async function loadSettings() {
   document.getElementById('sInvitePrice').value = s.invite_code_change_price || '10';
   document.getElementById('sBackupKeep').value = s.backup_keep_count || '10';
   document.getElementById('sSiteName').value = s.site_name || '';
+  document.getElementById('sSiteUrl').value = s.site_url || '';
   document.getElementById('sTgToken').value = s.telegram_bot_token || '';
   document.getElementById('sTgAdminId').value = s.telegram_admin_id || '';
+  document.getElementById('sTgSupportUser').value = s.telegram_support_user || '';
+  document.getElementById('sTgChannelUrl').value = s.telegram_channel_url || '';
   document.getElementById('currentLoadingHtml').textContent = s.loading_html_file || 'Not uploaded yet';
   if (s.upi_qr_image) {
     document.getElementById('currentQr').innerHTML = `<img src="/api/files/${s.upi_qr_image}" style="width:110px;border-radius:10px;border:1px solid var(--border)">`;
@@ -2262,7 +2383,20 @@ async function saveSettings() {
   fd.append('invite_code_change_price', document.getElementById('sInvitePrice').value);
   fd.append('backup_keep_count', document.getElementById('sBackupKeep').value);
   fd.append('site_name', document.getElementById('sSiteName').value);
+  fd.append('site_url', document.getElementById('sSiteUrl').value);
   fd.append('telegram_bot_token', document.getElementById('sTgToken').value);
+  fd.append('telegram_admin_id', document.getElementById('sTgAdminId').value);
+  fd.append('telegram_support_user', document.getElementById('sTgSupportUser').value);
+  fd.append('telegram_channel_url', document.getElementById('sTgChannelUrl').value);
+  const qrFile = document.getElementById('sQrImg').files[0];
+  if (qrFile) fd.append('upi_qr_image', qrFile);
+  const loadingHtmlFile = document.getElementById('sLoadingHtml').files[0];
+  if (loadingHtmlFile) fd.append('loading_html', loadingHtmlFile);
+  const d = await api('/api/admin/settings','POST',fd,true);
+  setLoading(btn, false);
+  if (d.error) return toast(d.error, true);
+  toast('✓ Settings saved!');
+}
   fd.append('telegram_admin_id', document.getElementById('sTgAdminId').value);
   const qrFile = document.getElementById('sQrImg').files[0];
   if (qrFile) fd.append('upi_qr_image', qrFile);

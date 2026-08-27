@@ -51,6 +51,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5">
 <meta name="theme-color" content="#05070f">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="/js/audio-engine.js"></script>
 <title>Zayro Mod Builder — Build Your App in Minutes</title>
 <meta name="description" content="Choose a design, customize your app, and get a signed APK instantly.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -455,7 +456,18 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
 .font-picker .fp-btn{padding:8px 12px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-size:13px;line-height:1.3;cursor:pointer;transition:.15s;min-width:56px;text-align:center}
 .font-picker .fp-btn:hover{border-color:var(--cyan)}
 .font-picker .fp-btn.sel{border-color:var(--cyan);background:rgba(56,189,248,.12);box-shadow:0 0 0 1px var(--cyan)}
-.paste-btn{flex:none;background:transparent;border:1.5px solid rgba(126,224,255,.35);color:#7ee0ff;border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer;line-height:1.2}.paste-btn:active{background:rgba(126,224,255,.15)}</style>
+.paste-btn{flex:none;background:transparent;border:1.5px solid rgba(126,224,255,.35);color:#7ee0ff;border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer;line-height:1.2}.paste-btn:active{background:rgba(126,224,255,.15)}
+
+/* ── Sound Toggle Button ── */
+.sound-toggle-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text);font-size:11.5px;cursor:pointer;transition:.2s}
+.sound-toggle-btn:hover{border-color:var(--cyan);color:#fff}
+.sound-toggle-btn.muted{color:var(--dim);border-color:rgba(255,84,112,.3);background:rgba(255,84,112,.06)}
+
+/* ── Announcement Modal & Badge ── */
+.announcement-box{position:relative;background:linear-gradient(175deg,rgba(16,24,46,.95),rgba(9,13,26,.98));border:1px solid rgba(103,232,255,.3);box-shadow:0 0 30px rgba(61,123,255,.25),0 28px 70px -34px rgba(0,0,0,.95)}
+.ann-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:rgba(103,232,255,.12);color:var(--cyan);border:1px solid rgba(103,232,255,.3);margin-bottom:12px}
+.pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:pulse-anim 1.5s infinite}
+@keyframes pulse-anim{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.4);opacity:.6}}</style>
 </head>
 <body>
 
@@ -501,10 +513,16 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
     <span class="brand-mark"><svg class="i"><use href="#ic-bolt"/></svg></span>
     <span class="brand-text">Zayro<small>MOD BUILDER</small></span>
   </div>
-  <button class="coin-chip" id="topCoins" style="display:none" onclick="showPage('wallet')">
-    <svg class="coin-i"><use href="#ic-coin"/></svg><span id="topCoinBal">0</span>
-  </button>
-  <button class="btn btn-primary btn-sm" id="topLoginBtn" onclick="openAuth()"><svg class="i sm"><use href="#ic-login"/></svg>Login</button>
+  <div style="display:flex;align-items:center;gap:8px">
+    <button class="sound-toggle-btn" onclick="toggleAudioMute()" title="Sound Effects Toggle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      <span class="snd-lbl">Sound</span>
+    </button>
+    <button class="coin-chip" id="topCoins" style="display:none" onclick="showPage('wallet')">
+      <svg class="coin-i"><use href="#ic-coin"/></svg><span id="topCoinBal">0</span>
+    </button>
+    <button class="btn btn-primary btn-sm" id="topLoginBtn" onclick="openAuth()"><svg class="i sm"><use href="#ic-login"/></svg>Login</button>
+  </div>
 </header>
 
 <!-- ══ HOME ══ -->
@@ -786,6 +804,23 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
       <button class="btn btn-primary btn-block" id="downloadBtn"><svg class="i sm"><use href="#ic-download"/></svg>Download APK</button>
       <button class="btn btn-gold btn-block" style="display:none" id="downloadFakeBtn"><svg class="i sm"><use href="#ic-download"/></svg>Download APK (Fake)</button>
       <button class="btn btn-outline btn-block" onclick="closeModal('progressModal',true)">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ANNOUNCEMENT POPUP MODAL ══ -->
+<div class="modal-overlay" id="announcementModal">
+  <div class="modal announcement-box" style="max-width:440px;text-align:center;position:relative">
+    <button class="close-modal" onclick="closeAnnouncementModal()" aria-label="Close"><svg class="i"><use href="#ic-x"/></svg></button>
+    <div class="ann-badge"><span class="pulse-dot"></span> Official Announcement</div>
+    <div id="annImageContainer" style="display:none;margin:10px 0 14px">
+      <img id="annImage" src="" alt="Announcement Banner" style="width:100%;max-height:180px;object-fit:cover;border-radius:14px;border:1px solid var(--border-soft)">
+    </div>
+    <h2 id="annTitle" style="font-size:18px;margin-bottom:8px;color:#fff;font-family:'Chakra Petch',sans-serif"></h2>
+    <div id="annMessage" style="font-size:13.5px;color:var(--text);line-height:1.6;margin-bottom:18px;white-space:pre-line;text-align:left;background:rgba(255,255,255,0.03);padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.06)"></div>
+    <div class="modal-actions" style="flex-direction:column;gap:8px">
+      <a id="annBtn" href="#" target="_blank" class="btn btn-primary btn-block" style="display:none;justify-content:center;text-decoration:none"></a>
+      <button class="btn btn-outline btn-block" onclick="closeAnnouncementModal()">Got it, Dismiss</button>
     </div>
   </div>
 </div>
@@ -1217,6 +1252,7 @@ function clearBuildTimers(){
 function startBuildProgress(orderId,hasFake){
   clearBuildTimers();
   buildFinished=false;buildRunning=true;
+  if(window.playAudio) window.playAudio('buildStart');
   const token=++buildToken;
   $('progressTitle').innerHTML='<span class="loader"></span> BUILDING APK...';
   $('progressSub').textContent='Please keep this screen open until the build finishes.';
@@ -1267,6 +1303,7 @@ async function pollBuildStatus(orderId,hasFake,token){
 
   const showDone=async(s)=>{
     finishSteps(true);
+    if(window.playAudio) window.playAudio('buildComplete');
     $('progressTitle').innerHTML=icon('ic-check','i')+' APK READY!';
     $('downloadArea').style.display='flex';
     $('downloadBtn').onclick=function(){
@@ -1282,6 +1319,7 @@ async function pollBuildStatus(orderId,hasFake,token){
   };
   const showFail=async(msg)=>{
     finishSteps(false);
+    if(window.playAudio) window.playAudio('error');
     $('progressTitle').innerHTML=icon('ic-alert','i')+' BUILD FAILED';
     log.textContent+=(log.textContent?'\n':'')+(msg||'Build failed.');
     log.scrollTop=log.scrollHeight;
@@ -1612,6 +1650,48 @@ function closeLightbox(){
   if(!document.querySelector('.modal-overlay.show'))document.body.style.overflow='';
 }
 
+/* ── Announcements Popup ── */
+let _currentAnnouncementId = null;
+async function checkAnnouncementPopup() {
+  try {
+    const ann = await api('/api/announcement');
+    if (!ann || !ann.active) return;
+    const dismissed = sessionStorage.getItem('ann_dismissed_' + ann.id);
+    if (dismissed) return;
+
+    _currentAnnouncementId = ann.id;
+    $('annTitle').textContent = ann.title;
+    $('annMessage').textContent = ann.message;
+    if (ann.image_url && ann.image_url.trim()) {
+      $('annImage').src = ann.image_url.trim();
+      $('annImageContainer').style.display = 'block';
+    } else {
+      $('annImageContainer').style.display = 'none';
+    }
+
+    if (ann.button_text && ann.button_url) {
+      const btn = $('annBtn');
+      btn.textContent = '✨ ' + ann.button_text;
+      btn.href = ann.button_url.startsWith('http') ? ann.button_url : `https://${ann.button_url}`;
+      btn.style.display = 'flex';
+    } else {
+      $('annBtn').style.display = 'none';
+    }
+
+    openModal('announcementModal');
+    if (window.playAudio) window.playAudio('popup');
+  } catch (e) {
+    // ignore
+  }
+}
+
+function closeAnnouncementModal() {
+  if (_currentAnnouncementId) {
+    sessionStorage.setItem('ann_dismissed_' + _currentAnnouncementId, 'true');
+  }
+  closeModal('announcementModal');
+}
+
 /* ── Init ── */
 window.addEventListener('load',async()=>{
   try{window.Telegram?.WebApp?.ready();window.Telegram?.WebApp?.expand();}catch(e){}
@@ -1621,6 +1701,7 @@ window.addEventListener('load',async()=>{
   await loadMe();
   await loadDesigns();
   syncAmountUI();
+  setTimeout(checkAnnouncementPopup, 800);
 
   /* Google login result (redirect ke baad) */
   const q=new URLSearchParams(location.search);

@@ -11,7 +11,7 @@ const https = require('https');
 
 const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
-const { initBot, sendCoinRequest, sendApkReady } = require('./utils/telegram');
+const { initBot, sendCoinRequest, sendApkReady, broadcastAnnouncement } = require('./utils/telegram');
 const { injectParams: injectHtmlParams } = require('./utils/htmlprocessor');
 const { buildAppContent } = require('./utils/appcontent');
 const { applyFontStyle, isValidStyle, FONT_STYLES } = require('./utils/fontstyles');
@@ -2201,6 +2201,92 @@ app.get('/api/admin/backups/:file/download', requireAdmin, (req, res) => {
   res.download(p, file);
 });
 
+// ═══════════════════════════════════════════
+// ANNOUNCEMENTS & BROADCAST POPUP
+// ═══════════════════════════════════════════
+app.get('/api/announcement', (req, res) => {
+  try {
+    const row = db.prepare('SELECT * FROM popup_announcements WHERE active=1 ORDER BY id DESC LIMIT 1').get();
+    res.json(row || null);
+  } catch (e) {
+    res.json(null);
+  }
+});
+
+app.get('/api/admin/announcements', requireAdmin, (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM popup_announcements ORDER BY id DESC').all();
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/announcements', requireAdmin, async (req, res) => {
+  try {
+    const { title, message, image_url, button_text, button_url, active, broadcast_now } = req.body;
+    if (!title || !message) return res.status(400).json({ error: 'Title and message are required' });
+    const isActive = active === false || active === 0 || active === '0' ? 0 : 1;
+    const stmt = db.prepare('INSERT INTO popup_announcements(title,message,image_url,button_text,button_url,active) VALUES(?,?,?,?,?,?)');
+    const result = stmt.run(title.trim(), message.trim(), image_url ? image_url.trim() : '', button_text ? button_text.trim() : '', button_url ? button_url.trim() : '', isActive);
+    const ann = { id: result.lastInsertRowid, title, message, image_url, button_text, button_url, active: isActive };
+
+    let broadcastResult = null;
+    if (broadcast_now) {
+      try {
+        broadcastResult = await broadcastAnnouncement(ann);
+      } catch (be) {
+        console.error('Broadcast failed:', be.message);
+      }
+    }
+    res.json({ success: true, announcement: ann, broadcast: broadcastResult });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch('/api/admin/announcements/:id', requireAdmin, (req, res) => {
+  try {
+    const { title, message, image_url, button_text, button_url, active } = req.body;
+    const current = db.prepare('SELECT * FROM popup_announcements WHERE id=?').get(req.params.id);
+    if (!current) return res.status(404).json({ error: 'Announcement not found' });
+    const isActive = active !== undefined ? (active ? 1 : 0) : current.active;
+    db.prepare('UPDATE popup_announcements SET title=?,message=?,image_url=?,button_text=?,button_url=?,active=? WHERE id=?')
+      .run(
+        title !== undefined ? title : current.title,
+        message !== undefined ? message : current.message,
+        image_url !== undefined ? image_url : current.image_url,
+        button_text !== undefined ? button_text : current.button_text,
+        button_url !== undefined ? button_url : current.button_url,
+        isActive,
+        req.params.id
+      );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/admin/announcements/:id', requireAdmin, (req, res) => {
+  try {
+    db.prepare('DELETE FROM popup_announcements WHERE id=?').run(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/announcements/:id/broadcast', requireAdmin, async (req, res) => {
+  try {
+    const ann = db.prepare('SELECT * FROM popup_announcements WHERE id=?').get(req.params.id);
+    if (!ann) return res.status(404).json({ error: 'Announcement not found' });
+    const result = await broadcastAnnouncement(ann);
+    res.json({ success: true, result });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Settings
 app.get('/api/admin/settings', requireAdmin, (req, res) => {
   const rows = db.prepare('SELECT key,value FROM settings').all();
@@ -2213,7 +2299,7 @@ app.post('/api/admin/settings', requireAdmin, adminUpload.fields([
   { name: 'upi_qr_image', maxCount: 1 },
   { name: 'loading_html', maxCount: 1 }
 ]), (req, res) => {
-  const allowed = ['upi_id','coin_rate','site_name','telegram_bot_token','telegram_admin_id','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count'];
+  const allowed = ['upi_id','coin_rate','site_name','site_url','telegram_bot_token','telegram_admin_id','telegram_support_user','telegram_channel_url','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count'];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
       db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run(key, req.body[key]);
