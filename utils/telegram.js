@@ -10,6 +10,38 @@ let deliveryAgent = null;
 let apkDeliveryQueue = Promise.resolve();
 let _db  = null;
 
+// ── Telegram Premium Custom Emojis ──
+const PE = {
+  wave: '<tg-emoji emoji-id="5413694143601842851">👋</tg-emoji>',
+  gift: '<tg-emoji emoji-id="5449800250032143374">🎁</tg-emoji>',
+  star: '<tg-emoji emoji-id="5924870095925942277">⭐️</tg-emoji>',
+  fire: '<tg-emoji emoji-id="5402406965252989103">🔥</tg-emoji>',
+  crown: '<tg-emoji emoji-id="5431505596316665041">👑</tg-emoji>',
+  diamond: '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>',
+  money: '<tg-emoji emoji-id="5224257782013769471">💰</tg-emoji>',
+  check: '<tg-emoji emoji-id="5336985409220001678">✅</tg-emoji>',
+  alert: '<tg-emoji emoji-id="5440660757194744323">‼️</tg-emoji>',
+  lock: '<tg-emoji emoji-id="5296369303661067030">🔒</tg-emoji>',
+  sparkles: '<tg-emoji emoji-id="5463297803235113601">✨</tg-emoji>',
+  rocket: '<tg-emoji emoji-id="5406966974980828470">🚀</tg-emoji>',
+  bell: '<tg-emoji emoji-id="5458603043203327669">🔔</tg-emoji>',
+  dot: '<tg-emoji emoji-id="5210708311246126137">🔘</tg-emoji>',
+  down: '<tg-emoji emoji-id="5192680362114830442">🔽</tg-emoji>',
+  party: '<tg-emoji emoji-id="5355129313878353723">🥳</tg-emoji>',
+  bot: '<tg-emoji emoji-id="5287684458881756303">🤖</tg-emoji>',
+  stats: '<tg-emoji emoji-id="5231200819986047254">📊</tg-emoji>',
+  phone: '<tg-emoji emoji-id="5201990176175299013">📞</tg-emoji>',
+  arrow: '<tg-emoji emoji-id="5397582299640375552">👉</tg-emoji>',
+  verified: '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji>',
+  card: '<tg-emoji emoji-id="5332724926216428039">📇</tg-emoji>',
+  telegram: '<tg-emoji emoji-id="5364125616801073577">✈️</tg-emoji>',
+  mobile: '<tg-emoji emoji-id="5407025283456835913">📱</tg-emoji>',
+  trophy: '<tg-emoji emoji-id="5188344996356448758">🏆</tg-emoji>',
+  user: '<tg-emoji emoji-id="6165860934242798778">👤</tg-emoji>',
+  gear: '<tg-emoji emoji-id="5339068773301240682">⚙️</tg-emoji>',
+  broadcast: '<tg-emoji emoji-id="5256134032852278918">📡</tg-emoji>'
+};
+
 function getSiteUrl() {
   if (!_db) return 'https://devlopedwithzayro.site';
   return _db.prepare("SELECT value FROM settings WHERE key='site_url'").get()?.value
@@ -73,7 +105,7 @@ function initBot(token, db) {
       request: { agent: deliveryAgent, timeout: 10 * 60_000 }
     });
 
-    // ── /start Handler — Ultra-Premium VIP Hub ──
+    // ── /start Handler — Ultra-Premium VIP Hub with Premium Emojis ──
     bot.onText(/\/start/, async (msg) => {
       const chatId    = String(msg.chat.id);
       const username  = msg.from?.username ? `@${msg.from.username}` : '';
@@ -82,7 +114,6 @@ function initBot(token, db) {
       const supportUrl = getSupportUrl();
       const channelUrl = getChannelUrl();
 
-      // Check user details if in DB
       let userCoins = 0;
       let userOrders = 0;
       if (_db) {
@@ -98,27 +129,27 @@ function initBot(token, db) {
 
       const welcomeMsg =
 `╔══════════════════════════════════╗
-║    💎  <b>𝐙𝐀𝐘𝐑𝐎 𝐌𝐎𝐃 𝐁𝐔𝐈𝐋𝐃𝐄𝐑 𝐕𝐈𝐏</b>  💎    ║
+║  ${PE.diamond} <b>𝐙𝐀𝐘𝐑𝐎 𝐌𝐎𝐃 𝐁𝐔𝐈𝐋𝐃𝐄𝐑 𝐕𝐈𝐏</b> ${PE.diamond}  ║
 ╚══════════════════════════════════╝
 
-👋 Welcome, <b>${firstName}</b> ${username ? `(<code>${username}</code>)` : ''}!
+${PE.wave} <b>Welcome, ${firstName}!</b> ${username ? `(<code>${username}</code>)` : ''}
 
-⚡ <b>System Status:</b> <code>ONLINE 🟢</code>
-🪙 <b>Your Balance:</b> <code>${userCoins} Coins 💰</code>
-📦 <b>Total Orders:</b> <code>${userOrders} APKs Built 🚀</code>
+${PE.bot} <b>System Status:</b> <code>ONLINE 🟢</code>
+${PE.money} <b>Your Balance:</b> <code>${userCoins} Coins</code>
+${PE.trophy} <b>Total Orders:</b> <code>${userOrders} APKs Built</code>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔥 <b>Fastest Sideload & Auto-Bypass Cloud Engine:</b>
-• 🛡️ <i>100% Antivirus & Phone Manager Clean</i>
-• ⚡ <i>Universal DhaniWin & Multi-Game Dynamic Engine</i>
-• ☁️ <i>Live Firebase Sync & Auto-Recharge Gateway</i>
+${PE.fire} <b>Next-Gen Sideload & Auto-Bypass Engine:</b>
+• ${PE.lock} <i>100% Antivirus & Phone Manager Safe</i>
+• ${PE.rocket} <i>Universal DhaniWin & Multi-Game Compatible</i>
+• ${PE.broadcast} <i>Live Cloud Sync & Zero-Downtime Builds</i>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👇 <b>Choose an action below to get started:</b>`;
+${PE.down} <b>Choose an option below to proceed:</b>`;
 
       const reply_markup = {
         inline_keyboard: [
           [
-            { text: '🚀 ᴏᴘᴇɴ ᴀᴘᴋ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: siteUrl } }
+            { text: '🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: siteUrl } }
           ],
           [
             { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` } },
@@ -151,7 +182,7 @@ function initBot(token, db) {
       try {
         const u = _db.prepare('SELECT id, username FROM users WHERE telegram_id=?').get(chatId);
         if (!u) {
-          return bot.sendMessage(chatId, `⚠️ <b>Account not linked</b>\nPlease link your Telegram ID from your website profile.`, {
+          return bot.sendMessage(chatId, `${PE.alert} <b>Account not linked</b>\nPlease link your Telegram ID from your website profile to view orders.`, {
             parse_mode: 'HTML',
             reply_markup: { inline_keyboard: [[{ text: '🚀 Open Web Panel', web_app: { url: siteUrl } }]] }
           });
@@ -159,16 +190,16 @@ function initBot(token, db) {
 
         const orders = _db.prepare('SELECT id, app_name, status, created_at FROM orders WHERE user_id=? ORDER BY id DESC LIMIT 5').all(u.id);
         if (!orders.length) {
-          return bot.sendMessage(chatId, `📦 <b>No orders yet!</b>\nYou haven't created any APK orders yet. Tap below to create your first app.`, {
+          return bot.sendMessage(chatId, `${PE.mobile} <b>No orders yet!</b>\nYou haven't created any APK orders yet. Tap below to create your first app.`, {
             parse_mode: 'HTML',
             reply_markup: { inline_keyboard: [[{ text: '🔨 Build First APK', web_app: { url: siteUrl } }]] }
           });
         }
 
-        let txt = `📦 <b>Your Recent Orders (${orders.length}):</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+        let txt = `${PE.mobile} <b>Your Recent Orders (${orders.length}):</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
         orders.forEach(o => {
-          const st = o.status === 'done' ? '✅ Ready' : o.status === 'failed' ? '❌ Failed' : '⏳ Building';
-          txt += `• <b>#${o.id} - ${escapeHtml(o.app_name)}</b>\n  Status: ${st} | 🕒 <code>${new Date(o.created_at).toLocaleDateString()}</code>\n\n`;
+          const st = o.status === 'done' ? `${PE.check} Ready` : o.status === 'failed' ? `❌ Failed` : `⏳ Building`;
+          txt += `${PE.dot} <b>#${o.id} - ${escapeHtml(o.app_name)}</b>\n  Status: ${st} | ${PE.card} <code>${new Date(o.created_at).toLocaleDateString()}</code>\n\n`;
         });
         txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
@@ -188,10 +219,10 @@ function initBot(token, db) {
       const chatId = String(msg.chat.id);
       const helpMsg =
 `╔══════════════════════════════════╗
-║     📖 <b>𝐀𝐏𝐊 𝐈𝐍𝐒𝐓𝐀𝐋𝐋𝐀𝐓𝐈𝐎𝐍 𝐆𝐔𝐈𝐃𝐄</b>    ║
+║  ${PE.sparkles} <b>𝐀𝐏𝐊 𝐈𝐍𝐒𝐓𝐀𝐋𝐋𝐀𝐓𝐈𝐎𝐍 𝐆𝐔𝐈𝐃𝐄</b> ${PE.sparkles}  ║
 ╚══════════════════════════════════╝
 
-⚡ <b>How to install APKs smoothly:</b>
+${PE.fire} <b>How to install APKs smoothly:</b>
 
 1️⃣ <b>Download:</b> Tap the APK file sent by this bot.
 2️⃣ <b>Permission:</b> Allow installation from Telegram / Browser.
@@ -200,7 +231,7 @@ function initBot(token, db) {
    • Google will verify the clean APK in 5 seconds and complete install!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🛡️ <b>Security Guarantee:</b>
+${PE.lock} <b>Security Guarantee:</b>
 Our APKs are built with 100% clean architecture, without malicious permissions.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
@@ -247,13 +278,13 @@ Our APKs are built with 100% clean architecture, without malicious permissions.
           try {
             await bot.answerCallbackQuery(query.id, { text: `✅ Approved +${row.coins_requested} coins!` });
             const cap =
-`✅ <b>COIN REQUEST APPROVED</b> 💰
+`${PE.check} <b>COIN REQUEST APPROVED</b> ${PE.money}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 <b>User:</b> <code>#${row.user_id}</code>
-🪙 <b>Coins Added:</b> <b>+${row.coins_requested}</b>
-💵 <b>Amount Paid:</b> ₹${row.amount_paid}
-🔖 <b>UTR:</b> <code>${escapeHtml(row.utr)}</code>
-🆔 <b>Request ID:</b> <code>#${reqId}</code>
+${PE.user} <b>User:</b> <code>#${row.user_id}</code>
+${PE.money} <b>Coins Added:</b> <b>+${row.coins_requested}</b>
+${PE.gift} <b>Amount Paid:</b> ₹${row.amount_paid}
+${PE.verified} <b>UTR:</b> <code>${escapeHtml(row.utr)}</code>
+${PE.dot} <b>Request ID:</b> <code>#${reqId}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
             await bot.editMessageCaption(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' })
               .catch(() => bot.editMessageText(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }));
@@ -264,11 +295,11 @@ Our APKs are built with 100% clean architecture, without malicious permissions.
           try {
             await bot.answerCallbackQuery(query.id, { text: '❌ Request rejected' });
             const cap =
-`❌ <b>COIN REQUEST REJECTED</b>
+`${PE.alert} <b>COIN REQUEST REJECTED</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 <b>User:</b> <code>#${row.user_id}</code>
-🔖 <b>UTR:</b> <code>${escapeHtml(row.utr)}</code>
-🆔 <b>Request ID:</b> <code>#${reqId}</code>
+${PE.user} <b>User:</b> <code>#${row.user_id}</code>
+${PE.verified} <b>UTR:</b> <code>${escapeHtml(row.utr)}</code>
+${PE.dot} <b>Request ID:</b> <code>#${reqId}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
             await bot.editMessageCaption(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' })
               .catch(() => bot.editMessageText(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }));
@@ -292,15 +323,15 @@ async function sendCoinRequest(adminChatId, user, request, screenshotPath) {
 
   const msg =
 `╔══════════════════════════════════╗
-║    💰  <b>𝐍𝐄𝐖 𝐂𝐎𝐈𝐍 𝐑𝐄𝐐𝐔𝐄𝐒𝐓</b>  💰    ║
+║  ${PE.money} <b>𝐍𝐄𝐖 𝐂𝐎𝐈𝐍 𝐑𝐄𝐐𝐔𝐄𝐒𝐓</b> ${PE.money}  ║
 ╚══════════════════════════════════╝
 
-👤 <b>Username:</b> <code>${escapeHtml(user.username)}</code>
-📧 <b>Email:</b> <code>${escapeHtml(user.email)}</code>
-🪙 <b>Coins Requested:</b> <b>${request.coins_requested} 💰</b>
-💵 <b>Amount:</b> <b>₹${request.amount_paid}</b>
-🔖 <b>UTR:</b> <code>${escapeHtml(request.utr)}</code>
-🆔 <b>Request ID:</b> <code>#${request.id}</code>
+${PE.user} <b>Username:</b> <code>${escapeHtml(user.username)}</code>
+${PE.card} <b>Email:</b> <code>${escapeHtml(user.email)}</code>
+${PE.money} <b>Coins Requested:</b> <b>${request.coins_requested}</b>
+${PE.gift} <b>Amount:</b> <b>₹${request.amount_paid}</b>
+${PE.verified} <b>UTR:</b> <code>${escapeHtml(request.utr)}</code>
+${PE.dot} <b>Request ID:</b> <code>#${request.id}</code>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <i>Verify payment and choose action below:</i>`;
@@ -371,7 +402,7 @@ async function sendDocumentWithRetry(sender, telegramId, apkPath, caption) {
   }
 }
 
-// ── Ultra-Sleek APK Delivery ──
+// ── Ultra-Sleek APK Delivery with Premium Emojis ──
 async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
   const telegramId = user.telegram_id;
   const validApkPaths = apkPaths.filter(apkPath => apkPath && fs.existsSync(apkPath));
@@ -385,16 +416,16 @@ async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
   if (validApkPaths.length > 0) {
     const headerCard =
 `╔══════════════════════════════════╗
-║     ⚡ <b>𝐀𝐏𝐊 𝐁𝐔𝐈𝐋𝐃 𝐒𝐔𝐂𝐂𝐄𝐒𝐒𝐅𝐔𝐋!</b> ⚡     ║
+║  ${PE.rocket} <b>𝐀𝐏𝐊 𝐁𝐔𝐈𝐋𝐃 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄𝐃!</b> ${PE.rocket}  ║
 ╚══════════════════════════════════╝
 
-👑 <b>App Name:</b>  <code>${escapeHtml(appNamePlain)}</code>
-📦 <b>Package:</b>   <code>${escapeHtml(order.package_name || 'com.client.app')}</code>
-🛡️ <b>Protection:</b> <b>100% Antivirus Clean • Jiagu Hardened</b>
-🚀 <b>Status:</b>     <b>Ready to Install ✅</b>
+${PE.crown} <b>App Name:</b>  <code>${escapeHtml(appNamePlain)}</code>
+${PE.card} <b>Package:</b>   <code>${escapeHtml(order.package_name || 'com.client.app')}</code>
+${PE.lock} <b>Protection:</b> <b>100% Clean • Jiagu Hardened</b>
+${PE.verified} <b>Status:</b>     <b>Ready to Install</b> ${PE.check}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📥 <i>Uploading your APK files now… Please wait.</i>
+${PE.down} <i>Uploading your APK files now… Please wait.</i>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
     try {
@@ -412,8 +443,8 @@ async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
       const filename = path.basename(apkPath);
       const isReal = index === 0;
       const caption = isReal
-        ? `✅ <b>REAL PRODUCTION APK</b>\n📁 <code>${escapeHtml(filename)}</code>\n\n💡 <i><b>Note:</b> If "App scan recommended" appears, tap "Scan app" — installs in 5s!</i>`
-        : `🎭 <b>FAKE PREVIEW APK</b>\n📁 <code>${escapeHtml(filename)}</code>\n\n💡 <i>Multi-game clone variant.</i>`;
+        ? `${PE.check} <b>REAL PRODUCTION APK</b>\n📁 <code>${escapeHtml(filename)}</code>\n\n${PE.bell} <i><b>Tip:</b> If "App scan recommended" appears, tap "Scan app" — installs in 5s!</i>`
+        : `${PE.sparkles} <b>FAKE PREVIEW APK</b>\n📁 <code>${escapeHtml(filename)}</code>\n\n${PE.star} <i>Multi-game clone variant.</i>`;
 
       try {
         await sendDocumentWithRetry(sender, telegramId, apkPath, caption);
@@ -425,8 +456,8 @@ async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
     }
 
     const completionCard = failedFiles.length === 0
-      ? `🎉 <b>All ${sentCount} APK file(s) delivered successfully!</b>\nTap the attached file above to install directly on your Android phone.`
-      : `⚠️ <b>${sentCount}/${validApkPaths.length} APK file(s) sent.</b>\nPlease open My Orders to download remaining files.`;
+      ? `${PE.party} <b>All ${sentCount} APK file(s) delivered successfully!</b>\nTap the attached file above to install directly on your phone.`
+      : `${PE.alert} <b>${sentCount}/${validApkPaths.length} APK file(s) sent.</b>\nPlease open My Orders to download remaining files.`;
 
     const deliveryButtons = {
       inline_keyboard: [
@@ -481,7 +512,7 @@ function sendApkReady(user, order, apkPaths = [], downloadUrls = []) {
   return delivery;
 }
 
-// ── Broadcast Announcement to All Telegram Bot Users ──
+// ── Broadcast Announcement to All Telegram Bot Users with Premium Emojis ──
 async function broadcastAnnouncement(announcement) {
   if (!bot || !_db) throw new Error('Telegram bot is not configured or running');
 
@@ -494,13 +525,13 @@ async function broadcastAnnouncement(announcement) {
 
   const text =
 `╔══════════════════════════════════╗
-║    📢 <b>${escapeHtml(title.toUpperCase())}</b>    ║
+║  ${PE.broadcast} <b>${escapeHtml(title.toUpperCase())}</b> ${PE.bell}  ║
 ╚══════════════════════════════════╝
 
 ${escapeHtml(message)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🌐 <b>Official Portal:</b> <a href="${siteUrl}">${siteUrl}</a>`;
+${PE.rocket} <b>Official Portal:</b> <a href="${siteUrl}">${siteUrl}</a>`;
 
   const inlineKeyboard = [];
   if (button_text && button_url) {
@@ -532,7 +563,6 @@ ${escapeHtml(message)}
         });
       }
       sent++;
-      // Sleep 40ms to respect Telegram rate limits (max 30 msgs/sec)
       await wait(40);
     } catch (e) {
       failed++;
