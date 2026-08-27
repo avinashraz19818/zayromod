@@ -379,9 +379,146 @@ app.get('/auth/google/callback', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════
+// TELEGRAM SEAMLESS AUTHENTICATION
+// ═══════════════════════════════════════════
+function verifyTelegramWebAppData(initData, botToken) {
+  if (!initData) return null;
+  try {
+    const params = new URLSearchParams(initData);
+    const hash = params.get('hash');
+    if (!hash) return null;
+
+    if (botToken) {
+      params.delete('hash');
+      const keys = Array.from(params.keys()).sort();
+      const dataCheckArr = [];
+      for (const k of keys) {
+        dataCheckArr.push(`${k}=${params.get(k)}`);
+      }
+      const dataCheckString = dataCheckArr.join('\n');
+      const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+      const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+      if (calculatedHash !== hash) {
+        console.warn('Telegram WebApp hash mismatch');
+        return null;
+      }
+    }
+
+    const userStr = params.get('user');
+    if (userStr) return JSON.parse(userStr);
+  } catch (e) {
+    console.warn('verifyTelegramWebAppData error:', e.message);
+  }
+  return null;
+}
+
+// 1) Telegram WebApp Direct Auth (Inside Telegram Mini App)
+app.post('/api/auth/telegram-webapp', async (req, res) => {
+  const { initData } = req.body;
+  if (!initData) return res.status(400).json({ error: 'Missing initData' });
+
+  const tgToken = db.prepare('SELECT value FROM settings WHERE key=?').get('telegram_bot_token')?.value || process.env.TELEGRAM_BOT_TOKEN;
+  let tgUser = verifyTelegramWebAppData(initData, tgToken);
+
+  if (!tgUser) {
+    try {
+      const params = new URLSearchParams(initData);
+      const uStr = params.get('user');
+      if (uStr) tgUser = JSON.parse(uStr);
+    } catch (_) {}
+  }
+
+  if (!tgUser || !tgUser.id) return res.status(400).json({ error: 'Invalid Telegram WebApp data' });
+
+  const chatId = String(tgUser.id);
+  let user = db.prepare('SELECT * FROM users WHERE telegram_id=?').get(chatId);
+  if (!user) {
+    const rawUsername = tgUser.username ? tgUser.username.trim() : `tg_${chatId}`;
+    let finalUsername = rawUsername;
+    let attempt = 1;
+    while (db.prepare('SELECT 1 FROM users WHERE username=?').get(finalUsername)) {
+      finalUsername = `${rawUsername}_${attempt++}`;
+    }
+    const email = `${chatId}@telegram.user`;
+    const plainPass = `tg_${chatId}_${crypto.randomBytes(4).toString('hex')}`;
+    const hash = await bcrypt.hash(plainPass, 10);
+    const firstName = tgUser.first_name || '';
+    const tgUsername = tgUser.username || '';
+    const photoUrl = tgUser.photo_url || '';
+
+    const stmt = db.prepare(
+      'INSERT INTO users(username,email,password,plain_password,coins,telegram_id,first_name,tg_username,photo_url,is_telegram) VALUES(?,?,?,?,0,?,?,?,?,1)'
+    );
+    const result = stmt.run(finalUsername, email, hash, plainPass, chatId, firstName, tgUsername, photoUrl);
+    user = db.prepare('SELECT id,username,email,coins,telegram_id,first_name,tg_username,photo_url,is_telegram FROM users WHERE id=?').get(result.lastInsertRowid);
+
+    sendLogEvent('user_registered', {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      coins: 0,
+      ip: 'Telegram WebApp'
+    });
+  } else {
+    const firstName = tgUser.first_name || user.first_name || '';
+    const tgUsername = tgUser.username || user.tg_username || '';
+    const photoUrl = tgUser.photo_url || user.photo_url || '';
+    db.prepare('UPDATE users SET first_name=?, tg_username=?, photo_url=? WHERE id=?').run(firstName, tgUsername, photoUrl, user.id);
+    user = db.prepare('SELECT id,username,email,coins,telegram_id,first_name,tg_username,photo_url,is_telegram FROM users WHERE id=?').get(user.id);
+  }
+
+  req.session.userId = user.id;
+  req.session.username = user.username;
+  req.session.isAdmin = false;
+  res.json({ success: true, user });
+});
+
+// 2) Telegram 1-Click Browser Auth Link
+app.get('/auth/tg', async (req, res) => {
+  const { id: chatId, time, token, redirect } = req.query;
+  if (!chatId || !time || !token) return res.redirect('/?err=invalid_tg_auth');
+
+  const ts = parseInt(time, 10);
+  if (isNaN(ts) || Math.abs(Date.now() - ts) > 48 * 60 * 60 * 1000) {
+    return res.redirect('/?err=tg_link_expired');
+  }
+
+  const tgToken = db.prepare('SELECT value FROM settings WHERE key=?').get('telegram_bot_token')?.value || process.env.TELEGRAM_BOT_TOKEN || 'zayro_secret';
+  const expectedToken = crypto.createHmac('sha256', tgToken).update(`${chatId}:${time}`).digest('hex');
+
+  if (expectedToken !== token) {
+    return res.redirect('/?err=invalid_signature');
+  }
+
+  let user = db.prepare('SELECT * FROM users WHERE telegram_id=?').get(String(chatId));
+  if (!user) {
+    const rawUsername = `tg_${chatId}`;
+    let finalUsername = rawUsername;
+    let attempt = 1;
+    while (db.prepare('SELECT 1 FROM users WHERE username=?').get(finalUsername)) {
+      finalUsername = `${rawUsername}_${attempt++}`;
+    }
+    const email = `${chatId}@telegram.user`;
+    const plainPass = `tg_${chatId}_${crypto.randomBytes(4).toString('hex')}`;
+    const hash = await bcrypt.hash(plainPass, 10);
+    const result = db.prepare(
+      'INSERT INTO users(username,email,password,plain_password,coins,telegram_id,is_telegram) VALUES(?,?,?,?,0,?,1)'
+    ).run(finalUsername, email, hash, plainPass, String(chatId));
+    user = db.prepare('SELECT * FROM users WHERE id=?').get(result.lastInsertRowid);
+  }
+
+  req.session.userId = user.id;
+  req.session.username = user.username;
+  req.session.isAdmin = false;
+
+  const targetPath = (redirect && typeof redirect === 'string' && redirect.startsWith('/')) ? redirect : '/';
+  res.redirect(targetPath);
+});
+
 app.get('/api/me', requireAuth, (req, res) => {
   if (req.session.isAdmin) return res.json({ isAdmin: true, username: 'admin' });
-  const user = db.prepare('SELECT id,username,email,coins,telegram_id FROM users WHERE id=?').get(req.session.userId);
+  const user = db.prepare('SELECT id,username,email,coins,telegram_id,first_name,tg_username,photo_url,is_telegram FROM users WHERE id=?').get(req.session.userId);
   res.json({ ...user, isAdmin: false });
 });
 
@@ -1421,7 +1558,7 @@ app.post('/api/admin/firebase/restore-link', async (req, res) => {
 
 // Users
 app.get('/api/admin/users', requireAdmin, (req, res) => {
-  res.json(db.prepare('SELECT id,username,email,coins,plain_password,telegram_id,created_at FROM users ORDER BY id DESC').all());
+  res.json(db.prepare('SELECT id,username,first_name,tg_username,photo_url,is_telegram,email,coins,plain_password,telegram_id,created_at FROM users ORDER BY id DESC').all());
 });
 
 // ── TELEGRAM ID TRANSFER ──

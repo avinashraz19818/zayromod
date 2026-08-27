@@ -1041,8 +1041,21 @@ async function logout(){
   currentUser=null;updateNav(null);showPage('home');toast('Logged out');
 }
 async function loadMe(){
+  try{
+    const tg=window.Telegram?.WebApp;
+    if(tg&&tg.initData){
+      tg.ready();tg.expand();
+      const tgAuth=await api('/api/auth/telegram-webapp','POST',{initData:tg.initData});
+      if(tgAuth.success&&tgAuth.user){
+        currentUser=tgAuth.user;
+        updateNav(currentUser);
+        return currentUser;
+      }
+    }
+  }catch(e){}
+
   const d=await api('/api/me');
-  if(d.error){updateNav(null);return;}
+  if(d.error){updateNav(null);return null;}
   currentUser=d;updateNav(d);
   try{
     const tgUser=window.Telegram?.WebApp?.initDataUnsafe?.user;
@@ -1053,6 +1066,7 @@ async function loadMe(){
       if(!updated.error){currentUser=updated;updateNav(updated);}
     }
   }catch(e){}
+  return currentUser;
 }
 function updateNav(user){
   const on=!!user;
@@ -1778,34 +1792,48 @@ async function submitCoinRequest(){
 function renderProfile(){
   const b=$('profileBody');
   if(!currentUser){
-    b.innerHTML=`<div class="empty-state"><div class="ico">${icon('ic-user','i')}</div><h4>You're not logged in</h4>
-      <p>Login to see your profile, coins and orders.</p>
+    b.innerHTML=`<div class="empty-state"><div class="ico">${icon('ic-user','i')}</div><h4>Welcome to Zayro Mod VIP</h4>
+      <p>Telegram bot se 1-click me open karein ya neeche se login karein.</p>
       <button class="btn btn-primary" onclick="openAuth()">${icon('ic-login')}Login / Register</button></div>`;
     return;
   }
   const u=currentUser;
-  const initial=esc((u.username||'U').charAt(0).toUpperCase());
+  const displayName = u.first_name || (u.tg_username ? ('@' + u.tg_username) : u.username) || 'VIP Member';
+  const displayHandle = u.tg_username ? `@${u.tg_username}` : (u.telegram_id ? `Telegram ID: ${u.telegram_id}` : (u.email || 'Verified Account'));
+  const initial = esc(displayName.charAt(0).toUpperCase());
+
   b.innerHTML=`
-    <div class="prof-head">
-      <div class="avatar">${initial}</div>
-      <div class="who">
-        <h3>${esc(u.username||'User')}</h3>
-        <p>${esc(u.email||'No email added')}</p>
+    <div class="prof-head" style="align-items:center;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:18px">
+      ${u.photo_url 
+        ? `<img src="${esc(u.photo_url)}" alt="Avatar" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--cyan)">`
+        : `<div class="avatar" style="background:var(--grad-blue);width:52px;height:52px;font-size:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800">${initial}</div>`
+      }
+      <div class="who" style="min-width:0;margin-left:12px">
+        <h3 style="font-size:16px;display:flex;align-items:center;gap:6px;color:#fff">
+          <span>${esc(displayName)}</span>
+          <span style="display:inline-flex;align-items:center;gap:3px;background:rgba(103,232,255,0.12);color:var(--cyan);font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:12px;border:1px solid rgba(103,232,255,0.3)">
+            ✓ VIP
+          </span>
+        </h3>
+        <p style="color:var(--dim);font-size:12px;margin-top:2px">${esc(displayHandle)}</p>
       </div>
     </div>
-    <div class="stat-duo">
+
+    <div class="stat-duo" style="margin-top:14px">
       <div class="s"><b>${coin(20)}${u.coins ?? 0}</b><span>Coin Balance</span></div>
       <div class="s"><b>#${esc(u.id ?? '—')}</b><span>User ID</span></div>
     </div>
-    <div class="menu-list">
+
+    <div class="menu-list" style="margin-top:14px">
       <button onclick="showPage('wallet')">${icon('ic-wallet','i')} Wallet &amp; Deposit <span class="chev">${icon('ic-chev','i sm')}</span></button>
       <button onclick="showPage('orders')">${icon('ic-box','i')} My Orders <span class="chev">${icon('ic-chev','i sm')}</span></button>
       <button onclick="showPage('home')">${icon('ic-rocket','i')} Build New APK <span class="chev">${icon('ic-chev','i sm')}</span></button>
       <button onclick="loadMe().then(()=>{renderProfile();toast('Refreshed')})">${icon('ic-refresh','i')} Refresh Account <span class="chev">${icon('ic-chev','i sm')}</span></button>
       <button onclick="logout()" style="color:var(--danger)">${icon('ic-logout','i')} Logout</button>
     </div>
+
     <div class="note" style="margin-top:14px"><svg class="i sm"><use href="#ic-shield"/></svg>
-      <span>Every APK is signed with our keystore. Never share your login with anyone.</span></div>`;
+      <span>Your profile is securely synced with Telegram. Generated APKs are delivered to your bot in real-time.</span></div>`;
 }
 
 /* ── Lightbox ── */
