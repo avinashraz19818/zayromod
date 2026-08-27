@@ -1,11 +1,11 @@
 /**
- * ⚡ ZAYRO CYBERPUNK AUDIO ENGINE (Web Audio API Synthesizer)
- * High-definition, zero-latency procedural UI sound generator.
- * Works 100% offline without external audio files.
+ * ⚡ ZAYRO HIGH-DEFINITION AUDIO ENGINE (Web Audio API Synthesizer)
+ * Premium, zero-latency procedural UI sound generator.
+ * Works 100% offline with zero external audio assets.
  */
 (function() {
   let audioCtx = null;
-  let isMuted = localStorage.getItem('zayro_sound_muted') === 'true';
+  let isMuted = false; // Always ON by default
 
   function getAudioContext() {
     if (!audioCtx) {
@@ -20,7 +20,7 @@
     return audioCtx;
   }
 
-  // Unlock audio context on user interaction
+  // Unlock audio context on first user interaction
   const unlockAudio = () => {
     getAudioContext();
     window.removeEventListener('click', unlockAudio);
@@ -32,59 +32,71 @@
   window.addEventListener('keydown', unlockAudio, { passive: true });
 
   const SoundFX = {
-    // 🖱️ Crisp Futuristic Click
+    // 🎧 Satisfying Deep Crystal Pop / Haptic Tap (Rich, punchy and loud)
     click: (ctx) => {
       const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, now);
-      osc.frequency.exponentialRampToValueAtTime(1400, now + 0.04);
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.05);
+      // 1) Main resonant pop (sine + triangle)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(620, now);
+      osc1.frequency.exponentialRampToValueAtTime(160, now + 0.055);
+      gain1.gain.setValueAtTime(0.42, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.06);
+
+      // 2) High crisp glass click transient
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(1800, now);
+      osc2.frequency.exponentialRampToValueAtTime(950, now + 0.025);
+      gain2.gain.setValueAtTime(0.25, now);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now);
+      osc2.stop(now + 0.03);
     },
 
-    // 📑 Tab / Navigation Switch
+    // 📑 Tab / Nav Switch Chime
     tab: (ctx) => {
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(450, now);
-      osc.frequency.exponentialRampToValueAtTime(900, now + 0.07);
-      gain.gain.setValueAtTime(0.10, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(520, now);
+      osc.frequency.exponentialRampToValueAtTime(1040, now + 0.065);
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.08);
+      osc.stop(now + 0.07);
     },
 
-    // 🚀 APK Build Started (Sci-Fi Power surge)
+    // 🚀 APK Build Started (Sci-Fi Power Surge & Synth Ignition)
     buildStart: (ctx) => {
       const now = ctx.currentTime;
-      // Sub oscillator
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       osc1.type = 'sawtooth';
-      osc1.frequency.setValueAtTime(120, now);
-      osc1.frequency.exponentialRampToValueAtTime(440, now + 0.45);
-      gain1.gain.setValueAtTime(0.01, now);
-      gain1.gain.linearRampToValueAtTime(0.15, now + 0.2);
+      osc1.frequency.setValueAtTime(110, now);
+      osc1.frequency.exponentialRampToValueAtTime(580, now + 0.45);
+      gain1.gain.setValueAtTime(0.02, now);
+      gain1.gain.linearRampToValueAtTime(0.35, now + 0.2);
       gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
 
-      // Cyber chime
       const osc2 = ctx.createOscillator();
       const gain2 = ctx.createGain();
       osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(600, now + 0.1);
-      osc2.frequency.exponentialRampToValueAtTime(1200, now + 0.45);
+      osc2.frequency.setValueAtTime(440, now + 0.08);
+      osc2.frequency.exponentialRampToValueAtTime(1320, now + 0.45);
       gain2.gain.setValueAtTime(0.001, now);
-      gain2.gain.setValueAtTime(0.12, now + 0.1);
+      gain2.gain.setValueAtTime(0.30, now + 0.08);
       gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
 
       osc1.connect(gain1);
@@ -92,61 +104,32 @@
       gain1.connect(ctx.destination);
       gain2.connect(ctx.destination);
       osc1.start(now);
-      osc2.start(now + 0.1);
+      osc2.start(now + 0.08);
       osc1.stop(now + 0.55);
       osc2.stop(now + 0.55);
     },
 
-    // 🏆 APK Build Completed (Triumphant Major Triad Victory Chime)
+    // 🏆 APK Build Completed (Triumphant High-Definition Victory Chime)
     buildComplete: (ctx) => {
       const now = ctx.currentTime;
-      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51]; // C5, E5, G5, C6, E6
       notes.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        const startTime = now + (idx * 0.09);
+        const startTime = now + (idx * 0.08);
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, startTime);
         gain.gain.setValueAtTime(0.001, startTime);
-        gain.gain.linearRampToValueAtTime(0.14, startTime + 0.03);
-        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.45);
+        gain.gain.linearRampToValueAtTime(0.38, startTime + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.5);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(startTime);
-        osc.stop(startTime + 0.5);
+        osc.stop(startTime + 0.55);
       });
     },
 
-    // ✈️ Telegram Sent / Bot Notification Chime
-    telegramSent: (ctx) => {
-      const now = ctx.currentTime;
-      // High chime
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(987.77, now); // B5
-      osc1.frequency.setValueAtTime(1318.51, now + 0.08); // E6
-      gain1.gain.setValueAtTime(0.15, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.4);
-
-      // Shimmer
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'triangle';
-      osc2.frequency.setValueAtTime(1760, now + 0.08);
-      gain2.gain.setValueAtTime(0.08, now + 0.08);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.08);
-      osc2.stop(now + 0.4);
-    },
-
-    // 🪙 Golden Coin Ring
+    // 🪙 Golden Coin Metallic Ring
     coin: (ctx) => {
       const now = ctx.currentTime;
       const osc1 = ctx.createOscillator();
@@ -154,31 +137,50 @@
       const gain = ctx.createGain();
       osc1.type = 'sine';
       osc2.type = 'triangle';
-      osc1.frequency.setValueAtTime(1975.53, now); // B6
-      osc1.frequency.setValueAtTime(2637.02, now + 0.07); // E7
-      osc2.frequency.setValueAtTime(3951.07, now + 0.07); // B7
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc1.frequency.setValueAtTime(2093, now); // C7
+      osc1.frequency.setValueAtTime(2793.83, now + 0.06); // F7
+      osc2.frequency.setValueAtTime(4186, now + 0.06); // C8
+      gain.gain.setValueAtTime(0.36, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
       osc1.connect(gain);
       osc2.connect(gain);
       gain.connect(ctx.destination);
       osc1.start(now);
-      osc2.start(now + 0.07);
-      osc1.stop(now + 0.45);
-      osc2.stop(now + 0.45);
+      osc2.start(now + 0.06);
+      osc1.stop(now + 0.5);
+      osc2.stop(now + 0.5);
+    },
+
+    // ✨ Success Notification Chime
+    success: (ctx) => {
+      const now = ctx.currentTime;
+      [587.33, 880].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const start = now + (i * 0.09);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.01, start);
+        gain.gain.linearRampToValueAtTime(0.35, start + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.4);
+      });
     },
 
     // 📢 Popup Announcement Ambient Chime
     popup: (ctx) => {
       const now = ctx.currentTime;
-      const freqs = [440, 554.37, 659.25];
+      const freqs = [523.25, 659.25, 783.99];
       freqs.forEach((f, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
         osc.frequency.setValueAtTime(f, now + (i * 0.05));
         gain.gain.setValueAtTime(0.01, now + (i * 0.05));
-        gain.gain.linearRampToValueAtTime(0.08, now + (i * 0.05) + 0.04);
+        gain.gain.linearRampToValueAtTime(0.28, now + (i * 0.05) + 0.03);
         gain.gain.exponentialRampToValueAtTime(0.001, now + (i * 0.05) + 0.45);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -194,8 +196,8 @@
       const gain = ctx.createGain();
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(180, now);
-      osc.frequency.setValueAtTime(140, now + 0.08);
-      gain.gain.setValueAtTime(0.12, now);
+      osc.frequency.setValueAtTime(130, now + 0.08);
+      gain.gain.setValueAtTime(0.30, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -219,10 +221,12 @@
     }
   };
 
+  window.playSound = function(soundName) {
+    window.playAudio(soundName);
+  };
+
   window.toggleAudioMute = function() {
     isMuted = !isMuted;
-    localStorage.setItem('zayro_sound_muted', isMuted ? 'true' : 'false');
-    updateAudioToggleUI();
     if (!isMuted) window.playAudio('click');
     return !isMuted;
   };
@@ -231,26 +235,15 @@
     return isMuted;
   };
 
-  function updateAudioToggleUI() {
-    document.querySelectorAll('.sound-toggle-btn').forEach(btn => {
-      btn.innerHTML = isMuted
-        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg> <span class="snd-lbl">Muted</span>'
-        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg> <span class="snd-lbl">Sound ON</span>';
-      btn.classList.toggle('muted', isMuted);
-    });
-  }
-
-  // Bind click sounds to buttons, links, tabs automatically
+  // Bind click sounds to all interactive elements automatically
   document.addEventListener('click', (e) => {
-    const target = e.target.closest('button, a, .btn, .nav-link, .stat-card, .design-card, .tab-btn, .font-btn, input[type="radio"], input[type="checkbox"]');
+    const target = e.target.closest('button, a, .btn, .nav-link, .nav-item, .stat-card, .design-card, .tab-btn, .font-btn, .mode-card, input[type="radio"], input[type="checkbox"]');
     if (target) {
-      if (target.classList.contains('nav-link') || target.classList.contains('tab-btn')) {
+      if (target.classList.contains('nav-link') || target.classList.contains('nav-item') || target.classList.contains('tab-btn')) {
         window.playAudio('tab');
       } else {
         window.playAudio('click');
       }
     }
   }, { passive: true });
-
-  document.addEventListener('DOMContentLoaded', updateAudioToggleUI);
 })();
