@@ -13,11 +13,15 @@ const UPLOADS_DIR       = path.join(__dirname, '..', 'uploads');
 const ANDROID_HOME      = '/opt/android-sdk';
 
 // ── Generate package name from app name ──
-function makePackageName(appName, counter) {
-  let clean = appName.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 8) || 'app';
-  // Package name cannot start with a digit — prefix with 'a' if it does
-  if (/^[0-9]/.test(clean)) clean = 'a' + clean.substring(0, 7);
-  return `com.zayro.${clean}${counter}`;
+function makePackageName(appName, counter = 1) {
+  const prefixes = ['com.app', 'com.client', 'com.service', 'com.pro', 'com.hub', 'com.portal', 'com.net', 'com.cloud'];
+  const pfx = prefixes[Math.abs(counter || 0) % prefixes.length];
+  let clean = String(appName || '').toLowerCase()
+    .replace(/admin|panel|hack|mod|cheat|root|inject|trojan|fake/gi, '')
+    .replace(/[^a-z0-9]/g, '')
+    .substring(0, 10) || 'client';
+  if (/^[0-9]/.test(clean)) clean = 'app' + clean.substring(0, 7);
+  return `${pfx}.${clean}${counter}`;
 }
 
 // ── Resize icon to required Android sizes ──
