@@ -11,7 +11,7 @@ const https = require('https');
 
 const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
-const { initBot, sendCoinRequest, sendApkReady, broadcastAnnouncement } = require('./utils/telegram');
+const { initBot, sendCoinRequest, sendApkReady, broadcastAnnouncement, sendLogEvent } = require('./utils/telegram');
 const { injectParams: injectHtmlParams } = require('./utils/htmlprocessor');
 const { buildAppContent } = require('./utils/appcontent');
 const { applyFontStyle, isValidStyle, FONT_STYLES } = require('./utils/fontstyles');
@@ -199,6 +199,15 @@ app.post('/api/register', registerLimiter, async (req, res) => {
     req.session.userId = result.lastInsertRowid;
     req.session.username = username;
     res.json({ success: true });
+
+    // Send to Telegram Log Channel
+    sendLogEvent('user_registered', {
+      id: result.lastInsertRowid,
+      username: username.trim(),
+      email: email.trim(),
+      coins: 0,
+      ip: getClientIp(req)
+    });
   } catch (e) {
     res.json({ error: 'Username or email already exists' });
   }
@@ -507,15 +516,27 @@ app.post('/api/coupons/validate', requireAuth, (req, res) => {
 });
 
 app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) => {
-  const { design_id, app_name, register_url, min_deposit, brand_title, fake_addon, fake_register_url } = req.body;
-  if (!design_id || !app_name || !register_url) return res.json({ error: 'Missing required fields' });
+  const { design_id, app_name, register_url, min_deposit, brand_title, fake_addon, fake_register_url, build_mode } = req.body;
+  if (!design_id || !app_name) return res.json({ error: 'Missing design or app name' });
   const appNameStyle = isValidStyle(req.body.app_name_style) ? req.body.app_name_style : 'normal';
+
+  // Determine build mode: 'fake', 'both', or 'real'
+  const isOnlyFake = build_mode === 'fake' || (!register_url && fake_register_url);
+  const isBoth = build_mode === 'both' || (fake_addon === 'true' && register_url && fake_register_url);
+  const effectiveBuildMode = isOnlyFake ? 'fake' : (isBoth ? 'both' : 'real');
+
+  const mainUrlInput = isOnlyFake ? (fake_register_url || register_url) : register_url;
+  if (!mainUrlInput) {
+    return res.json({ error: isOnlyFake ? 'Fake site register URL required' : 'Register URL required' });
+  }
 
   let cleanRegisterUrl;
   let cleanFakeRegisterUrl = null;
   try {
-    cleanRegisterUrl = normalizeHttpUrl(register_url);
-    if (fake_register_url) cleanFakeRegisterUrl = normalizeHttpUrl(fake_register_url);
+    cleanRegisterUrl = normalizeHttpUrl(mainUrlInput);
+    if ((isBoth || isOnlyFake) && (fake_register_url || register_url)) {
+      cleanFakeRegisterUrl = normalizeHttpUrl(fake_register_url || register_url);
+    }
   } catch (error) {
     return res.json({ error: error.message || 'Enter a valid http(s) register URL' });
   }
@@ -526,9 +547,8 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
   if (!user) return res.status(401).json({ error: 'User not found. Please login again.' });
 
-  const fakeAddonEnabled = fake_addon === 'true' || fake_addon === true;
   const fakePrice = design.fake_price_coins > 0 ? design.fake_price_coins : parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('addon_fake_price')?.value || '5');
-  const subtotalCoins = design.price_coins + (fakeAddonEnabled ? fakePrice : 0);
+  const subtotalCoins = isOnlyFake ? fakePrice : (design.price_coins + (isBoth ? fakePrice : 0));
   let couponResult = { code: '', discount: 0 };
   try {
     couponResult = calculateCouponDiscount(req.body.coupon_code, subtotalCoins);
@@ -537,7 +557,7 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   }
   const totalCoins = Math.max(0, subtotalCoins - couponResult.discount);
 
-  if (fakeAddonEnabled && !cleanFakeRegisterUrl) return res.json({ error: 'Fake site register URL required' });
+  if (isBoth && !cleanFakeRegisterUrl) return res.json({ error: 'Fake site register URL required for dual build' });
   if (user.coins < totalCoins) return res.json({ error: `Not enough coins. Need ${totalCoins}, have ${user.coins}` });
 
   const { buildUrls, extractDomain, isDhaniUrl } = require('./utils/htmlprocessor');
@@ -549,21 +569,16 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   const packageName = makePackageName(app_name, _pkgCounter);
   const iconFile = req.file ? path.basename(req.file.path) : null;
 
-  // Pehle order INSERT karo (temp path ke saath) — orderId ke baad UNIQUE
-  // firebase path set hota hai. Same domain ke do orders ka path same
-  // nahi ho sakta — warna dono apps ka content ek hi jagah se serve hota
-  // hai (galat naam/content dikhne lagta hai).
   const tempPath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
   const orderResult = db.prepare(`
     INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,app_name_style,status,coins_spent,design_variant,coupon_code,discount_coins)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'building',?,?,?,?)
-  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, tempPath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, null, appNameStyle, totalCoins, 'real', couponResult.code, couponResult.discount);
+  `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, tempPath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, isBoth ? cleanFakeRegisterUrl : (isOnlyFake ? cleanRegisterUrl : null), null, appNameStyle, totalCoins, effectiveBuildMode, couponResult.code, couponResult.discount);
   const orderId = orderResult.lastInsertRowid;
 
-  // UNIQUE paths (order id ke saath) — collisions impossible
   const firebasePath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}${orderId}`;
   let fakeFirebasePath = null;
-  if (fakeAddonEnabled && cleanFakeRegisterUrl) {
+  if (isBoth && cleanFakeRegisterUrl) {
     const fakeDomain = extractDomain(cleanFakeRegisterUrl);
     fakeFirebasePath = `zayrof${fakeDomain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}${orderId}`;
   }
@@ -576,7 +591,7 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
       depositUrl,
       wingoUrl
     });
-    if (fakeAddonEnabled && cleanFakeRegisterUrl) {
+    if (isBoth && cleanFakeRegisterUrl) {
       const fakeUrls = buildUrls(cleanFakeRegisterUrl, isDhaniDesign);
       await updateFirebaseLinks(fakeFirebasePath, {
         registerUrl: cleanFakeRegisterUrl,
@@ -585,7 +600,6 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
       });
     }
   } catch (error) {
-    // Firebase fail — order row hatao, coins NAHI kate
     db.prepare('DELETE FROM orders WHERE id=?').run(orderId);
     return res.json({ error: `${error.message}. APK was not started and no coins were deducted.` });
   }
@@ -599,6 +613,22 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
 
   res.json({ success: true, orderId, buildId, message: 'Build started' });
 
+  // ── Log APK Build Started to Telegram Log Channel ──
+  sendLogEvent('order_created', {
+    id: orderId,
+    user_id: user.id,
+    username: user.username,
+    app_name: app_name.trim(),
+    package_name: packageName,
+    design_name: design.name,
+    build_mode: effectiveBuildMode,
+    coins_spent: totalCoins,
+    coupon_code: couponResult.code,
+    discount_coins: couponResult.discount,
+    register_url: cleanRegisterUrl,
+    fake_register_url: cleanFakeRegisterUrl
+  });
+
   // ── Build in background ──
   const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
   const logs = [];
@@ -609,8 +639,8 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
       db.prepare('UPDATE orders SET apk_file=? WHERE id=?').run(result.apkFile, orderId);
 
       let fakeResult = null;
-      // ── Fake APK build if addon enabled ──
-      if (fakeAddonEnabled && cleanFakeRegisterUrl) {
+      // ── Fake APK build if dual addon enabled ──
+      if (isBoth && cleanFakeRegisterUrl) {
         logPush('\n--- Building Fake APK (Fake 1) ---');
         const fakeOrder = makeFakeOrder(order, cleanFakeRegisterUrl,
           order.fake_firebase_path
@@ -627,10 +657,19 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
       }
 
       db.prepare('UPDATE orders SET status=? WHERE id=?').run('done', orderId);
-      // Send APK files via Telegram (instant)
+
+      // Send APK files to user via Telegram
       const apkPaths = [result.apkPath];
       if (fakeResult?.success) apkPaths.push(fakeResult.apkPath);
       sendApkReady(user, db.prepare('SELECT * FROM orders WHERE id=?').get(orderId), apkPaths, []).catch(() => {});
+
+      // Send APK files & completion log to Telegram Log Channel
+      sendLogEvent('order_completed', {
+        order_id: orderId,
+        user_id: user.id,
+        username: user.username,
+        app_name: order.app_name
+      }, apkPaths);
     } else {
       db.prepare('UPDATE orders SET status=? WHERE id=?').run('failed', orderId);
       db.prepare('UPDATE users SET coins = coins + ? WHERE id=?').run(totalCoins, user.id);
@@ -994,6 +1033,15 @@ app.post('/api/coins/request', requireAuth, iconUpload.single('screenshot'), asy
   try {
     const msgId = await sendCoinRequest(adminId, user, requestRow, screenshotPath);
     if (msgId) db.prepare('UPDATE coin_requests SET telegram_msg_id=? WHERE id=?').run(msgId, requestRow.id);
+    sendLogEvent('coin_requested', {
+      id: requestRow.id,
+      user_id: user.id,
+      username: user.username,
+      coins_requested: parseInt(coins),
+      amount_paid: amount,
+      utr: utr.trim(),
+      screenshot_path: screenshotPath
+    });
   } catch(e) { /* Telegram not configured */ }
 
   res.json({ success: true, message: 'Request sent. Admin will approve soon.' });
@@ -2299,7 +2347,7 @@ app.post('/api/admin/settings', requireAdmin, adminUpload.fields([
   { name: 'upi_qr_image', maxCount: 1 },
   { name: 'loading_html', maxCount: 1 }
 ]), (req, res) => {
-  const allowed = ['upi_id','coin_rate','site_name','site_url','telegram_bot_token','telegram_admin_id','telegram_support_user','telegram_channel_url','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count'];
+  const allowed = ['upi_id','coin_rate','site_name','site_url','telegram_bot_token','telegram_admin_id','telegram_support_user','telegram_channel_url','telegram_log_channel_id','telegram_log_enabled','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count'];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
       db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run(key, req.body[key]);

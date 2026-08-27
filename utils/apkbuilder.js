@@ -356,7 +356,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     log('Reading design HTML files...');
 
     // Use fake HTML if this is a fake build and design has fake_popup_html_file
-    const isFakeBuild = !!(order.is_fake);
+    const isFakeBuild = !!(order.is_fake || order.design_variant === 'fake');
     const popupHtmlFileName = (isFakeBuild && design.fake_popup_html_file)
       ? design.fake_popup_html_file
       : design.popup_html_file;
