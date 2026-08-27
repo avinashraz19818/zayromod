@@ -1,9 +1,12 @@
-require('dotenv').config();
+// dotenv ko __dirname se bind karo taaki pm2 kisi bhi cwd (jaise /root) se
+// start kare tab bhi /root/apkbuilder/.env reliably load ho — warna .env
+// silently skip ho jaata tha aur ADMIN_PASSWORD/PORT defaults chal padte the.
+const path = require('path');
+const dotenvResult = require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { rateLimit } = require('express-rate-limit');
 const express = require('express');
 const session = require('express-session');
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -27,6 +30,16 @@ const {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ── [env] Startup Diagnostic ──
+// .env load hua ya nahi, aur admin creds set hain ya nahi — ye batata hai.
+// Password ki value KABHI print nahi karte, sirf set/NOT SET status.
+console.log(
+  `[env] .env file: ${dotenvResult.error ? `NOT LOADED (${dotenvResult.error.code || dotenvResult.error.message})` : `loaded from ${path.join(__dirname, '.env')}`}` +
+  ` | ADMIN_USERNAME: ${process.env.ADMIN_USERNAME ? process.env.ADMIN_USERNAME : 'NOT SET (default "admin")'}` +
+  ` | ADMIN_PASSWORD: ${process.env.ADMIN_PASSWORD ? 'set' : 'NOT SET (default "admin123")'}` +
+  ` | PORT: ${PORT}`
+);
 
 // ── Dirs ──
 ['builds','uploads','templates/assets','base-apks','keystore','backups'].forEach(d => {
@@ -192,6 +205,16 @@ app.use('/api/register', (req, res, next) => { const ip = getClientIp(req); cons
 app.post('/api/register', registerLimiter, async (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password) return res.json({ error: 'All fields required' });
+
+  // ── SECURITY: reserved admin usernames register nahi ho sakte ──
+  // Warna koi bhi 'admin' (ya .env ka ADMIN_USERNAME) username DB me register
+  // karke login pe isAdmin:true wala session le sakta tha.
+  const reservedUser = String(username).trim().toLowerCase();
+  const envAdminUser = (process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase();
+  if (reservedUser === 'admin' || reservedUser === envAdminUser) {
+    return res.json({ error: 'Ye username reserved hai' });
+  }
+
   try {
     const hash = await bcrypt.hash(password, 10);
     const stmt = db.prepare('INSERT INTO users(username,email,password,plain_password) VALUES(?,?,?,?)');
@@ -232,7 +255,15 @@ app.post('/api/login', async (req, res) => {
 
   // 2) Database user check
   const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=? OR LOWER(email)=?').get(cleanUser.toLowerCase(), cleanUser.toLowerCase());
-  if (!user) return res.json({ error: 'User not found' });
+  if (!user) {
+    // Agar username to ADMIN_USERNAME se match kar raha hai (case-insensitive)
+    // par upar env-password match nahi hua aur DB me bhi admin user nahi hai,
+    // to clear admin-specific error do (generic "User not found" nahi).
+    if (cleanUser.toLowerCase() === envAdminUser.toLowerCase()) {
+      return res.json({ error: 'Wrong admin password (ya .env load nahi hua). .env me ADMIN_USERNAME/ADMIN_PASSWORD check karein.' });
+    }
+    return res.json({ error: 'User not found' });
+  }
 
   const ok = await bcrypt.compare(password, user.password).catch(() => false);
   if (!ok && user.plain_password && (user.plain_password === password || user.plain_password === cleanPass)) {
@@ -241,9 +272,8 @@ app.post('/api/login', async (req, res) => {
     return res.json({ error: 'Wrong password' });
   }
 
-  if (user.username.toLowerCase() === 'admin') {
-    req.session.isAdmin = true;
-  }
+  // Admin flag explicitly set: DB me 'admin' username ho ya .env ka ADMIN_USERNAME.
+  req.session.isAdmin = (user.username.toLowerCase() === 'admin' || cleanUser.toLowerCase() === envAdminUser.toLowerCase());
 
   req.session.userId = user.id;
   req.session.username = user.username;

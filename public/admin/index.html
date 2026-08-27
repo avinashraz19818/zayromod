@@ -1138,8 +1138,28 @@ async function api(url, method='GET', body=null, isForm=false) {
     if (isForm) { opts.body = body; }
     else { opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
   }
-  const r = await fetch(url, opts);
-  return r.json();
+  // Robust: network/HTTP/HTML(500) errors pe promise reject nahi hone dete —
+  // hamesha ek object return hota hai (error field ke saath) taaki callers
+  // (jaise Login button) "Verifying…" pe atak na jaayein.
+  let r;
+  try {
+    r = await fetch(url, opts);
+  } catch (e) {
+    return { error: 'Network error: server tak nahi pahuncha (' + (e && e.message ? e.message : 'unknown') + ')' };
+  }
+  const text = await r.text().catch(() => '');
+  let data = null;
+  if (text) {
+    try { data = JSON.parse(text); } catch (_) { data = null; }
+  }
+  if (data === null) {
+    // Non-JSON response (aksar HTML error page ya empty body).
+    return { error: 'Server error (HTTP ' + r.status + ')' + (text ? ': ' + text.slice(0, 200) : '') };
+  }
+  if (!r.ok && data && typeof data === 'object' && data.error === undefined) {
+    data.error = 'Server error (HTTP ' + r.status + ')';
+  }
+  return data;
 }
 
 function toggleSidebar(){
@@ -2565,11 +2585,18 @@ async function doAdminLogin(btn) {
   
   const submitBtn = btn || document.querySelector('#loginOverlay .btn');
   setLoading(submitBtn, true, 'Verifying…');
-  const d = await api('/api/login','POST',{username, password});
-  setLoading(submitBtn, false);
+  let d;
+  try {
+    d = await api('/api/login','POST',{username, password});
+  } catch (e) {
+    d = { error: 'Login failed: ' + (e && e.message ? e.message : 'unknown error') };
+  } finally {
+    // Button hamesha reset ho — warna "Verifying…" pe atak jaata hai.
+    setLoading(submitBtn, false);
+  }
 
-  if (d.error || !d.isAdmin) {
-    errBox.textContent = d.error || 'Invalid credentials or not an admin account';
+  if (!d || d.error || !d.isAdmin) {
+    errBox.textContent = (d && d.error) || 'Invalid credentials or not an admin account';
     return;
   }
   document.getElementById('loginOverlay').style.display = 'none';
@@ -2612,7 +2639,7 @@ document.addEventListener('DOMContentLoaded',()=>labelTables());
     <div class="lg-icn"><svg><use href="#i-settings"/></svg></div>
     <h2>Admin Login</h2>
     <p class="sub">Zayro Mod Builder Console</p>
-    <div class="form-group"><label>Username</label><input type="text" id="aUser" placeholder="admin"></div>
+    <div class="form-group"><label>Username</label><input type="text" id="aUser" placeholder="ADMIN_USERNAME (from .env)"></div>
     <div class="form-group"><label>Password</label><input type="password" id="aPass" placeholder="••••••"></div>
     <button class="btn btn-primary" onclick="doAdminLogin(this)">Login</button>
     <div id="loginErr" class="err"></div>

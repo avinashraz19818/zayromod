@@ -226,10 +226,6 @@ ${PE.down} <b>Choose an option below to proceed:</b>`;
             { text: '🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: siteUrl }, style: 'success' }
           ],
           [
-            { text: '📱 ᴍʏ ᴀᴄᴄᴏᴜɴᴛꜱ', web_app: { url: `${siteUrl}#profile` }, style: 'primary' },
-            { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` }, style: 'primary' }
-          ],
-          [
             { text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ', web_app: { url: `${siteUrl}#wallet` }, style: 'success' },
             { text: '🌐 ᴏᴘᴇɴ ɪɴ ᴄʜʀᴏᴍᴇ / ꜱᴀꜰᴀʀɪ', url: browserAuthUrl, style: 'primary' }
           ],
@@ -260,6 +256,14 @@ ${PE.down} <b>Choose an option below to proceed:</b>`;
     bot.on('message', async (msg) => {
       const text = msg.text?.trim() || '';
       const chatId = String(msg.chat.id);
+
+      // Har private incoming message pe stale reply-keyboard (bottom dock) ka
+      // one-time cleanup. Fire-and-forget rakha hai (await nahi karte) taaki
+      // message handling block na ho; helper khud per-chat sirf ek baar chalta hai.
+      if (msg.chat.type === 'private' && !msg.from?.is_bot) {
+        clearStaleReplyKeyboard(chatId).catch(() => {});
+      }
+
       if (text.startsWith('/')) return; // handled by command handlers
 
       if (/24\/7 SUPPORT|SUPPORT/i.test(text)) {
