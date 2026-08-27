@@ -627,12 +627,14 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
   <div class="step-card" style="margin-bottom:8px">
     <div class="step-head"><span class="n">3</span><div><h4>Submit proof</h4><small>Coins are added after admin approval</small></div></div>
     <div class="form-group">
-      <label><svg class="i sm"><use href="#ic-tag"/></svg>UTR / Reference Number</label>
-      <input type="text" id="buyUtr" placeholder="e.g. 4531 2298 7741" inputmode="numeric">
+      <label><svg class="i sm"><use href="#ic-tag"/></svg>UTR / Reference Number <span style="color:var(--danger);font-size:11px;font-weight:700">* Required</span></label>
+      <input type="text" id="buyUtr" placeholder="e.g. 4531 2298 7741" inputmode="numeric" required>
+      <div class="hint">Payment app se 12-digit UTR / Ref No. yahan enter karein.</div>
     </div>
     <div class="form-group">
-      <label><svg class="i sm"><use href="#ic-image"/></svg>Payment Screenshot (optional)</label>
-      <input type="file" id="buyScreenshot" accept="image/*">
+      <label><svg class="i sm"><use href="#ic-image"/></svg>Payment Screenshot <span style="color:var(--danger);font-size:11px;font-weight:700">* Mandatory</span></label>
+      <input type="file" id="buyScreenshot" accept="image/*" required>
+      <div class="hint">UPI payment ka clear screenshot upload karna zaroori hai.</div>
     </div>
     <button class="btn btn-gold btn-block" onclick="submitCoinRequest()"><svg class="i sm"><use href="#ic-check"/></svg>Submit Deposit Request</button>
     <div class="hint" style="text-align:center;margin-top:10px">Usually approved within a few minutes.</div>
@@ -878,6 +880,39 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('domainModal')">Cancel</button>
       <button class="btn btn-primary" onclick="submitDomainChange(this)"><svg class="i sm"><use href="#ic-bolt"/></svg>Update Link</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DEMO ACCOUNT MODAL ══ -->
+<div class="modal-overlay" id="demoAccountModal">
+  <div class="modal" style="max-width:480px">
+    <button class="close-modal" onclick="closeModal('demoAccountModal')" aria-label="Close"><svg class="i"><use href="#ic-x"/></svg></button>
+    <h2><svg class="i"><use href="#ic-user"/></svg>Manage Demo Accounts</h2>
+    <p class="modal-sub" style="margin-bottom:14px">Authorize demo accounts or prediction hack users for <b id="demoAppName" style="color:var(--cyan)"></b>. Added numbers can bypass prediction registration.</p>
+    <input type="hidden" id="demoOrderId">
+
+    <div class="form-group" style="margin-bottom:12px">
+      <label><svg class="i sm"><use href="#ic-user"/></svg>Add Phone Number / Hack User Key</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="demoUserKey" placeholder="e.g. 9876543210" inputmode="numeric" style="flex:1">
+        <button type="button" class="btn btn-primary btn-sm" onclick="addDemoUser(this)" style="white-space:nowrap;padding:0 14px"><svg class="i sm"><use href="#ic-check"/></svg>Add User</button>
+      </div>
+      <div class="hint">Phone number enter karein jisko hack/prediction bypass demo access dena hai.</div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--dim)">Authorized Accounts</span>
+        <button class="btn btn-outline btn-sm" onclick="loadDemoUsers($('demoOrderId').value)" style="padding:3px 8px;font-size:11px"><svg class="i sm"><use href="#ic-refresh"/></svg>Refresh</button>
+      </div>
+      <div id="demoUsersList" style="max-height:220px;overflow-y:auto;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:8px">
+        <div style="text-align:center;padding:16px;color:var(--dim);font-size:12px">Loading accounts...</div>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-outline btn-block" onclick="closeModal('demoAccountModal')">Close</button>
     </div>
   </div>
 </div>
@@ -1463,7 +1498,8 @@ async function loadOrders(){
       o.status==='done'
         ?`<a href="/api/orders/${o.id}/download" class="btn btn-primary btn-sm">${icon('ic-download')}APK</a>
           ${o.fake_apk_file?`<a href="/api/orders/${o.id}/download-fake" class="btn btn-gold btn-sm">${icon('ic-download')}Fake</a>`:''}
-          <button class="btn btn-outline btn-sm" onclick="openChangeDomain(${o.id},${o.live_link_enabled?1:0})">${icon('ic-edit')}${o.live_link_enabled?'Update Link':'Upgrade Link'}</button>`
+          <button class="btn btn-outline btn-sm" onclick="openChangeDomain(${o.id},${o.live_link_enabled?1:0})">${icon('ic-edit')}${o.live_link_enabled?'Update Link':'Upgrade Link'}</button>
+          <button class="btn btn-outline btn-sm" onclick="openDemoAccountModal(${o.id},'${esc(o.app_name)}')">${icon('ic-user')}Add Demo Account</button>`
         :o.status==='building'
           ?`<span style="color:var(--cyan);font-size:12px;display:inline-flex;align-items:center;gap:7px"><span class="spinner"></span>Building...</span>`
           :`<span style="color:var(--dim);font-size:12px">No actions</span>`}</div>
@@ -1530,6 +1566,67 @@ async function submitDomainChange(btn){
 
   toast(d.message||'One-time Live Link upgrade started...');
   startBuildProgress(d.orderId,false);
+}
+
+/* ── Demo Accounts / Hack Users ── */
+async function openDemoAccountModal(orderId,appName){
+  $('demoOrderId').value=orderId;
+  $('demoAppName').textContent=appName||('Order #'+orderId);
+  $('demoUserKey').value='';
+  openModal('demoAccountModal');
+  await loadDemoUsers(orderId);
+}
+async function loadDemoUsers(orderId){
+  const container=$('demoUsersList');
+  if(!container)return;
+  container.innerHTML=`<div style="text-align:center;padding:16px;color:var(--dim);font-size:12px"><span class="spinner"></span> Loading accounts...</div>`;
+  const users=await api('/api/orders/'+orderId+'/demo-users');
+  if(users.error){
+    container.innerHTML=`<div style="text-align:center;padding:16px;color:var(--danger);font-size:12px">${esc(users.error)}</div>`;
+    return;
+  }
+  if(!Array.isArray(users)||!users.length){
+    container.innerHTML=`<div style="text-align:center;padding:16px;color:var(--dim);font-size:12px">No demo accounts added yet. Enter a phone number above to grant access.</div>`;
+    return;
+  }
+  container.innerHTML=users.map(u=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.05)">
+      <div>
+        <div style="font-weight:700;font-size:13px;color:#fff;display:flex;align-items:center;gap:6px">
+          <span>📱</span> <span>${esc(u.key)}</span>
+        </div>
+        <div style="font-size:10.5px;color:var(--dim);margin-top:2px">
+          ${u.timestamp?new Date(u.timestamp).toLocaleString():'Authorized Demo User'}
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteDemoUser('${orderId}','${esc(u.key)}',this)" style="padding:4px 8px;font-size:11px">
+        ${icon('ic-x','i sm')} Remove
+      </button>
+    </div>
+  `).join('');
+}
+async function addDemoUser(btn){
+  const orderId=$('demoOrderId').value;
+  const userKey=$('demoUserKey').value.trim();
+  if(!userKey)return toast('Please enter a phone number or demo user key',true);
+  setLoading(btn,true,'Adding...');
+  const res=await api('/api/orders/'+orderId+'/demo-users','POST',{user_key:userKey});
+  setLoading(btn,false);
+  if(res.error)return toast(res.error,true);
+  if(typeof playSound==='function')playSound('success');
+  toast('Demo account added successfully!');
+  $('demoUserKey').value='';
+  await loadDemoUsers(orderId);
+}
+async function deleteDemoUser(orderId,userKey,btn){
+  if(!confirm(`Are you sure you want to remove demo user "${userKey}"?`))return;
+  setLoading(btn,true,'...');
+  const res=await api('/api/orders/'+orderId+'/demo-users/'+encodeURIComponent(userKey),'DELETE');
+  setLoading(btn,false);
+  if(res.error)return toast(res.error,true);
+  if(typeof playSound==='function')playSound('click');
+  toast('Demo user removed!');
+  await loadDemoUsers(orderId);
 }
 
 /* ── Wallet ── */
@@ -1657,21 +1754,24 @@ function copyUpi(){
 }
 async function submitCoinRequest(){
   if(!currentUser)return openAuth();
-  const btn=event.currentTarget;
+  const btn=event?.currentTarget||event?.target;
   const coins=$('buyCoins').value,utr=$('buyUtr').value.trim();
-  if(!coins||parseFloat(coins)<1)return toast('Enter a valid coin amount',true);
-  if(!utr)return toast('Enter the UTR / reference number',true);
+  if(!coins||isNaN(coins)||parseFloat(coins)<1)return toast('Enter a valid coin amount (minimum 1)',true);
+  if(!utr||utr.length<4)return toast('Enter valid 12-digit UTR / reference number',true);
+  const shot=$('buyScreenshot')?.files[0];
+  if(!shot)return toast('Payment screenshot upload is required!',true);
   const fd=new FormData();
   fd.append('coins',coins);fd.append('utr',utr);
-  const shot=$('buyScreenshot')?.files[0];
-  if(shot)fd.append('screenshot',shot);
+  fd.append('screenshot',shot);
   setLoading(btn,true,'Submitting...');
   const d=await api('/api/coins/request','POST',fd,true);
   setLoading(btn,false);
   if(d.error)return toast(d.error,true);
-  toast(d.message||'Request submitted!');
+  if(typeof playSound==='function')playSound('success');
+  toast(d.message||'Request submitted! Admin will verify soon.');
   $('buyUtr').value='';
   const si=$('buyScreenshot');if(si)si.value='';
+  loadWalletPage();
 }
 
 /* ── Profile ── */
