@@ -660,6 +660,10 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
           '--ks', keystorePath,
           '--ks-pass', 'pass:zayro@123',
           '--key-pass', 'pass:zayro@123',
+          '--v1-signing-enabled', 'true',
+          '--v2-signing-enabled', 'true',
+          '--v3-signing-enabled', 'true',
+          '--v4-signing-enabled', 'false',
           '--out', preSignedApk,
           preAligned
         ], { stdio: 'pipe' });
@@ -848,6 +852,10 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
         '--ks', keystorePath,
         '--ks-pass', 'pass:zayro@123',
         '--key-pass', 'pass:zayro@123',
+        '--v1-signing-enabled', 'true',
+        '--v2-signing-enabled', 'true',
+        '--v3-signing-enabled', 'true',
+        '--v4-signing-enabled', 'false',
         '--out', signedApk,
         alignedApk
       ], { stdio: 'pipe' });
