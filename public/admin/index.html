@@ -1638,14 +1638,26 @@ async function loadUsers() {
   const users = await api('/api/admin/users');
   const c = document.getElementById('usersList');
   if (!users.length) { c.innerHTML = '<div style="color:var(--dim);padding:16px 4px">No users yet.</div>'; return; }
-  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Username</th><th>Email</th><th>Password</th><th>Coins</th><th>Telegram ID</th><th>Joined</th><th>Manage Coins</th><th>Actions</th></tr></thead><tbody>` +
-    users.map(u => `<tr>
-      <td>${u.id}</td><td><button class="btn btn-sm btn-outline" onclick="openUserOrders(${u.id},'${u.username.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-users"/></svg> ${u.username}</button></td><td>${u.email}</td>
-      <td><code style="background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--cyan)">${u.plain_password || '(hashed)'}</code></td>
+  c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>User / Telegram</th><th>Type</th><th>Coins</th><th>Telegram ID</th><th>Joined</th><th>Manage Coins</th><th>Actions</th></tr></thead><tbody>` +
+    users.map(u => {
+      const name = u.first_name || (u.tg_username ? ('@' + u.tg_username) : u.username);
+      const isTg = !!u.telegram_id || !!u.is_telegram;
+      return `<tr>
+      <td>${u.id}</td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="openUserOrders(${u.id},'${(u.username||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" style="display:inline-flex;align-items:center;gap:6px">
+          <svg><use href="#i-users"/></svg> <b>${adminEsc(name)}</b>
+          ${u.tg_username ? `<span style="color:var(--cyan);font-size:11px">@${adminEsc(u.tg_username)}</span>` : ''}
+        </button>
+        <div style="font-size:10.5px;color:var(--dim);margin-top:2px">${adminEsc(u.email || u.username)}</div>
+      </td>
+      <td>
+        <span class="badge ${isTg ? 'badge-ok' : 'badge-pending'}">${isTg ? '⚡ Telegram' : 'Web'}</span>
+      </td>
       <td><span class="coin-chip">${u.coins}</span></td>
       <td><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
         ${u.telegram_id ? `<code style="background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:11px;color:#8bdcff">${u.telegram_id}</code>` : `<span style="color:var(--dim);font-size:11px">—</span>`}
-        <button class="btn btn-sm" style="background:rgba(42,123,255,.18);color:var(--cyan);border:1px solid rgba(94,200,255,.3)" onclick="openTgTransfer(${u.id},'${u.username.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}','${(u.telegram_id || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Telegram ID transfer">⇄</button>
+        <button class="btn btn-sm" style="background:rgba(42,123,255,.18);color:var(--cyan);border:1px solid rgba(94,200,255,.3)" onclick="openTgTransfer(${u.id},'${(u.username||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}','${(u.telegram_id || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Telegram ID transfer">⇄</button>
       </div></td>
       <td><small>${new Date(u.created_at).toLocaleDateString()}</small></td>
       <td>
@@ -1656,10 +1668,11 @@ async function loadUsers() {
         </div>
       </td>
       <td><div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-sm btn-primary" onclick="openUserOrders(${u.id},'${u.username.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-package"/></svg> Manage APKs</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id},'${u.username.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-x"/></svg> Delete</button>
+        <button class="btn btn-sm btn-primary" onclick="openUserOrders(${u.id},'${(u.username||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-package"/></svg> Manage APKs</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id},'${(u.username||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-x"/></svg> Delete</button>
       </div></td>
-    </tr>`).join('') + `</tbody></table></div>`;
+    </tr>`;
+    }).join('') + `</tbody></table></div>`;
 }
 
 async function addUserCoins(userId) {

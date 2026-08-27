@@ -2,6 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const https = require('https');
 const fs   = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 let bot = null;
 let deliveryBot = null;
@@ -46,6 +47,15 @@ function getSiteUrl() {
   if (!_db) return 'https://devlopedwithzayro.site';
   return _db.prepare("SELECT value FROM settings WHERE key='site_url'").get()?.value
     || 'https://devlopedwithzayro.site';
+}
+
+function generateTelegramAuthLink(chatId, subPath = '') {
+  const siteUrl = getSiteUrl();
+  const token = _db?.prepare("SELECT value FROM settings WHERE key='telegram_bot_token'").get()?.value || 'zayro_secret';
+  const time = Date.now();
+  const sig = crypto.createHmac('sha256', token).update(`${chatId}:${time}`).digest('hex');
+  const redirectParam = subPath ? `&redirect=${encodeURIComponent(subPath)}` : '';
+  return `${siteUrl}/auth/tg?id=${chatId}&time=${time}&token=${sig}${redirectParam}`;
 }
 
 function getSupportUrl() {
@@ -105,10 +115,10 @@ function initBot(token, db) {
       request: { agent: deliveryAgent, timeout: 10 * 60_000 }
     });
 
-    // ── /start Handler — Ultra-Premium VIP Hub with Premium Emojis ──
+    // ── /start Handler — Ultra-Premium Seamless VIP Hub ──
     bot.onText(/\/start/, async (msg) => {
       const chatId    = String(msg.chat.id);
-      const username  = msg.from?.username ? `@${msg.from.username}` : '';
+      const rawUsername = msg.from?.username ? msg.from.username.trim() : '';
       const firstName = escapeHtml(msg.from?.first_name || 'VIP Member');
       const siteUrl   = getSiteUrl();
       const supportUrl = getSupportUrl();
@@ -116,15 +126,43 @@ function initBot(token, db) {
 
       let userCoins = 0;
       let userOrders = 0;
+
+      // ── Auto-Register / Sync User on Telegram Start ──
       if (_db) {
         try {
-          const u = _db.prepare('SELECT id, coins FROM users WHERE telegram_id=?').get(chatId);
-          if (u) {
-            userCoins = u.coins || 0;
-            const oc = _db.prepare('SELECT count(*) as c FROM orders WHERE user_id=?').get(u.id);
-            userOrders = oc?.c || 0;
+          let u = _db.prepare('SELECT * FROM users WHERE telegram_id=?').get(chatId);
+          if (!u) {
+            let finalUsername = rawUsername || `tg_${chatId}`;
+            let attempt = 1;
+            while (_db.prepare('SELECT 1 FROM users WHERE username=?').get(finalUsername)) {
+              finalUsername = `${rawUsername || `tg_${chatId}`}_${attempt++}`;
+            }
+            const email = `${chatId}@telegram.user`;
+            const plainPass = `tg_${chatId}_${crypto.randomBytes(3).toString('hex')}`;
+            const result = _db.prepare(
+              'INSERT INTO users(username, email, password, plain_password, coins, telegram_id, first_name, tg_username, is_telegram) VALUES(?, ?, ?, ?, 0, ?, ?, ?, 1)'
+            ).run(finalUsername, email, plainPass, plainPass, chatId, msg.from?.first_name || '', rawUsername);
+            u = _db.prepare('SELECT * FROM users WHERE id=?').get(result.lastInsertRowid);
+            sendLogEvent('user_registered', {
+              id: u.id,
+              username: u.username,
+              email: u.email,
+              coins: 0,
+              ip: 'Telegram Bot'
+            });
+          } else {
+            _db.prepare('UPDATE users SET first_name=?, tg_username=? WHERE id=?').run(
+              msg.from?.first_name || u.first_name || '',
+              rawUsername || u.tg_username || '',
+              u.id
+            );
           }
-        } catch (_) {}
+          userCoins = u.coins || 0;
+          const oc = _db.prepare('SELECT count(*) as c FROM orders WHERE user_id=?').get(u.id);
+          userOrders = oc?.c || 0;
+        } catch (e) {
+          console.error('User sync error:', e.message);
+        }
       }
 
       const welcomeMsg =
@@ -132,7 +170,7 @@ function initBot(token, db) {
 ║  ${PE.diamond} <b>𝐙𝐀𝐘𝐑𝐎 𝐌𝐎𝐃 𝐁𝐔𝐈𝐋𝐃𝐄𝐑 𝐕𝐈𝐏</b> ${PE.diamond}  ║
 ╚══════════════════════════════════╝
 
-${PE.wave} <b>Welcome, ${firstName}!</b> ${username ? `(<code>${username}</code>)` : ''}
+${PE.wave} <b>Welcome, ${firstName}!</b> ${rawUsername ? `(<code>@${rawUsername}</code>)` : ''}
 
 ${PE.bot} <b>System Status:</b> <code>ONLINE 🟢</code>
 ${PE.money} <b>Your Balance:</b> <code>${userCoins} Coins</code>
@@ -146,17 +184,21 @@ ${PE.fire} <b>Next-Gen Sideload & Auto-Bypass Engine:</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${PE.down} <b>Choose an option below to proceed:</b>`;
 
+      const browserAuthUrl = generateTelegramAuthLink(chatId);
       const reply_markup = {
         inline_keyboard: [
           [
-            { text: '🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: siteUrl } }
+            { text: '🟢 🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: siteUrl } }
           ],
           [
             { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` } },
-            { text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ', web_app: { url: `${siteUrl}#coins` } }
+            { text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ', web_app: { url: `${siteUrl}#wallet` } }
           ],
           [
-            { text: '👨‍💻 ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl },
+            { text: '🌐 ᴏᴘᴇɴ ɪɴ ᴄʜʀᴏᴍᴇ / ꜱᴀꜰᴀʀɪ', url: browserAuthUrl }
+          ],
+          [
+            { text: '👨‍💻 24/7 ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl },
             { text: '📢 ᴏꜰꜰɪᴄɪᴀʟ ᴄʜᴀɴɴᴇʟ', url: channelUrl }
           ]
         ]
@@ -182,9 +224,9 @@ ${PE.down} <b>Choose an option below to proceed:</b>`;
       try {
         const u = _db.prepare('SELECT id, username FROM users WHERE telegram_id=?').get(chatId);
         if (!u) {
-          return bot.sendMessage(chatId, `${PE.alert} <b>Account not linked</b>\nPlease link your Telegram ID from your website profile to view orders.`, {
+          return bot.sendMessage(chatId, `${PE.alert} <b>Account not found</b>\nTap /start to register automatically.`, {
             parse_mode: 'HTML',
-            reply_markup: { inline_keyboard: [[{ text: '🚀 Open Web Panel', web_app: { url: siteUrl } }]] }
+            reply_markup: { inline_keyboard: [[{ text: '🟢 🚀 Open Builder Panel', web_app: { url: siteUrl } }]] }
           });
         }
 
@@ -206,11 +248,49 @@ ${PE.down} <b>Choose an option below to proceed:</b>`;
         await bot.sendMessage(chatId, txt, {
           parse_mode: 'HTML',
           reply_markup: {
-            inline_keyboard: [[{ text: '📲 Manage in Web App', web_app: { url: siteUrl } }]]
+            inline_keyboard: [
+              [{ text: '📱 ᴍᴀɴᴀɢᴇ ɪɴ ᴡᴇʙ ᴀᴘᴘ', web_app: { url: `${siteUrl}#orders` } }],
+              [{ text: '🌐 ᴏᴘᴇɴ ɪɴ ʙʀᴏᴡꜱᴇʀ', url: generateTelegramAuthLink(chatId, '/#orders') }]
+            ]
           }
         });
       } catch (e) {
         console.error('Bot /orders error:', e.message);
+      }
+    });
+
+    // ── /wallet or /coins command ──
+    bot.onText(/\/wallet|\/coins|\/balance|\/deposit/, async (msg) => {
+      const chatId = String(msg.chat.id);
+      const siteUrl = getSiteUrl();
+      if (!_db) return;
+
+      try {
+        const u = _db.prepare('SELECT id, coins FROM users WHERE telegram_id=?').get(chatId);
+        const coins = u?.coins || 0;
+        const upiId = _db.prepare("SELECT value FROM settings WHERE key='upi_id'").get()?.value || '';
+
+        const txt =
+`╔══════════════════════════════════╗
+║  ${PE.money} <b>𝐘𝐎𝐔𝐑 𝐖𝐀𝐋𝐋𝐄𝐓 &amp; 𝐁𝐀𝐋𝐀𝐍𝐂𝐄</b> ${PE.money}  ║
+╚══════════════════════════════════╝
+
+${PE.diamond} <b>Available Balance:</b> <code>${coins} Coins</code>
+${upiId ? `${PE.card} <b>UPI ID:</b> <code>${escapeHtml(upiId)}</code>\n` : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${PE.fire} <i>Deposit credits instantly to build your modded APKs.</i>`;
+
+        await bot.sendMessage(chatId, txt, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ ɴᴏᴡ', web_app: { url: `${siteUrl}#wallet` } }],
+              [{ text: '🌐 ᴏᴘᴇɴ ɪɴ ʙʀᴏᴡꜱᴇʀ', url: generateTelegramAuthLink(chatId, '/#wallet') }]
+            ]
+          }
+        });
+      } catch (e) {
+        console.error('Bot /wallet error:', e.message);
       }
     });
 
@@ -288,6 +368,32 @@ ${PE.dot} <b>Request ID:</b> <code>#${reqId}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
             await bot.editMessageCaption(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' })
               .catch(() => bot.editMessageText(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }));
+
+            // Notify user directly
+            const targetUser = _db.prepare('SELECT telegram_id, coins FROM users WHERE id=?').get(row.user_id);
+            if (targetUser?.telegram_id) {
+              const userNotice =
+`╔══════════════════════════════════╗
+║  ${PE.party} <b>𝐂𝐎𝐈𝐍 𝐃𝐄𝐏𝐎𝐒𝐈𝐓 𝐀𝐏𝐏𝐑𝐎𝐕𝐄𝐃!</b> ${PE.money}  ║
+╚══════════════════════════════════╝
+
+${PE.check} <b>+${row.coins_requested} Coins</b> have been added to your account!
+${PE.money} <b>Current Balance:</b> <code>${targetUser.coins} Coins</code>
+${PE.verified} <b>UTR / Ref:</b> <code>${escapeHtml(row.utr)}</code>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${PE.rocket} <i>Aapka balance update ho chuka hai. Ab aap instant APK build kar sakte hain!</i>`;
+
+              bot.sendMessage(targetUser.telegram_id, userNotice, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '🟢 🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: getSiteUrl() } }],
+                    [{ text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${getSiteUrl()}#orders` } }]
+                  ]
+                }
+              }).catch(() => {});
+            }
           } catch(_) {}
         } else {
           _db.prepare('UPDATE coin_requests SET status=?,approved_by=? WHERE id=?')
@@ -303,6 +409,27 @@ ${PE.dot} <b>Request ID:</b> <code>#${reqId}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
             await bot.editMessageCaption(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' })
               .catch(() => bot.editMessageText(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }));
+
+            const targetUser = _db.prepare('SELECT telegram_id FROM users WHERE id=?').get(row.user_id);
+            if (targetUser?.telegram_id) {
+              const userNotice =
+`╔══════════════════════════════════╗
+║  ${PE.alert} <b>𝐂𝐎𝐈𝐍 𝐃𝐄𝐏𝐎𝐒𝐈𝐓 𝐔𝐏𝐃𝐀𝐓𝐄</b> ${PE.alert}  ║
+╚══════════════════════════════════╝
+
+${PE.alert} <b>Deposit Request #${reqId} could not be approved.</b>
+${PE.verified} <b>UTR:</b> <code>${escapeHtml(row.utr)}</code>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Agar aapne payment ki hai to please payment screenshot ke saath <b>Admin Support</b> se contact karein.`;
+
+              bot.sendMessage(targetUser.telegram_id, userNotice, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [[{ text: '👨‍💻 ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ', url: getSupportUrl() }]]
+                }
+              }).catch(() => {});
+            }
           } catch(_) {}
         }
       }
