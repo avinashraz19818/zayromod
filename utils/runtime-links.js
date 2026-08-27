@@ -221,10 +221,16 @@ async function updateFirebaseControl(firebasePath, values) {
   return patch;
 }
 
-async function addFirebaseUser(firebasePath, userKey) {
+async function addFirebaseUser(firebasePath, userKey, options = {}) {
   const safePath = normalizeFirebasePath(firebasePath);
   const safeKey = normalizeFirebaseUserKey(userKey);
-  const value = { registered: true, addedByAdmin: true, timestamp: Date.now() };
+  const value = {
+    registered: true,
+    isDemo: true,
+    addedByUser: options.addedByUser !== undefined ? !!options.addedByUser : false,
+    addedByAdmin: options.addedByAdmin !== undefined ? !!options.addedByAdmin : !options.addedByUser,
+    timestamp: Date.now()
+  };
   await firebaseRequest([safePath, 'users', safeKey], 'PUT', value);
   return { key: safeKey, value };
 }

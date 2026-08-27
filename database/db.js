@@ -186,6 +186,17 @@ db.exec(`
         active INTEGER NOT NULL DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS demo_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        user_key TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_demo_accounts_order_key ON demo_accounts(order_id, user_key);
     `);
   } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('telegram_support_user','')"); } catch(e) {}
