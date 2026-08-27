@@ -734,13 +734,13 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
         </div>
       </div>
       <div class="fsec">
-        <div class="fsec-head"><span class="n">2</span><div><h4>Select Build Mode</h4><small>Choose Real APK, Fake Clone Only, or Both</small></div></div>
+        <div class="fsec-head"><span class="n">2</span><div><h4>Select Build Mode</h4><small>Choose Member Hack, Fake Clone Only, or Both</small></div></div>
         <div class="build-mode-grid">
           <label class="mode-card active" id="modeCardReal" onclick="setBuildMode('real')">
             <input type="radio" name="orderBuildModeRadio" value="real" checked>
             <div class="mode-info">
-              <b>👑 Real APK Only</b>
-              <small>Production app pointing to real registration site.</small>
+              <b>👑 Only Member Hack</b>
+              <small>register to unlock deposit to unlock</small>
             </div>
             <span class="mode-price" id="modePriceReal">10 coins</span>
           </label>
@@ -748,17 +748,17 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
             <input type="radio" name="orderBuildModeRadio" value="fake">
             <div class="mode-info">
               <b>🎭 Fake APK Only</b>
-              <small>Standalone clone app pointing directly to fake site.</small>
+              <small>1 period piche</small>
             </div>
             <span class="mode-price" id="modePriceFake">5 coins</span>
           </label>
           <label class="mode-card" id="modeCardBoth" onclick="setBuildMode('both')">
             <input type="radio" name="orderBuildModeRadio" value="both">
             <div class="mode-info">
-              <b>⚡ Dual Build (Real + Fake)</b>
-              <small>Compile both Real &amp; Fake APKs simultaneously.</small>
+              <b>⚡ Both APK</b>
+              <small>Real Member Hack + Fake Clone (Both APKs)</small>
             </div>
-            <span class="mode-price" id="modePriceBoth">+5 coins</span>
+            <span class="mode-price" id="modePriceBoth">15 coins</span>
           </label>
         </div>
       </div>
@@ -1223,12 +1223,13 @@ async function selectDesign(id,designData=null){
   $('orderDesignId').value=id;
   $('orderModalTitle').textContent='Build: '+d.name;
   $('orderBalance').textContent=currentUser.coins;
-  fakeAddonPrice=d.fake_price_coins>0?d.fake_price_coins:5;
-  try{const s=await api('/api/settings/payment');}catch(e){}
+  const realPrice = Number(d.price_coins) || 10;
+  fakeAddonPrice = d.fake_price_coins > 0 ? Number(d.fake_price_coins) : 5;
+  const bothPrice = realPrice + fakeAddonPrice;
   
-  $('modePriceReal').textContent = d.price_coins + ' coins';
+  $('modePriceReal').textContent = realPrice + ' coins';
   $('modePriceFake').textContent = fakeAddonPrice + ' coins';
-  $('modePriceBoth').textContent = '+' + fakeAddonPrice + ' coins';
+  $('modePriceBoth').textContent = bothPrice + ' coins';
   setBuildMode('real');
 
   ['orderAppName','orderRegUrl','orderIcon','fakeRegUrl','couponCode'].forEach(i=>$(i).value='');
@@ -1320,7 +1321,7 @@ async function previewOrder(){
   
   $('cnfUrl').textContent=orderBuildMode==='fake' ? fakeUrl : regUrl;
   $('cnfDeposit').textContent='₹'+minDep;
-  $('cnfFake').textContent=orderBuildMode==='fake' ? 'Only Fake APK' : (orderBuildMode==='both' ? `Dual Build (+${fakeAddonPrice}) — ${fakeUrl}` : 'No (Real APK Only)');
+  $('cnfFake').textContent=orderBuildMode==='fake' ? 'Fake APK Only' : (orderBuildMode==='both' ? `Both APK (${fakeUrl})` : 'Only Member Hack');
   $('cnfDiscount').textContent=appliedCoupon.discount>0?`${appliedCoupon.code} (-${appliedCoupon.discount} coins)`:'No coupon';
   $('cnfCost').textContent=total;
   $('cnfAfter').textContent=(currentUser.coins-total)+' coins';
