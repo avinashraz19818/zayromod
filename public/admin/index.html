@@ -947,6 +947,16 @@ td code{background:rgba(94,200,255,.08);color:var(--cyan);padding:2px 8px;border
       </div>
     </div>
     <div class="card" style="max-width:640px">
+      <div class="card-hd"><span class="accent"></span><h3>Telegram Activity Log Channel / Group</h3></div>
+      <p style="font-size:12.5px;color:var(--dim);margin-bottom:14px;line-height:1.5">
+        Automatically sends live activity logs (new user signups, APK build orders, APK file archives, coin deposits) with rich formatted cards to your Telegram channel or group.
+      </p>
+      <div class="grid2">
+        <div class="form-group"><label>Log Channel / Group ID</label><input type="text" id="sTgLogChannelId" placeholder="e.g. -1001234567890 or @mychannel"></div>
+        <div class="form-group"><label>Activity Logger Status</label><select id="sTgLogEnabled"><option value="1">Enabled (Send live logs &amp; APKs)</option><option value="0">Disabled</option></select></div>
+      </div>
+    </div>
+    <div class="card" style="max-width:640px">
       <div class="card-hd"><span class="accent"></span><h3>Assets</h3></div>
       <div class="form-group">
         <label>Loading HTML File <small>(shared for all APKs)</small></label>
@@ -2366,6 +2376,8 @@ async function loadSettings() {
   document.getElementById('sTgAdminId').value = s.telegram_admin_id || '';
   document.getElementById('sTgSupportUser').value = s.telegram_support_user || '';
   document.getElementById('sTgChannelUrl').value = s.telegram_channel_url || '';
+  document.getElementById('sTgLogChannelId').value = s.telegram_log_channel_id || '';
+  document.getElementById('sTgLogEnabled').value = s.telegram_log_enabled !== undefined ? String(s.telegram_log_enabled) : '1';
   document.getElementById('currentLoadingHtml').textContent = s.loading_html_file || 'Not uploaded yet';
   if (s.upi_qr_image) {
     document.getElementById('currentQr').innerHTML = `<img src="/api/files/${s.upi_qr_image}" style="width:110px;border-radius:10px;border:1px solid var(--border)">`;
@@ -2388,6 +2400,8 @@ async function saveSettings() {
   fd.append('telegram_admin_id', document.getElementById('sTgAdminId').value);
   fd.append('telegram_support_user', document.getElementById('sTgSupportUser').value);
   fd.append('telegram_channel_url', document.getElementById('sTgChannelUrl').value);
+  fd.append('telegram_log_channel_id', document.getElementById('sTgLogChannelId').value);
+  fd.append('telegram_log_enabled', document.getElementById('sTgLogEnabled').value);
   const qrFile = document.getElementById('sQrImg').files[0];
   if (qrFile) fd.append('upi_qr_image', qrFile);
   const loadingHtmlFile = document.getElementById('sLoadingHtml').files[0];

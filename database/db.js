@@ -190,5 +190,7 @@ db.exec(`
   } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('telegram_support_user','')"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('telegram_channel_url','')"); } catch(e) {}
+  try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('telegram_log_channel_id','')"); } catch(e) {}
+  try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('telegram_log_enabled','1')"); } catch(e) {}
 
 module.exports = db;

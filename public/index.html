@@ -463,6 +463,17 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
 .sound-toggle-btn:hover{border-color:var(--cyan);color:#fff}
 .sound-toggle-btn.muted{color:var(--dim);border-color:rgba(255,84,112,.3);background:rgba(255,84,112,.06)}
 
+/* ── Build Mode Grid & Cards ── */
+.build-mode-grid{display:grid;grid-template-columns:1fr;gap:9px;margin-top:10px}
+.mode-card{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.03);border:1.5px solid var(--border);cursor:pointer;transition:.2s}
+.mode-card:hover{border-color:var(--cyan)}
+.mode-card.active{border-color:var(--cyan);background:rgba(103,232,255,.08);box-shadow:0 0 16px rgba(103,232,255,.15)}
+.mode-card input{accent-color:var(--cyan);width:17px;height:17px;flex-shrink:0}
+.mode-info{flex:1}
+.mode-info b{display:block;font-size:13.5px;color:#fff}
+.mode-info small{display:block;font-size:11px;color:var(--dim);margin-top:2px}
+.mode-price{font-size:12.5px;font-weight:700;color:var(--gold);white-space:nowrap}
+
 /* ── Announcement Modal & Badge ── */
 .announcement-box{position:relative;background:linear-gradient(175deg,rgba(16,24,46,.95),rgba(9,13,26,.98));border:1px solid rgba(103,232,255,.3);box-shadow:0 0 30px rgba(61,123,255,.25),0 28px 70px -34px rgba(0,0,0,.95)}
 .ann-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:rgba(103,232,255,.12);color:var(--cyan);border:1px solid rgba(103,232,255,.3);margin-bottom:12px}
@@ -721,26 +732,45 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
         </div>
       </div>
       <div class="fsec">
-        <div class="fsec-head"><span class="n">2</span><div><h4>Site &amp; Deposit</h4><small>Where the app should point</small></div></div>
-        <div class="form-grid">
-          <div class="form-group full"><label><svg class="i sm"><use href="#ic-globe"/></svg>Register URL</label>
-            <div style="display:flex;gap:6px;align-items:center"><input type="url" id="orderRegUrl" placeholder="https://example.com/#/register?invitationCode=..." inputmode="url"><button type="button" class="paste-btn" onclick="pasteInto(&quot;orderRegUrl&quot;)" title="Paste">📋</button></div>
-            <div class="hint">Deposit &amp; Wingo URLs auto-built from this domain.</div></div>
-          <div class="form-group full"><label><svg class="i sm"><use href="#ic-rupee"/></svg>Minimum Deposit Amount (₹)</label>
-            <input type="number" id="orderMinDeposit" value="300" min="1" inputmode="numeric"></div>
+        <div class="fsec-head"><span class="n">2</span><div><h4>Select Build Mode</h4><small>Choose Real APK, Fake Clone Only, or Both</small></div></div>
+        <div class="build-mode-grid">
+          <label class="mode-card active" id="modeCardReal" onclick="setBuildMode('real')">
+            <input type="radio" name="orderBuildModeRadio" value="real" checked>
+            <div class="mode-info">
+              <b>👑 Real APK Only</b>
+              <small>Production app pointing to real registration site.</small>
+            </div>
+            <span class="mode-price" id="modePriceReal">10 coins</span>
+          </label>
+          <label class="mode-card" id="modeCardFake" onclick="setBuildMode('fake')">
+            <input type="radio" name="orderBuildModeRadio" value="fake">
+            <div class="mode-info">
+              <b>🎭 Fake APK Only</b>
+              <small>Standalone clone app pointing directly to fake site.</small>
+            </div>
+            <span class="mode-price" id="modePriceFake">5 coins</span>
+          </label>
+          <label class="mode-card" id="modeCardBoth" onclick="setBuildMode('both')">
+            <input type="radio" name="orderBuildModeRadio" value="both">
+            <div class="mode-info">
+              <b>⚡ Dual Build (Real + Fake)</b>
+              <small>Compile both Real &amp; Fake APKs simultaneously.</small>
+            </div>
+            <span class="mode-price" id="modePriceBoth">+5 coins</span>
+          </label>
         </div>
       </div>
-      <div class="addon-box" id="fakeAddonBox">
-        <label class="addon-head">
-          <input type="checkbox" id="fakeAddonCheck" onchange="toggleFakeAddon()">
-          <svg class="i sm" style="color:var(--gold)"><use href="#ic-layers"/></svg>
-          Add Fake Site APK
-          <span class="tag-gold" id="fakeAddonPriceTag"><svg class="coin-i" style="width:13px;height:13px"><use href="#ic-coin"/></svg>+?</span>
-        </label>
-        <div class="hint" style="margin-left:29px">Same design, different URL. You get 2 APKs — real + fake.</div>
-        <div id="fakeUrlBox" style="display:none;margin-top:14px">
-          <div class="form-group" style="margin-bottom:0"><label><svg class="i sm"><use href="#ic-globe"/></svg>Fake Site Register URL</label>
-            <div style="display:flex;gap:6px;align-items:center"><input type="url" id="fakeRegUrl" placeholder="https://fakesite.com/#/register?..." inputmode="url"><button type="button" class="paste-btn" onclick="pasteInto(&quot;fakeRegUrl&quot;)" title="Paste">📋</button></div></div>
+      <div class="fsec">
+        <div class="fsec-head"><span class="n">3</span><div><h4>Site &amp; Deposit</h4><small>Where the app should point</small></div></div>
+        <div class="form-grid">
+          <div class="form-group full" id="realUrlGroup"><label><svg class="i sm"><use href="#ic-globe"/></svg>Real Site Register URL *</label>
+            <div style="display:flex;gap:6px;align-items:center"><input type="url" id="orderRegUrl" placeholder="https://example.com/#/register?invitationCode=..." inputmode="url"><button type="button" class="paste-btn" onclick="pasteInto(&quot;orderRegUrl&quot;)" title="Paste">📋</button></div>
+            <div class="hint">Deposit &amp; Wingo URLs auto-built from this domain.</div></div>
+          <div class="form-group full" id="fakeUrlGroup" style="display:none"><label><svg class="i sm"><use href="#ic-globe"/></svg>Fake Site Register URL *</label>
+            <div style="display:flex;gap:6px;align-items:center"><input type="url" id="fakeRegUrl" placeholder="https://fakesite.com/#/register?..." inputmode="url"><button type="button" class="paste-btn" onclick="pasteInto(&quot;fakeRegUrl&quot;)" title="Paste">📋</button></div>
+            <div class="hint">Fake registration site URL.</div></div>
+          <div class="form-group full"><label><svg class="i sm"><use href="#ic-rupee"/></svg>Minimum Deposit Amount (₹)</label>
+            <input type="number" id="orderMinDeposit" value="300" min="1" inputmode="numeric"></div>
         </div>
       </div>
       <div class="form-group">
@@ -1109,6 +1139,33 @@ function continueWithDesign(){
   selectDesign(d.id,d);
 }
 
+let orderBuildMode = 'real';
+function setBuildMode(mode) {
+  orderBuildMode = mode;
+  ['real', 'fake', 'both'].forEach(m => {
+    const card = $('modeCard' + m.charAt(0).toUpperCase() + m.slice(1));
+    if (card) {
+      card.classList.toggle('active', m === mode);
+      const radio = card.querySelector('input[type="radio"]');
+      if (radio) radio.checked = (m === mode);
+    }
+  });
+
+  if (mode === 'fake') {
+    $('realUrlGroup').style.display = 'none';
+    $('fakeUrlGroup').style.display = 'block';
+  } else if (mode === 'both') {
+    $('realUrlGroup').style.display = 'block';
+    $('fakeUrlGroup').style.display = 'block';
+  } else {
+    $('realUrlGroup').style.display = 'block';
+    $('fakeUrlGroup').style.display = 'none';
+  }
+
+  resetCouponHint('Coupon reset. Apply again after changing mode.');
+  updateOrderCost();
+}
+
 async function selectDesign(id,designData=null){
   if(!currentUser){openAuth();return;}
   const d=designData||await api('/api/designs/'+id);
@@ -1116,14 +1173,15 @@ async function selectDesign(id,designData=null){
   currentDesign=d;
   $('orderDesignId').value=id;
   $('orderModalTitle').textContent='Build: '+d.name;
-  $('orderCost').textContent=d.price_coins;
   $('orderBalance').textContent=currentUser.coins;
   fakeAddonPrice=d.fake_price_coins>0?d.fake_price_coins:5;
   try{const s=await api('/api/settings/payment');}catch(e){}
-  $('fakeAddonPriceTag').innerHTML=coin(13)+'+'+fakeAddonPrice;
-  $('fakeAddonCheck').checked=false;
-  $('fakeUrlBox').style.display='none';
-  $('fakeAddonBox').classList.remove('active');
+  
+  $('modePriceReal').textContent = d.price_coins + ' coins';
+  $('modePriceFake').textContent = fakeAddonPrice + ' coins';
+  $('modePriceBoth').textContent = '+' + fakeAddonPrice + ' coins';
+  setBuildMode('real');
+
   ['orderAppName','orderRegUrl','orderIcon','fakeRegUrl','couponCode'].forEach(i=>$(i).value='');
   orderFontStyle='bold';refreshOrderFontPicker();
   appliedCoupon={code:'',discount:0,total:null};
@@ -1137,17 +1195,15 @@ function resetCouponHint(msg='Discount coupons are set by admin.'){
   appliedCoupon={code:'',discount:0,total:null};
   $('couponHint').textContent=msg;
 }
-function currentSubtotal(){return (currentDesign?Number(currentDesign.price_coins)||0:0)+($('fakeAddonCheck').checked?fakeAddonPrice:0);}
+function currentSubtotal(){
+  const base = currentDesign ? (Number(currentDesign.price_coins) || 0) : 0;
+  if (orderBuildMode === 'fake') return fakeAddonPrice;
+  if (orderBuildMode === 'both') return base + fakeAddonPrice;
+  return base;
+}
 function updateOrderCost(){
   const total=appliedCoupon.total!==null?appliedCoupon.total:currentSubtotal();
   $('orderCost').textContent=total;
-}
-function toggleFakeAddon(){
-  const checked=$('fakeAddonCheck').checked;
-  $('fakeUrlBox').style.display=checked?'block':'none';
-  $('fakeAddonBox').classList.toggle('active',checked);
-  resetCouponHint('Coupon reset. Apply again after changing add-ons.');
-  updateOrderCost();
 }
 async function applyCoupon(btn){
   const code=$('couponCode').value.trim().toUpperCase();
@@ -1186,12 +1242,18 @@ $('orderAppName').addEventListener('input',()=>{clearTimeout(_fontTimer);_fontTi
 refreshOrderFontPicker();
 
 async function previewOrder(){
-  const appName=$('orderAppName').value.trim(),regUrl=$('orderRegUrl').value.trim();
-  const minDep=$('orderMinDeposit').value,fakeAddon=$('fakeAddonCheck').checked,fakeUrl=$('fakeRegUrl').value.trim();
+  const appName=$('orderAppName').value.trim();
+  const regUrl=$('orderRegUrl').value.trim();
+  const fakeUrl=$('fakeRegUrl').value.trim();
+  const minDep=$('orderMinDeposit').value;
+
   if(!currentUser){closeModal('orderModal');openAuth();return;}
   if(!appName)return toast('App name is required',true);
-  if(!regUrl)return toast('Register URL is required',true);
-  if(fakeAddon&&!fakeUrl)return toast('Fake site register URL is required',true);
+
+  if(orderBuildMode==='real' && !regUrl) return toast('Real Site Register URL is required',true);
+  if(orderBuildMode==='fake' && !fakeUrl) return toast('Fake Site Register URL is required',true);
+  if(orderBuildMode==='both' && (!regUrl || !fakeUrl)) return toast('Both Real and Fake Register URLs are required for dual build',true);
+
   const subtotal=currentSubtotal();
   const total=appliedCoupon.total!==null?appliedCoupon.total:subtotal;
   if(currentUser.coins<total){
@@ -1206,9 +1268,10 @@ async function previewOrder(){
     const sel=Array.isArray(opts)?opts.find(o=>o.key===orderFontStyle):null;
     $('cnfAppName').textContent=sel?sel.sample:appName;
   }catch(e){ $('cnfAppName').textContent=appName; }
-  $('cnfUrl').textContent=regUrl;
+  
+  $('cnfUrl').textContent=orderBuildMode==='fake' ? fakeUrl : regUrl;
   $('cnfDeposit').textContent='₹'+minDep;
-  $('cnfFake').textContent=fakeAddon?`Yes (+${fakeAddonPrice}) — ${fakeUrl}`:'No';
+  $('cnfFake').textContent=orderBuildMode==='fake' ? 'Only Fake APK' : (orderBuildMode==='both' ? `Dual Build (+${fakeAddonPrice}) — ${fakeUrl}` : 'No (Real APK Only)');
   $('cnfDiscount').textContent=appliedCoupon.discount>0?`${appliedCoupon.code} (-${appliedCoupon.discount} coins)`:'No coupon';
   $('cnfCost').textContent=total;
   $('cnfAfter').textContent=(currentUser.coins-total)+' coins';
@@ -1226,11 +1289,21 @@ async function submitOrder(){
   fd.append('app_name',$('orderAppName').value.trim());
   fd.append('app_name_style',orderFontStyle);
   fd.append('brand_title',$('orderAppName').value.trim());
-  fd.append('register_url',$('orderRegUrl').value.trim());
+  fd.append('build_mode',orderBuildMode);
+
+  if(orderBuildMode==='fake'){
+    fd.append('fake_register_url',$('fakeRegUrl').value.trim());
+    fd.append('register_url',$('fakeRegUrl').value.trim());
+  } else if(orderBuildMode==='both'){
+    fd.append('register_url',$('orderRegUrl').value.trim());
+    fd.append('fake_addon','true');
+    fd.append('fake_register_url',$('fakeRegUrl').value.trim());
+  } else {
+    fd.append('register_url',$('orderRegUrl').value.trim());
+    fd.append('fake_addon','false');
+  }
+
   fd.append('min_deposit',$('orderMinDeposit').value);
-  const fakeAddon=$('fakeAddonCheck').checked;
-  fd.append('fake_addon',fakeAddon?'true':'false');
-  if(fakeAddon)fd.append('fake_register_url',$('fakeRegUrl').value.trim());
   if(appliedCoupon.code)fd.append('coupon_code',appliedCoupon.code);
   const iconFile=$('orderIcon').files[0];
   if(iconFile)fd.append('icon',iconFile);
@@ -1239,7 +1312,7 @@ async function submitOrder(){
   setLoading(btn,false);
   if(d.error)return toast(d.error,true);
   closeModal('orderModal',true);
-  startBuildProgress(d.orderId,fakeAddon);
+  startBuildProgress(d.orderId, orderBuildMode==='both');
   await loadMe();
 }
 

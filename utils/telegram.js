@@ -572,4 +572,99 @@ ${PE.rocket} <b>Official Portal:</b> <a href="${siteUrl}">${siteUrl}</a>`;
   return { total: users.length, sent, failed };
 }
 
-module.exports = { initBot, sendCoinRequest, sendApkReady, broadcastAnnouncement };
+// ── Log Channel & Group Activity Logger with Premium Emojis ──
+async function sendLogEvent(eventType, data = {}, attachments = []) {
+  if (!bot || !_db) return;
+  try {
+    const isLogEnabled = _db.prepare("SELECT value FROM settings WHERE key='telegram_log_enabled'").get()?.value;
+    if (isLogEnabled === '0' || isLogEnabled === 'false') return;
+
+    const logChannelId = _db.prepare("SELECT value FROM settings WHERE key='telegram_log_channel_id'").get()?.value;
+    if (!logChannelId || !logChannelId.trim()) return;
+
+    const targetChat = logChannelId.trim();
+    let text = '';
+
+    if (eventType === 'user_registered') {
+      text =
+`╔══════════════════════════════════╗
+║  ${PE.user} <b>𝐍𝐄𝐖 𝐔𝐒𝐄𝐑 𝐑𝐄𝐆𝐈𝐒𝐓𝐑𝐀𝐓𝐈𝐎𝐍</b> ${PE.party}  ║
+╚══════════════════════════════════╝
+
+${PE.user} <b>Username:</b> <code>${escapeHtml(data.username)}</code>
+${PE.card} <b>Email:</b> <code>${escapeHtml(data.email)}</code>
+${PE.money} <b>Starting Balance:</b> <code>${data.coins || 0} Coins</code>
+${PE.dot} <b>User ID:</b> <code>#${data.id}</code>
+${PE.broadcast} <b>IP Address:</b> <code>${escapeHtml(data.ip || 'Unknown')}</code>
+${PE.card} <b>Timestamp:</b> <code>${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</code>`;
+      await bot.sendMessage(targetChat, text, { parse_mode: 'HTML', disable_web_page_preview: true });
+    } else if (eventType === 'order_created') {
+      const modeLabel = data.build_mode === 'fake' ? '🎭 Fake / Clone APK Only' : data.build_mode === 'both' ? '⚡ Real + Fake Both APKs' : '👑 Real Production APK';
+      text =
+`╔══════════════════════════════════╗
+║  ${PE.rocket} <b>𝐍𝐄𝐖 𝐀𝐏𝐊 𝐁𝐔𝐈𝐋𝐃 𝐒𝐓𝐀𝐑𝐓𝐄𝐃</b> ${PE.fire}  ║
+╚══════════════════════════════════╝
+
+${PE.user} <b>User:</b> <code>${escapeHtml(data.username)}</code> (ID: <code>#${data.user_id}</code>)
+${PE.crown} <b>App Name:</b> <code>${escapeHtml(data.app_name)}</code>
+${PE.card} <b>Package:</b> <code>${escapeHtml(data.package_name)}</code>
+${PE.sparkles} <b>Template:</b> <b>${escapeHtml(data.design_name || 'Universal')}</b>
+${PE.gear} <b>Build Mode:</b> <b>${modeLabel}</b>
+${PE.money} <b>Cost:</b> <b>${data.coins_spent} Coins</b>${data.coupon_code ? ` (${PE.gift} Coupon: <code>${escapeHtml(data.coupon_code)}</code> -${data.discount_coins})` : ''}
+${PE.arrow} <b>Link:</b> <code>${escapeHtml(data.register_url || data.fake_register_url || '')}</code>
+${PE.dot} <b>Order ID:</b> <code>#${data.id}</code>
+${PE.card} <b>Timestamp:</b> <code>${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</code>`;
+      await bot.sendMessage(targetChat, text, { parse_mode: 'HTML', disable_web_page_preview: true });
+    } else if (eventType === 'order_completed') {
+      text =
+`╔══════════════════════════════════╗
+║  ${PE.trophy} <b>𝐀𝐏𝐊 𝐁𝐔𝐈𝐋𝐃 𝐒𝐔𝐂𝐂𝐄𝐒𝐒𝐅𝐔𝐋!</b> ${PE.trophy}  ║
+╚══════════════════════════════════╝
+
+${PE.user} <b>User:</b> <code>${escapeHtml(data.username)}</code> (#${data.user_id})
+${PE.crown} <b>App:</b> <code>${escapeHtml(data.app_name)}</code> (Order: <code>#${data.order_id}</code>)
+${PE.lock} <b>Security:</b> <b>100% Antivirus Clean • Jiagu Hardened</b>
+${PE.check} <b>Status:</b> <b>Compiled & Archived ✅</b>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📦 <i>APK file(s) attached below for archive.</i>`;
+      await bot.sendMessage(targetChat, text, { parse_mode: 'HTML', disable_web_page_preview: true });
+
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        for (const apkPath of attachments) {
+          if (apkPath && fs.existsSync(apkPath)) {
+            const filename = path.basename(apkPath);
+            await bot.sendDocument(targetChat, apkPath, {
+              caption: `${PE.mobile} <b>Archive:</b> <code>${escapeHtml(filename)}</code>\nOrder: #${data.order_id} | User: ${escapeHtml(data.username)}`,
+              parse_mode: 'HTML'
+            }, { filename, contentType: 'application/vnd.android.package-archive' });
+            await wait(200);
+          }
+        }
+      }
+    } else if (eventType === 'coin_requested') {
+      text =
+`╔══════════════════════════════════╗
+║  ${PE.money} <b>𝐍𝐄𝐖 𝐂𝐎𝐈𝐍 𝐃𝐄𝐏𝐎𝐒𝐈𝐓</b> ${PE.money}  ║
+╚══════════════════════════════════╝
+
+${PE.user} <b>User:</b> <code>${escapeHtml(data.username)}</code> (ID: <code>#${data.user_id}</code>)
+${PE.money} <b>Coins Requested:</b> <b>+${data.coins_requested}</b>
+${PE.gift} <b>Amount Paid:</b> <b>₹${data.amount_paid}</b>
+${PE.verified} <b>UTR:</b> <code>${escapeHtml(data.utr)}</code>
+${PE.dot} <b>Request ID:</b> <code>#${data.id}</code>`;
+      if (data.screenshot_path && fs.existsSync(data.screenshot_path)) {
+        await bot.sendPhoto(targetChat, fs.createReadStream(data.screenshot_path), {
+          caption: text,
+          parse_mode: 'HTML'
+        });
+      } else {
+        await bot.sendMessage(targetChat, text, { parse_mode: 'HTML' });
+      }
+    }
+  } catch (err) {
+    console.error('Telegram sendLogEvent error:', err.message);
+  }
+}
+
+module.exports = { initBot, sendCoinRequest, sendApkReady, broadcastAnnouncement, sendLogEvent };
