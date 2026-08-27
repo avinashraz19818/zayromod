@@ -1371,8 +1371,8 @@ app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
 // Coin requests
 app.get('/api/admin/coin-requests', requireAdmin, (req, res) => {
   const rows = db.prepare(`
-    SELECT cr.*,u.username,u.email FROM coin_requests cr
-    JOIN users u ON cr.user_id=u.id
+    SELECT cr.*,COALESCE(u.username, 'Unknown') as username,COALESCE(u.email, '') as email FROM coin_requests cr
+    LEFT JOIN users u ON cr.user_id=u.id
     ORDER BY cr.id DESC
   `).all();
   res.json(rows);
@@ -1433,16 +1433,16 @@ app.get('/api/admin/orders', requireAdmin, (req, res) => {
   // Get total count
   const totalCount = db.prepare(`
     SELECT COUNT(*) as count FROM orders o
-    JOIN users u ON o.user_id=u.id
-    JOIN designs d ON o.design_id=d.id
+    LEFT JOIN users u ON o.user_id=u.id
+    LEFT JOIN designs d ON o.design_id=d.id
     ${where}
   `).get(...params).count;
 
   // Get orders
   const rows = db.prepare(`
-    SELECT o.*,u.username,d.name as design_name,d.category FROM orders o
-    JOIN users u ON o.user_id=u.id
-    JOIN designs d ON o.design_id=d.id
+    SELECT o.*,COALESCE(u.username, 'Unknown') as username,COALESCE(d.name, 'Default') as design_name,COALESCE(d.category, 'zayro') as category FROM orders o
+    LEFT JOIN users u ON o.user_id=u.id
+    LEFT JOIN designs d ON o.design_id=d.id
     ${where}
     ORDER BY o.id ${orderBy}
     LIMIT ? OFFSET ?
