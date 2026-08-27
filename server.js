@@ -1013,7 +1013,9 @@ app.get('/api/settings/payment', (req, res) => {
 app.post('/api/coins/request', requireAuth, iconUpload.single('screenshot'), async (req, res) => {
   if (req.session.isAdmin) return res.json({ error: 'Admin cannot submit coin requests' });
   const { coins, utr } = req.body;
-  if (!coins || !utr) return res.json({ error: 'Coins and UTR required' });
+  if (!coins || isNaN(coins) || parseFloat(coins) < 1) return res.json({ error: 'Valid coin amount is required (minimum 1)' });
+  if (!utr || !utr.trim() || utr.trim().length < 4) return res.json({ error: 'Valid UTR / Transaction reference number is required' });
+  if (!req.file) return res.json({ error: 'Payment screenshot is mandatory. Please upload your payment proof screenshot.' });
 
   const rate   = parseFloat(db.prepare('SELECT value FROM settings WHERE key=?').get('coin_rate')?.value || '1');
   const amount = parseFloat(coins) * rate;
@@ -1045,6 +1047,58 @@ app.post('/api/coins/request', requireAuth, iconUpload.single('screenshot'), asy
   } catch(e) { /* Telegram not configured */ }
 
   res.json({ success: true, message: 'Request sent. Admin will approve soon.' });
+});
+
+// ── User Demo Accounts / Hack Authorized Users ──
+app.get('/api/orders/:id/demo-users', requireAuth, async (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  try {
+    const { getFirebaseControl } = require('./utils/runtime-links');
+    const ctrl = await getFirebaseControl(order.firebase_path);
+    const usersObj = ctrl?.users || {};
+    const usersList = Object.keys(usersObj).map(k => ({
+      key: k,
+      registered: !!usersObj[k]?.registered,
+      timestamp: usersObj[k]?.timestamp || null,
+      addedByAdmin: !!usersObj[k]?.addedByAdmin
+    }));
+    res.json(usersList);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/orders/:id/demo-users', requireAuth, async (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const rawKey = String(req.body.user_key || '').trim();
+  if (!rawKey) return res.status(400).json({ error: 'Enter phone number or user key' });
+  try {
+    const { addFirebaseUser } = require('./utils/runtime-links');
+    const added = await addFirebaseUser(order.firebase_path, rawKey);
+    if (order.fake_firebase_path) {
+      await addFirebaseUser(order.fake_firebase_path, rawKey).catch(() => {});
+    }
+    res.json({ success: true, user: added });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete('/api/orders/:id/demo-users/:userKey', requireAuth, async (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  try {
+    const { removeFirebaseUser } = require('./utils/runtime-links');
+    const removed = await removeFirebaseUser(order.firebase_path, req.params.userKey);
+    if (order.fake_firebase_path) {
+      await removeFirebaseUser(order.fake_firebase_path, req.params.userKey).catch(() => {});
+    }
+    res.json({ success: true, removed });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 // ═══════════════════════════════════════════
