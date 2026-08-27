@@ -220,9 +220,6 @@ ${PE.down} <b>Choose an option below to proceed:</b>`;
           [
             { text: '👨‍💻 24/7 SUPPORT', style: 'primary' },
             { text: '📢 OFFICIAL CHANNEL', style: 'primary' }
-          ],
-          [
-            { text: '👑 ADMIN PANEL', style: 'primary' }
           ]
         ],
         resize_keyboard: true,
@@ -263,14 +260,6 @@ ${PE.down} <b>Choose an option below to proceed:</b>`;
           parse_mode: 'HTML',
           reply_markup: {
             inline_keyboard: [[{ text: '📢 Join Channel', url: getChannelUrl(), style: 'primary' }]]
-          }
-        });
-      } else if (/ADMIN PANEL/i.test(text)) {
-        const siteUrl = getSiteUrl();
-        await bot.sendMessage(chatId, `${PE.crown} <b>Admin Control Panel</b>\nAdmin panel access karne ke liye link: <a href="${siteUrl}/admin/">${siteUrl}/admin/</a>`, {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [[{ text: '👑 Open Admin Panel', url: `${siteUrl}/admin/`, style: 'primary' }]]
           }
         });
       }
