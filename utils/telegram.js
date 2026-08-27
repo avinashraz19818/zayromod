@@ -185,33 +185,94 @@ ${PE.fire} <b>Next-Gen Sideload & Auto-Bypass Engine:</b>
 ${PE.down} <b>Choose an option below to proceed:</b>`;
 
       const browserAuthUrl = generateTelegramAuthLink(chatId);
+
+      // ── Bot API 9.4+ Colored Keyboard & Inline Buttons ──
       const reply_markup = {
         inline_keyboard: [
           [
-            { text: '🟢 🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: siteUrl } }
+            { text: '🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: siteUrl }, style: 'success' }
           ],
           [
-            { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` } },
-            { text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ', web_app: { url: `${siteUrl}#wallet` } }
+            { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
+            { text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ', web_app: { url: `${siteUrl}#wallet` }, style: 'success' }
           ],
           [
-            { text: '🌐 ᴏᴘᴇɴ ɪɴ ᴄʜʀᴏᴍᴇ / ꜱᴀꜰᴀʀɪ', url: browserAuthUrl }
+            { text: '🌐 ᴏᴘᴇɴ ɪɴ ᴄʜʀᴏᴍᴇ / ꜱᴀꜰᴀʀɪ', url: browserAuthUrl, style: 'primary' }
           ],
           [
-            { text: '👨‍💻 24/7 ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl },
-            { text: '📢 ᴏꜰꜰɪᴄɪᴀʟ ᴄʜᴀɴɴᴇʟ', url: channelUrl }
+            { text: '👨‍💻 24/7 ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl, style: 'primary' },
+            { text: '📢 ᴏꜰꜰɪᴄɪᴀʟ ᴄʜᴀɴɴᴇʟ', url: channelUrl, style: 'primary' }
           ]
         ]
       };
 
+      // Persistent Colored Reply Keyboard (Bottom Dock)
+      const persistentKeyboard = {
+        keyboard: [
+          [
+            { text: '✅ BUILD NEW APK', web_app: { url: siteUrl }, style: 'success' },
+            { text: '📱 MY ACCOUNTS', web_app: { url: `${siteUrl}#profile` }, style: 'primary' }
+          ],
+          [
+            { text: '📦 MY ORDERS', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
+            { text: '🪙 ADD COINS', web_app: { url: `${siteUrl}#wallet` }, style: 'success' }
+          ],
+          [
+            { text: '👨‍💻 24/7 SUPPORT', style: 'primary' },
+            { text: '📢 OFFICIAL CHANNEL', style: 'primary' }
+          ],
+          [
+            { text: '👑 ADMIN PANEL', style: 'primary' }
+          ]
+        ],
+        resize_keyboard: true,
+        is_persistent: true
+      };
+
       try {
+        // Send welcome message with inline buttons and persistent colored dock
         await bot.sendMessage(chatId, welcomeMsg, {
           parse_mode: 'HTML',
           disable_web_page_preview: true,
           reply_markup
         });
+        await bot.sendMessage(chatId, `⚡ <b>Quick Access Dock Active!</b>\nNeeche diye gaye colored buttons se instant access karein:`, {
+          parse_mode: 'HTML',
+          reply_markup: persistentKeyboard
+        });
       } catch (e) {
         console.error('Bot /start error:', e.message);
+      }
+    });
+
+    // ── Handle Persistent Keyboard Button Clicks ──
+    bot.on('message', async (msg) => {
+      const text = msg.text?.trim() || '';
+      const chatId = String(msg.chat.id);
+      if (text.startsWith('/')) return; // handled by command handlers
+
+      if (/24\/7 SUPPORT|SUPPORT/i.test(text)) {
+        await bot.sendMessage(chatId, `${PE.phone} <b>24/7 Admin Support</b>\nKoi bhi query ya issue ke liye admin se direct connect karein:`, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[{ text: '👨‍💻 Contact Admin', url: getSupportUrl(), style: 'primary' }]]
+          }
+        });
+      } else if (/OFFICIAL CHANNEL|CHANNEL/i.test(text)) {
+        await bot.sendMessage(chatId, `${PE.broadcast} <b>Official Telegram Channel</b>\nDaily announcements, updates aur offers ke liye official channel join karein:`, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[{ text: '📢 Join Channel', url: getChannelUrl(), style: 'primary' }]]
+          }
+        });
+      } else if (/ADMIN PANEL/i.test(text)) {
+        const siteUrl = getSiteUrl();
+        await bot.sendMessage(chatId, `${PE.crown} <b>Admin Control Panel</b>\nAdmin panel access karne ke liye link: <a href="${siteUrl}/admin/">${siteUrl}/admin/</a>`, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[{ text: '👑 Open Admin Panel', url: `${siteUrl}/admin/`, style: 'primary' }]]
+          }
+        });
       }
     });
 
@@ -465,8 +526,8 @@ ${PE.dot} <b>Request ID:</b> <code>#${request.id}</code>
 
   const reply_markup = {
     inline_keyboard: [[
-      { text: '✅ ᴀᴘᴘʀᴏᴠᴇ (+ᴄᴏɪɴꜱ)', callback_data: `approve_${request.id}` },
-      { text: '❌ ʀᴇᴊᴇᴄᴛ', callback_data: `reject_${request.id}` }
+      { text: '✅ ᴀᴘᴘʀᴏᴠᴇ (+ᴄᴏɪɴꜱ)', callback_data: `approve_${request.id}`, style: 'success' },
+      { text: '❌ ʀᴇᴊᴇᴄᴛ', callback_data: `reject_${request.id}`, style: 'danger' }
     ]]
   };
 
@@ -589,11 +650,11 @@ ${PE.down} <i>Uploading your APK files now… Please wait.</i>
     const deliveryButtons = {
       inline_keyboard: [
         [
-          { text: '🔨 ʙᴜɪʟᴅ ᴀɴᴏᴛʜᴇʀ ᴀᴘᴋ', web_app: { url: siteUrl } }
+          { text: '🔨 ʙᴜɪʟᴅ ᴀɴᴏᴛʜᴇʀ ᴀᴘᴋ', web_app: { url: siteUrl }, style: 'success' }
         ],
         [
-          { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` } },
-          { text: '👨‍💻 ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl }
+          { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
+          { text: '👨‍💻 ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl, style: 'primary' }
         ]
       ]
     };
@@ -662,11 +723,11 @@ ${PE.rocket} <b>Official Portal:</b> <a href="${siteUrl}">${siteUrl}</a>`;
 
   const inlineKeyboard = [];
   if (button_text && button_url) {
-    inlineKeyboard.push([{ text: `✨ ${button_text}`, url: button_url.startsWith('http') ? button_url : `https://${button_url}` }]);
+    inlineKeyboard.push([{ text: `✨ ${button_text}`, url: button_url.startsWith('http') ? button_url : `https://${button_url}`, style: 'success' }]);
   }
   inlineKeyboard.push([
-    { text: '🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ', web_app: { url: siteUrl } },
-    { text: '👨‍💻 ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl }
+    { text: '🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ', web_app: { url: siteUrl }, style: 'success' },
+    { text: '👨‍💻 ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl, style: 'primary' }
   ]);
 
   const reply_markup = { inline_keyboard: inlineKeyboard };
