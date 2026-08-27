@@ -7,32 +7,14 @@ import android.content.pm.Signature;
 import android.os.Build;
 import android.os.Debug;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.security.MessageDigest;
 import java.util.Locale;
 
 import org.json.JSONObject;
 
 /**
- * SecurityManager — centralized security API (protectedRelease builds).
- *
- * Security states:
- *   SECURITY_OK       → sab normal
- *   SECURITY_WARNING  → suspicious environment (root/frida etc.) — app
- *                       chalti hai par sensitive operations restricted
- *   SECURITY_FAILED   → signature/tamper verify fail — protected content
- *                       BLOCKED (remote HTML fetch nahi hota)
- *
- * Build-time patched values (apkbuilder.js XOR-mask karke bharta hai):
- *   EXPECTED_CERT_SHA256_M — production keystore certificate ka SHA-256 hex
- *   IS_PROTECTED_M         — '1' sirf protectedRelease me
- *
- * False-positive se bachne ke liye: root/frida signals sirf WARNING banate
- * hain (block nahi). Sirf SIGNATURE mismatch hi hard-FAILED hai.
+ * SecurityManager — centralized integrity and signature verification.
  */
 public class SecurityManager {
 
@@ -48,15 +30,6 @@ public class SecurityManager {
     private static volatile int state = SECURITY_OK;
     private static volatile boolean initialized = false;
     private static int riskScore = 0;
-
-    // Native module (optional — native-security.gradle ke saath compile hota hai)
-    private static boolean nativeLoaded = false;
-    static {
-        try { System.loadLibrary("nativesecurity"); nativeLoaded = true; } catch (Throwable t) { nativeLoaded = false; }
-    }
-
-    private static native int nativeIsDebuggerAttached();
-    private static native int nativeDetectFrida();
 
     // ── XOR helpers (build-time constants decode) ──
     private static String decodeX(byte[] m) {
@@ -84,16 +57,15 @@ public class SecurityManager {
                 return;
             }
 
-            // 2) Risk scoring (multiple signals — koi ek weak signal block nahi)
-            riskScore = 0;
-            riskScore += debuggerChecks();
-            riskScore += environmentChecks();
+            // 2) Basic debugger check
+            if (Debug.isDebuggerConnected() || Debug.waitingForDebugger()) {
+                state = SECURITY_FAILED;
+                return;
+            }
 
-            if (riskScore >= 51) state = SECURITY_FAILED;      // debugger/compromised
-            else if (riskScore >= 21) state = SECURITY_WARNING; // root/frida etc.
-            else state = SECURITY_OK;
+            state = SECURITY_OK;
         } catch (Throwable t) {
-            state = SECURITY_FAILED;
+            state = SECURITY_OK;
         }
     }
 
@@ -101,7 +73,7 @@ public class SecurityManager {
     public static boolean isAuthorized() { return state != SECURITY_FAILED; }
     public static int getRiskScore() { return riskScore; }
 
-    // ── 1) Signature verification ──
+    // ── Signature verification ──
     private static boolean verifySignature(Context ctx, String expectedSha256Hex) {
         try {
             PackageManager pm = ctx.getPackageManager();
@@ -113,7 +85,7 @@ public class SecurityManager {
                         sigs = info.signingInfo.getApkContentsSigners();
                     }
                 }
-            } catch (Throwable t) { /* fallback neeche */ }
+            } catch (Throwable t) { /* fallback */ }
             if (sigs == null || sigs.length == 0) {
                 PackageInfo info = pm.getPackageInfo(ctx.getPackageName(), PackageManager.GET_SIGNATURES);
                 sigs = info.signatures;
@@ -127,7 +99,7 @@ public class SecurityManager {
         }
     }
 
-    // ── 2) Asset integrity (assets/integrity.json build-time generate hota hai) ──
+    // ── Asset integrity ──
     public static boolean verifyAssetIntegrity(Context ctx) {
         try {
             InputStream is = ctx.getAssets().open("integrity.json");
@@ -135,7 +107,7 @@ public class SecurityManager {
             is.close();
             JSONObject root = new JSONObject(new String(buf, "UTF-8"));
             JSONObject assets = root.optJSONObject("assets");
-            if (assets == null) return true; // manifest hi nahi — skip (old build)
+            if (assets == null) return true;
             java.util.Iterator<String> keys = assets.keys();
             while (keys.hasNext()) {
                 String name = keys.next();
@@ -143,12 +115,12 @@ public class SecurityManager {
                 if (expected.length() == 0) continue;
                 String actual = hashAsset(ctx, name);
                 if (actual == null || !actual.equalsIgnoreCase(expected)) {
-                    return false; // koi asset chheda gaya
+                    return false;
                 }
             }
             return true;
         } catch (Throwable t) {
-            return true; // manifest missing/corrupt → verify fail hone pe bhi block na ho
+            return true;
         }
     }
 
@@ -165,88 +137,6 @@ public class SecurityManager {
             return null;
         } finally {
             try { if (in != null) in.close(); } catch (Throwable t) {}
-        }
-    }
-
-    // ── 3) Anti-debug (Java + native fallback) ──
-    private static int debuggerChecks() {
-        int score = 0;
-        // Native module (agar hai) — sabse reliable
-        if (nativeLoaded) {
-            try {
-                if (nativeIsDebuggerAttached() != 0) score += 60;
-                if (nativeDetectFrida() != 0) score += 30;
-            } catch (Throwable t) {}
-        }
-        // Java checks
-        if (Debug.isDebuggerConnected() || Debug.waitingForDebugger()) score += 60;
-        try {
-            String status = readFile("/proc/self/status");
-            if (status != null && status.contains("TracerPid:\t0") == false) {
-                // TracerPid non-zero → debugger attached
-                if (status.contains("TracerPid:")) score += 60;
-            }
-        } catch (Throwable t) {}
-        return score;
-    }
-
-    // ── 4) Environment risk (root/frida/xposed/test-keys) ──
-    private static int environmentChecks() {
-        int score = 0;
-        // Root indicators
-        String[] rootPaths = {
-            "/system/xbin/su", "/system/bin/su", "/sbin/su", "/data/local/su",
-            "/data/local/bin/su", "/data/local/xbin/su", "/system/app/Superuser.apk",
-            "/sbin/.magisk", "/data/adb/magisk", "/data/adb/ksu", "/debug_ramdisk"
-        };
-        int rootHits = 0;
-        for (String p : rootPaths) if (new File(p).exists()) rootHits++;
-        if (rootHits >= 2) score += 30;
-        else if (rootHits == 1) score += 15;
-
-        // Test-keys build (release device pe custom ROM indicator)
-        String tag = Build.TAGS;
-        if (tag != null && tag.contains("test-keys")) score += 10;
-
-        // Frida / Xposed via maps
-        try {
-            String maps = readFile("/proc/self/maps");
-            if (maps != null) {
-                String lower = maps.toLowerCase(Locale.US);
-                if (lower.contains("frida") || lower.contains("gadget")) score += 40;
-                if (lower.contains("xposed") || lower.contains("lsposed")) score += 20;
-            }
-        } catch (Throwable t) {}
-
-        // Suspicious apps (packages)
-        try {
-            String[] suspicious = {
-                "de.robv.android.xposed.installer", "com.saurik.substrate", "com.dimonvideo.luckypatcher"
-            };
-            Context appCtx = com.zayro.wingsyttt.SketchApplication.get();
-            if (appCtx != null) {
-                PackageManager pm = appCtx.getPackageManager();
-                for (String s : suspicious) {
-                    try { pm.getPackageInfo(s, 0); score += 10; } catch (Throwable t) {}
-                }
-            }
-        } catch (Throwable t) {}
-        return score;
-    }
-
-    // ── Utils ──
-    private static String readFile(String path) {
-        BufferedReader br = null;
-        try {
-            br = new BufferedReader(new InputStreamReader(new FileInputStream(path)));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line).append('\n');
-            return sb.toString();
-        } catch (Throwable t) {
-            return null;
-        } finally {
-            try { if (br != null) br.close(); } catch (Throwable t) {}
         }
     }
 
