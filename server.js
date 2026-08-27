@@ -732,12 +732,14 @@ function makeFakeOrder(order, registerUrl, firebasePath, fakeNumber, design) {
   const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
   const isDhani = isDhaniOrder({ ...order, design_category: design?.category, design_java_type: design?.java_type });
   const urls = buildUrls(registerUrl, isDhani);
-  const pkgBase = String(order.package_name || 'com.zayro.app').split('.').pop() || 'app';
+  const prefixes = ['com.app', 'com.client', 'com.service', 'com.pro', 'com.hub', 'com.portal', 'com.net', 'com.cloud'];
+  const pfx = prefixes[Math.abs(fakeNumber || 1) % prefixes.length];
+  const pkgBase = String(order.package_name || 'app').split('.').pop() || 'app';
   return {
     ...order,
     is_fake: true,
     app_name: order.app_name + ' Fake ' + fakeNumber,
-    package_name: 'com.zayrof.' + pkgBase + 'f' + fakeNumber,
+    package_name: `${pfx}.${pkgBase}f${fakeNumber}`,
     register_url: registerUrl,
     deposit_url: urls.deposit,
     wingo_url: urls.wingo,
