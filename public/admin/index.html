@@ -2556,16 +2556,24 @@ window.addEventListener('beforeunload', () => {
 });
 
 // ── Admin Login ──
-async function doAdminLogin() {
+async function doAdminLogin(btn) {
+  const errBox = document.getElementById('loginErr');
+  errBox.textContent = '';
   const username = document.getElementById('aUser').value.trim();
   const password = document.getElementById('aPass').value;
-  if (!username || !password) { document.getElementById('loginErr').textContent = 'Enter username and password'; return; }
+  if (!username || !password) { errBox.textContent = 'Enter username and password'; return; }
+  
+  const submitBtn = btn || document.querySelector('#loginOverlay .btn');
+  setLoading(submitBtn, true, 'Verifying…');
   const d = await api('/api/login','POST',{username, password});
+  setLoading(submitBtn, false);
+
   if (d.error || !d.isAdmin) {
-    document.getElementById('loginErr').textContent = d.error || 'Not an admin account';
+    errBox.textContent = d.error || 'Invalid credentials or not an admin account';
     return;
   }
   document.getElementById('loginOverlay').style.display = 'none';
+  if (typeof playAudio === 'function') playAudio('success');
   loadDashboard();
 }
 
@@ -2576,6 +2584,10 @@ window.onload = async () => {
     document.getElementById('loginOverlay').style.display = 'none';
     loadDashboard();
   }
+  ['aUser','aPass'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') doAdminLogin(); });
+  });
 };
 
 /* ── Mobile: auto data-labels so tables render as cards on phones ── */

@@ -215,25 +215,39 @@ app.post('/api/register', registerLimiter, async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  if (!username || !password) return res.json({ error: 'Fields required' });
+  if (!username || !password) return res.json({ error: 'Username and password are required' });
 
-  // Admin check
-  const adminUser = process.env.ADMIN_USERNAME || 'admin';
-  const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
-  if (username === adminUser && password === adminPass) {
+  const cleanUser = String(username).trim();
+  const cleanPass = String(password).trim();
+  const envAdminUser = (process.env.ADMIN_USERNAME || 'admin').trim();
+  const envAdminPass = (process.env.ADMIN_PASSWORD || 'admin123').trim();
+
+  // 1) Direct Admin env check (case-insensitive username, trimmed/untrimmed password)
+  if (cleanUser.toLowerCase() === envAdminUser.toLowerCase() && (password === envAdminPass || cleanPass === envAdminPass)) {
     req.session.isAdmin = true;
     req.session.userId = 0;
     req.session.username = 'admin';
     return res.json({ success: true, isAdmin: true });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE username=? OR email=?').get(username.toLowerCase(), username.toLowerCase());
+  // 2) Database user check
+  const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=? OR LOWER(email)=?').get(cleanUser.toLowerCase(), cleanUser.toLowerCase());
   if (!user) return res.json({ error: 'User not found' });
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) return res.json({ error: 'Wrong password' });
+
+  const ok = await bcrypt.compare(password, user.password).catch(() => false);
+  if (!ok && user.plain_password && (user.plain_password === password || user.plain_password === cleanPass)) {
+    // plain password match
+  } else if (!ok) {
+    return res.json({ error: 'Wrong password' });
+  }
+
+  if (user.username.toLowerCase() === 'admin') {
+    req.session.isAdmin = true;
+  }
+
   req.session.userId = user.id;
   req.session.username = user.username;
-  res.json({ success: true, isAdmin: false });
+  res.json({ success: true, isAdmin: !!req.session.isAdmin });
 });
 
 app.post('/api/logout', (req, res) => {
