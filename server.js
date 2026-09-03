@@ -25,11 +25,6 @@ const {
   removeFirebaseUser
 } = require('./utils/runtime-links');
 const { SQLiteSessionStore } = require('./utils/session-store');
-const {
-  isEmailDeliveryConfigured,
-  sendVerificationEmail,
-  sendPasswordResetEmail
-} = require('./utils/email');
 
 const app = express();
 app.disable('x-powered-by');
@@ -152,14 +147,13 @@ app.use((req, res, next) => {
     return destroyExpiredSession(req, res, next);
   }
 
-  // Password reset/change increments session_version and invalidates every
-  // previously issued session for that user.
+  // Controlled credential changes can increment session_version and invalidate
+  // previously issued sessions for that user.
   if (current.userId !== undefined && current.isAdmin !== true) {
     const sessionVersion = Number(current.sessionVersion);
-    const user = db.prepare('SELECT session_version,email_verified_at,auth_provider,is_telegram FROM users WHERE id=?').get(current.userId);
+    const user = db.prepare('SELECT session_version FROM users WHERE id=?').get(current.userId);
     if (!user || !Number.isSafeInteger(sessionVersion) || sessionVersion < 0
-      || Number(user.session_version || 0) !== sessionVersion
-      || !isEmailVerified(user)) {
+      || Number(user.session_version || 0) !== sessionVersion) {
       return destroyExpiredSession(req, res, next);
     }
   }
@@ -311,8 +305,6 @@ function requireAdmin(req, res, next) {
 
 const PASSWORD_MIN_LENGTH = 12;
 const DUMMY_PASSWORD_HASH = '$2a$12$2FvOmOXatoX0cWCqzkdHiOHt18CWFmtM/Ewc3pXnJXwvolu4.uPF6';
-const EMAIL_VERIFICATION_TTL_MS = parseDurationMinutes('EMAIL_VERIFICATION_TTL_MINUTES', 30, 5);
-const PASSWORD_RESET_TTL_MS = parseDurationMinutes('PASSWORD_RESET_TTL_MINUTES', 30, 5);
 
 function normalizeIdentity(value) {
   return String(value || '').trim().toLowerCase().slice(0, 254);
@@ -359,34 +351,6 @@ function timingSafeStringEqual(left, right) {
   const a = crypto.createHash('sha256').update(String(left || ''), 'utf8').digest();
   const b = crypto.createHash('sha256').update(String(right || ''), 'utf8').digest();
   return crypto.timingSafeEqual(a, b);
-}
-
-function issueOneTimeToken(ttlMs) {
-  const raw = crypto.randomBytes(32).toString('base64url');
-  return {
-    raw,
-    hash: crypto.createHash('sha256').update(raw, 'utf8').digest('hex'),
-    expiresAt: Date.now() + ttlMs
-  };
-}
-
-function hashOneTimeToken(raw) {
-  const token = String(raw || '').trim();
-  if (!/^[A-Za-z0-9_-]{40,64}$/.test(token)) return null;
-  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
-}
-
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function isEmailVerified(user) {
-  if (!user) return false;
-  // OAuth providers have already verified ownership of the provider email;
-  // Telegram accounts do not have a deliverable email and are authenticated
-  // by Telegram's signed initData instead.
-  if (user.auth_provider === 'google' || user.auth_provider === 'telegram' || Number(user.is_telegram) === 1) return true;
-  return Number(user.email_verified_at) > 0;
 }
 
 function destroySession(req, res, callback) {
@@ -469,35 +433,6 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
   handler: jsonRateLimitHandler('Too many registration attempts. Please try again later.')
 });
-const verificationActionLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: jsonRateLimitHandler('Too many verification attempts. Please try again later.')
-});
-const resendVerificationLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: jsonRateLimitHandler('Too many verification email requests. Please try again later.')
-});
-const forgotPasswordLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: jsonRateLimitHandler('Too many password reset requests. Please try again later.')
-});
-const resetPasswordLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: jsonRateLimitHandler('Too many password reset attempts. Please try again later.')
-});
-
 app.post('/api/register', registerLimiter, async (req, res) => {
   const username = normalizeUsername(req.body?.username);
   const email = normalizeEmail(req.body?.email);
@@ -506,28 +441,13 @@ app.post('/api/register', registerLimiter, async (req, res) => {
   if (!username) return res.status(400).json({ error: 'Username must be 3-32 characters and may contain only letters, numbers, and underscores' });
   if (!email) return res.status(400).json({ error: 'Enter a valid email address' });
   if (passwordError) return res.status(400).json({ error: passwordError });
-  if (!isEmailDeliveryConfigured()) {
-    return res.status(503).json({ error: 'Registration is temporarily unavailable. Please try again later.' });
-  }
 
-  const verification = issueOneTimeToken(EMAIL_VERIFICATION_TTL_MS);
   try {
     const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const result = db.prepare(`
-      INSERT INTO users(
-        username,email,password,auth_provider,
-        email_verification_token_hash,email_verification_expires_at,email_verification_sent_at
-      ) VALUES(?,?,?,'password',?,?,?)
-    `).run(username, email, hash, verification.hash, verification.expiresAt, Date.now());
-
-    try {
-      await sendVerificationEmail({ to: email, username, token: verification.raw });
-    } catch (error) {
-      // Keep the account so the user can use the resend endpoint once mail is
-      // configured/recovered. The raw token is never logged or returned.
-      console.error('[auth] verification email delivery failed:', error.message);
-      return res.status(503).json({ error: 'Registration is temporarily unavailable. Please try again later.' });
-    }
+      INSERT INTO users(username,email,password,auth_provider,email_verified_at)
+      VALUES(?,?,?,'password',?)
+    `).run(username, email, hash, Date.now());
 
     sendLogEvent('user_registered', {
       id: result.lastInsertRowid,
@@ -538,8 +458,7 @@ app.post('/api/register', registerLimiter, async (req, res) => {
     });
     return res.status(201).json({
       success: true,
-      verificationRequired: true,
-      message: 'Account created. Check your email to verify your account before logging in.'
+      message: 'Account created. You can now log in.'
     });
   } catch (error) {
     if (String(error?.code || '').includes('SQLITE_CONSTRAINT')) {
@@ -594,12 +513,6 @@ app.post('/api/login', loginLimiter, loginAccountLimiter, async (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=? OR LOWER(email)=?').get(username, username);
   const passwordMatches = await verifyUserPassword(user, password);
   if (!passwordMatches) return res.status(401).json({ error: 'Invalid username or password' });
-  if (!isEmailVerified(user)) {
-    // Keep login failures indistinguishable so this route cannot be used to
-    // enumerate valid accounts. The separate resend endpoint is generic too.
-    return res.status(401).json({ error: 'Invalid username or password' });
-  }
-
   try {
     await establishSession(req, {
       userId: user.id,
@@ -616,165 +529,6 @@ app.post('/api/login', loginLimiter, loginAccountLimiter, async (req, res) => {
 
 app.post('/api/logout', (req, res) => {
   destroySession(req, res, () => res.json({ success: true }));
-});
-
-// ── Email verification ──
-function validEmailVerificationRow(tokenHash) {
-  if (!tokenHash) return null;
-  const now = Date.now();
-  const row = db.prepare(`
-    SELECT id,email_verified_at,email_verification_expires_at,email_verification_token_hash
-    FROM users WHERE email_verification_token_hash=? LIMIT 1
-  `).get(tokenHash);
-  if (!row || row.email_verified_at || Number(row.email_verification_expires_at || 0) <= now) return null;
-  return row;
-}
-
-function consumeEmailVerification(tokenHash) {
-  const row = validEmailVerificationRow(tokenHash);
-  if (!row) return false;
-  const now = Date.now();
-  const updated = db.prepare(`
-    UPDATE users SET email_verified_at=?,email_verification_token_hash=NULL,
-      email_verification_expires_at=NULL,email_verification_sent_at=NULL,
-      session_version=session_version+1
-    WHERE id=? AND email_verified_at IS NULL AND email_verification_token_hash=?
-      AND email_verification_expires_at>?
-  `).run(now, row.id, tokenHash, now);
-  return Boolean(updated.changes);
-}
-
-app.post('/api/auth/verify-email', verificationActionLimiter, (req, res) => {
-  // The browser can complete verification only through the server-side
-  // handoff session. It never receives or submits the raw token.
-  const sessionHash = String(req.session?.emailVerificationTokenHash || '');
-  const sessionExpiry = Number(req.session?.emailVerificationExpiresAt || 0);
-  const tokenHash = sessionHash && sessionExpiry > Date.now() ? sessionHash : null;
-  const verified = consumeEmailVerification(tokenHash);
-  if (sessionHash) {
-    delete req.session.emailVerificationTokenHash;
-    delete req.session.emailVerificationExpiresAt;
-    req.session.save(() => {});
-  }
-  if (!verified) return res.status(400).json({ error: 'Verification link is invalid or expired.' });
-  return res.json({ success: true, message: 'Email verified. You can now log in.' });
-});
-
-// Email links are validated by the server and placed into an HttpOnly
-// handoff session. The redirect removes the raw query token before any
-// frontend JavaScript runs; a second request performs the single-use consume.
-app.get('/auth/verify-email', verificationActionLimiter, (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  const tokenHash = hashOneTimeToken(req.query?.token);
-  const row = validEmailVerificationRow(tokenHash);
-  if (!row) return res.redirect('/?verified=0');
-  req.session.emailVerificationTokenHash = tokenHash;
-  req.session.emailVerificationExpiresAt = Number(row.email_verification_expires_at);
-  req.session.save(error => res.redirect(error ? '/?verified=0' : '/?verified=ready'));
-});
-
-app.post('/api/auth/resend-verification', resendVerificationLimiter, async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  const generic = {
-    success: true,
-    message: 'If an unverified account exists for that email, a new verification link has been sent.'
-  };
-  const responseDelay = delay(250);
-  if (email) {
-    const user = db.prepare(`
-      SELECT id,username,email,email_verified_at,auth_provider FROM users WHERE LOWER(email)=? LIMIT 1
-    `).get(email);
-    if (user && !user.email_verified_at && user.auth_provider === 'password') {
-      const verification = issueOneTimeToken(EMAIL_VERIFICATION_TTL_MS);
-      db.prepare(`
-        UPDATE users SET email_verification_token_hash=?,email_verification_expires_at=?,email_verification_sent_at=?
-        WHERE id=? AND email_verified_at IS NULL
-      `).run(verification.hash, verification.expiresAt, Date.now(), user.id);
-      void sendVerificationEmail({ to: user.email, username: user.username, token: verification.raw })
-        .catch(error => console.error('[auth] verification resend failed:', error.message));
-    }
-  }
-  await responseDelay;
-  return res.json(generic);
-});
-
-// ── Password reset ──
-app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  const generic = {
-    success: true,
-    message: 'If an account exists for that email, a password reset link has been sent.'
-  };
-  const responseDelay = delay(250);
-  if (email) {
-    const user = db.prepare('SELECT id,username,email FROM users WHERE LOWER(email)=? LIMIT 1').get(email);
-    if (user) {
-      const reset = issueOneTimeToken(PASSWORD_RESET_TTL_MS);
-      db.prepare(`
-        UPDATE users SET password_reset_token_hash=?,password_reset_expires_at=?
-        WHERE id=?
-      `).run(reset.hash, reset.expiresAt, user.id);
-      void sendPasswordResetEmail({ to: user.email, username: user.username, token: reset.raw })
-        .catch(error => console.error('[auth] password reset email delivery failed:', error.message));
-    }
-  }
-  await responseDelay;
-  return res.json(generic);
-});
-
-// The reset token is accepted only by this server-side handoff. Only its
-// hash is placed into the server-side, HttpOnly session and the browser is
-// redirected to a clean URL before the frontend is loaded.
-app.get('/auth/reset-password', resetPasswordLimiter, (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  const tokenHash = hashOneTimeToken(req.query?.token);
-  const now = Date.now();
-  const reset = tokenHash && db.prepare(`
-    SELECT password_reset_expires_at,password_reset_token_hash FROM users
-    WHERE password_reset_token_hash=? LIMIT 1
-  `).get(tokenHash);
-  if (!reset || Number(reset.password_reset_expires_at || 0) <= now) {
-    return res.redirect('/?reset=invalid');
-  }
-
-  req.session.passwordResetTokenHash = tokenHash;
-  req.session.passwordResetExpiresAt = Number(reset.password_reset_expires_at);
-  req.session.save(error => res.redirect(error ? '/?reset=invalid' : '/?reset=ready'));
-});
-
-app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
-  const tokenHash = String(req.session?.passwordResetTokenHash || '');
-  const pendingExpiry = Number(req.session?.passwordResetExpiresAt || 0);
-  const password = typeof req.body?.new_password === 'string' ? req.body.new_password : '';
-  const passwordError = validatePassword(password);
-  if (!tokenHash || pendingExpiry <= Date.now() || passwordError) {
-    return res.status(400).json({ error: passwordError || 'Password reset link is invalid or expired.' });
-  }
-
-  const reset = db.prepare(`
-    SELECT id,password_reset_expires_at,password_reset_token_hash FROM users
-    WHERE password_reset_token_hash=? LIMIT 1
-  `).get(tokenHash);
-  const now = Date.now();
-  if (!reset || Number(reset.password_reset_expires_at || 0) <= now) {
-    return res.status(400).json({ error: 'Password reset link is invalid or expired.' });
-  }
-
-  const newHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-  const changed = db.prepare(`
-    UPDATE users SET password=?,plain_password='',password_reset_token_hash=NULL,
-      password_reset_expires_at=NULL,email_verified_at=COALESCE(email_verified_at,?),
-      session_version=session_version+1
-    WHERE id=? AND password_reset_token_hash=? AND password_reset_expires_at>?
-  `).run(newHash, now, reset.id, tokenHash, now);
-  if (!changed.changes) return res.status(400).json({ error: 'Password reset link is invalid or expired.' });
-
-  // Destroy the handoff session too. Existing authenticated sessions are
-  // invalidated by the session_version increment above.
-  return destroySession(req, res, () => res.json({
-    success: true,
-    message: 'Password updated. Please log in with your new password.'
-  }));
 });
 
 // ═══════════════════════════════════════════
@@ -1098,11 +852,11 @@ app.get('/api/me', requireAuth, (req, res) => {
   if (req.session.isAdmin === true) return res.json({ isAdmin: true, username: req.session.username || 'admin' });
   const user = db.prepare(`
     SELECT id,username,email,coins,telegram_id,first_name,tg_username,photo_url,
-      is_telegram,auth_provider,email_verified_at
+      is_telegram,auth_provider
     FROM users WHERE id=?
   `).get(req.session.userId);
-  if (!user || !isEmailVerified(user)) return res.status(401).json({ error: 'Login required' });
-  res.json({ ...user, email_verified: true, isAdmin: false });
+  if (!user) return res.status(401).json({ error: 'Login required' });
+  res.json({ ...user, isAdmin: false });
 });
 
 app.post('/api/me/telegram', requireAuth, (req, res) => {

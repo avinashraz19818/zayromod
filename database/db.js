@@ -239,8 +239,9 @@ db.exec(`
     db.exec("UPDATE settings SET value='' WHERE key IN ('admin_password','admin_password_hash','session_secret','google_client_secret','resend_api_key','smtp_password','smtp_pass','email_password','restore_secret','firebase_database_auth')");
   } catch(e) {}
 
-// Token hashes are indexed for constant-time-ish indexed lookups without ever
-// storing the raw verification/reset token in SQLite.
+// These legacy columns remain only for non-destructive upgrades of old
+// databases. The email verification/password-reset workflows are disabled;
+// no new token values are written and any old pending values are cleared below.
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_users_email_verification_token ON users(email_verification_token_hash)"); } catch(e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_users_password_reset_token ON users(password_reset_token_hash)"); } catch(e) {}
 
@@ -283,6 +284,32 @@ try {
   // visible to the operator, while login remains fail-closed for non-bcrypt
   // credentials until the migration can run successfully.
   console.error('[security] legacy password migration failed:', error.message);
+}
+
+// Email verification and password-reset flows are disabled. Keep the columns
+// for schema compatibility, but clear any token material left by the earlier
+// release and make password accounts immediately usable.
+try {
+  db.prepare(`
+    UPDATE users SET
+      email_verified_at=CASE
+        WHEN auth_provider='password' OR auth_provider IS NULL THEN COALESCE(email_verified_at,?)
+        ELSE email_verified_at
+      END,
+      email_verification_token_hash=NULL,
+      email_verification_expires_at=NULL,
+      email_verification_sent_at=NULL,
+      password_reset_token_hash=NULL,
+      password_reset_expires_at=NULL
+    WHERE email_verified_at IS NULL
+      OR email_verification_token_hash IS NOT NULL
+      OR email_verification_expires_at IS NOT NULL
+      OR email_verification_sent_at IS NOT NULL
+      OR password_reset_token_hash IS NOT NULL
+      OR password_reset_expires_at IS NOT NULL
+  `).run(Date.now());
+} catch (error) {
+  console.error('[security] legacy email-auth cleanup failed:', error.message);
 }
 
 // Sessions are expiring records, so remove stale rows during boot as well as

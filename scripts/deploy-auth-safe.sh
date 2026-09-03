@@ -59,7 +59,8 @@ pm2 reload apkbuilder --update-env
 sleep 3
 pm2 status
 
-# Read-only compatibility check for an existing completed APK order.
+# Read-only compatibility check for an existing completed APK order. Wait for
+# the reloaded process instead of assuming it is listening immediately.
 old_path="$(python3 - <<'PY'
 import sqlite3
 
@@ -73,14 +74,26 @@ print(row[0] if row else '')
 db.close()
 PY
 )"
+app_port="${PORT:-$(node -e "require('dotenv').config(); process.stdout.write(String(process.env.PORT || 3000))")}"
+wait_for_content() {
+  local url="$1"
+  local output="$2"
+  local attempt
+  for attempt in $(seq 1 20); do
+    if curl -fsS --max-time 3 "$url" -o "$output" 2>/dev/null \
+      && [[ "$(wc -c < "$output")" -gt 16 ]]; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
 
 if [[ -n "$old_path" ]]; then
-  curl -fsS "http://127.0.0.1:${PORT:-3000}/api/app-content/${old_path}?compat-check=1" \
-    -o /tmp/zayro-legacy-popup.bin
-  curl -fsS "http://127.0.0.1:${PORT:-3000}/api/app-content/${old_path}/loading?compat-check=1" \
-    -o /tmp/zayro-legacy-loading.bin
-  test "$(wc -c < /tmp/zayro-legacy-popup.bin)" -gt 16
-  test "$(wc -c < /tmp/zayro-legacy-loading.bin)" -gt 16
+  wait_for_content "http://127.0.0.1:${app_port}/api/app-content/${old_path}?compat-check=1" \
+    /tmp/zayro-legacy-popup.bin
+  wait_for_content "http://127.0.0.1:${app_port}/api/app-content/${old_path}/loading?compat-check=1" \
+    /tmp/zayro-legacy-loading.bin
   rm -f /tmp/zayro-legacy-popup.bin /tmp/zayro-legacy-loading.bin
   echo "Existing APK compatibility check passed: $old_path"
 else

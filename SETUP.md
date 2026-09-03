@@ -53,8 +53,8 @@ npm ci
 cp .env.example .env
 nano .env
 # Fill in: BASE_URL, SESSION_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD_HASH,
-# RESEND_API_KEY, EMAIL_FROM, TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_CHAT_ID
-# and the optional Google/Firebase values you use.
+# TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_CHAT_ID and the optional
+# Google/Firebase values you use.
 # Never commit .env, service-account JSON, database files, backups, or tokens.
 
 # Generate a bcrypt hash for the admin password without putting the password
@@ -272,29 +272,12 @@ bot token or any other secret; secret fields are write-only for rotation.
 
 Admin URL: `https://yourdomain.com/admin/`
 
-## Authentication and email delivery
+## Authentication
 
-Password registrations are stored as bcrypt hashes and remain locked until the
-user verifies the email address. Verification and password-reset tokens are
-32-byte random values whose SHA-256 hashes (not raw values) are stored in
-SQLite. They expire and are single-use. Resetting a password increments the
-user session version and invalidates existing sessions.
-
-Configure Resend before enabling password registration:
-
-```dotenv
-BASE_URL=https://yourdomain.com
-RESEND_API_KEY=re_...
-EMAIL_FROM=Zayro Mod Builder <noreply@yourdomain.com>
-EMAIL_REPLY_TO=security@yourdomain.com
-```
-
-`BASE_URL` must be HTTPS in production. The email links are handled by
-server-side routes and immediately redirected to a clean frontend URL; raw
-tokens are never returned in JSON or included in `/api/me`, settings, or
-admin responses. If `BASE_URL`, `RESEND_API_KEY`, or `EMAIL_FROM` is absent,
-new password registration is refused rather than creating an account that can
-never verify.
+Password registrations use bcrypt hashes and can log in immediately; email is
+kept as an account identifier but email verification and password-reset email
+workflows are disabled. There are no email-delivery secrets or token links to
+configure.
 
 Sessions use a SQLite store with an absolute lifetime and an idle timeout.
 Production cookies are Secure, HttpOnly, SameSite=Lax, and use a `__Host-`
@@ -302,9 +285,10 @@ name. Set `TRUST_PROXY_HOPS` to the exact number of trusted reverse proxies
 (usually `1` behind the Nginx configuration above; use `0` when direct). Do
 not trust arbitrary `X-Forwarded-*` headers.
 
-Login is limited independently by client IP and normalized account
-identifier. Failed login responses are deliberately generic; forgot-password
-and resend-verification responses are also account-enumeration resistant.
+Login attempts are independently limited by IP and normalized account
+identifier. Failed login responses remain generic. Passwords can only be
+changed through the operator's existing administrative/database procedure;
+do not store or transmit plaintext passwords.
 
 ### Rotating the Telegram token
 
