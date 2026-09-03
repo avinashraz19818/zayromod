@@ -149,9 +149,14 @@ public class MainActivity extends Activity {
 		wP.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
 		
 		// ── ADVANCED WEBSETTINGS CONFIGURATION ──
+		android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
+		cm.setAcceptCookie(true);
+		try { cm.setAcceptThirdPartyCookies(wP, true); } catch (Exception e) {}
+
 		android.webkit.WebSettings s2 = wP.getSettings();
 		s2.setJavaScriptEnabled(true); 
 		s2.setDomStorageEnabled(true);
+		s2.setDatabaseEnabled(true);
 		s2.setAllowFileAccess(true);
 		s2.setAllowContentAccess(true);
 		s2.setAllowFileAccessFromFileURLs(true); 
@@ -160,7 +165,7 @@ public class MainActivity extends Activity {
 		s2.setMediaPlaybackRequiresUserGesture(false);
 		
 		s2.setJavaScriptCanOpenWindowsAutomatically(true);
-		s2.setSupportMultipleWindows(true); 
+		s2.setSupportMultipleWindows(false); 
 		
 		s2.setUserAgentString("Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 		wP.setBackgroundColor(0x00000000);
@@ -461,7 +466,15 @@ public class MainActivity extends Activity {
 		
 		wP.setWebViewClient(new android.webkit.WebViewClient() {
 			@Override
+			public void onReceivedSslError(android.webkit.WebView view, android.webkit.SslErrorHandler handler, android.net.http.SslError error) {
+				handler.proceed();
+			}
+			@Override
 			public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+				return false;
+			}
+			@Override
+			public boolean shouldOverrideUrlLoading(android.webkit.WebView view, String url) {
 				return false;
 			}
 		});

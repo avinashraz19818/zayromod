@@ -86,34 +86,6 @@ function escapeHtml(text) {
   }[char]));
 }
 
-// ── Clear any stale custom Reply Keyboard (bottom dock) of a chat ──
-// Telegram chat ka reply-keyboard state bot ke last keyboard-message se
-// decide hota hai. Purane versions me "is_persistent: true" wala dock bheja
-// jaata tha, jisse input bar ke paas chhota keyboard-toggle (⌄) button aa
-// jaata hai. Ek RemoveKeyboard message us state ko clear kar deta hai; wo
-// message bhejne ke baad delete kar diya jaata hai taaki chat me koi extra
-// dikhne wala message na pade. Flag DB me store karte hain, isliye ye
-// cleanup per user sirf ek hi baar hota hai.
-async function clearStaleReplyKeyboard(chatId) {
-  if (!bot || !_db) return;
-  const key = `tg_reply_kb_cleared:${chatId}`;
-  try {
-    if (_db.prepare('SELECT value FROM settings WHERE key=?').get(key)) return;
-    const sent = await bot.sendMessage(chatId, '\u200b', {
-      reply_markup: { remove_keyboard: true }
-    });
-    _db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?, ?)')
-      .run(key, String(Date.now()));
-    if (sent?.message_id) {
-      setTimeout(() => {
-        bot.deleteMessage(chatId, sent.message_id).catch(() => {});
-      }, 1500);
-    }
-  } catch (e) {
-    console.error('Bot remove_keyboard cleanup error:', e.message);
-  }
-}
-
 function initBot(token, db) {
   if (db) _db = db;
   try {
@@ -212,26 +184,15 @@ ${PE.fire} <b>Next-Gen Sideload & Auto-Bypass Engine:</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${PE.down} <b>Choose an option below to proceed:</b>`;
 
-      const browserAuthUrl = generateTelegramAuthLink(chatId);
-
-      // ── Bot API 9.4+ Colored Inline Buttons ──
-      // Sirf Inline Keyboard (message ke saath attached) bheja jaata hai.
-      // Koi ReplyKeyboard / bottom dock nahi bheja jayega, kyunki Telegram
-      // custom reply keyboard bhejne par input bar ke paas ek chhota
-      // keyboard-toggle (⌄ / "v") button dikhata hai — wo yahan nahi chahiye.
-      // Dock ke saare shortcuts neeche inline buttons me hi aa gaye hain.
+      // ── Bot API 9.4+ Colored Inline Buttons (Attached directly to message) ──
       const reply_markup = {
         inline_keyboard: [
           [
             { text: '🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: siteUrl }, style: 'success' }
           ],
           [
-            { text: '📱 ᴍʏ ᴀᴄᴄᴏᴜɴᴛꜱ', web_app: { url: `${siteUrl}#profile` }, style: 'primary' },
-            { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` }, style: 'primary' }
-          ],
-          [
-            { text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ', web_app: { url: `${siteUrl}#wallet` }, style: 'success' },
-            { text: '🌐 ᴏᴘᴇɴ ɪɴ ᴄʜʀᴏᴍᴇ / ꜱᴀꜰᴀʀɪ', url: browserAuthUrl, style: 'primary' }
+            { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
+            { text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ', web_app: { url: `${siteUrl}#wallet` }, style: 'success' }
           ],
           [
             { text: '👨‍💻 24/7 ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl, style: 'primary' },
@@ -241,41 +202,14 @@ ${PE.down} <b>Choose an option below to proceed:</b>`;
       };
 
       try {
-        // Welcome message + inline buttons only (no bottom keyboard dock)
+        // Send welcome message with inline buttons attached directly
         await bot.sendMessage(chatId, welcomeMsg, {
           parse_mode: 'HTML',
           disable_web_page_preview: true,
           reply_markup
         });
-        // Purane users ke chat me "is_persistent" dock pinned reh jaata hai,
-        // isliye ek baar usse clear karte hain taaki keyboard ke paas wala
-        // toggle button turant gayab ho jaye.
-        await clearStaleReplyKeyboard(chatId);
       } catch (e) {
         console.error('Bot /start error:', e.message);
-      }
-    });
-
-    // ── Handle Text Shortcuts (purane dock buttons / typed commands) ──
-    bot.on('message', async (msg) => {
-      const text = msg.text?.trim() || '';
-      const chatId = String(msg.chat.id);
-      if (text.startsWith('/')) return; // handled by command handlers
-
-      if (/24\/7 SUPPORT|SUPPORT/i.test(text)) {
-        await bot.sendMessage(chatId, `${PE.phone} <b>24/7 Admin Support</b>\nKoi bhi query ya issue ke liye admin se direct connect karein:`, {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [[{ text: '👨‍💻 Contact Admin', url: getSupportUrl(), style: 'primary' }]]
-          }
-        });
-      } else if (/OFFICIAL CHANNEL|CHANNEL/i.test(text)) {
-        await bot.sendMessage(chatId, `${PE.broadcast} <b>Official Telegram Channel</b>\nDaily announcements, updates aur offers ke liye official channel join karein:`, {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [[{ text: '📢 Join Channel', url: getChannelUrl(), style: 'primary' }]]
-          }
-        });
       }
     });
 
@@ -313,8 +247,7 @@ ${PE.down} <b>Choose an option below to proceed:</b>`;
           parse_mode: 'HTML',
           reply_markup: {
             inline_keyboard: [
-              [{ text: '📱 ᴍᴀɴᴀɢᴇ ɪɴ ᴡᴇʙ ᴀᴘᴘ', web_app: { url: `${siteUrl}#orders` } }],
-              [{ text: '🌐 ᴏᴘᴇɴ ɪɴ ʙʀᴏᴡꜱᴇʀ', url: generateTelegramAuthLink(chatId, '/#orders') }]
+              [{ text: '📱 ᴍᴀɴᴀɢᴇ ɪɴ ᴡᴇʙ ᴀᴘᴘ', web_app: { url: `${siteUrl}#orders` } }]
             ]
           }
         });
@@ -348,8 +281,7 @@ ${PE.fire} <i>Deposit credits instantly to build your modded APKs.</i>`;
           parse_mode: 'HTML',
           reply_markup: {
             inline_keyboard: [
-              [{ text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ ɴᴏᴡ', web_app: { url: `${siteUrl}#wallet` } }],
-              [{ text: '🌐 ᴏᴘᴇɴ ɪɴ ʙʀᴏᴡꜱᴇʀ', url: generateTelegramAuthLink(chatId, '/#wallet') }]
+              [{ text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ ɴᴏᴡ', web_app: { url: `${siteUrl}#wallet` } }]
             ]
           }
         });
@@ -612,7 +544,7 @@ async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
 
 ${PE.crown} <b>App Name:</b>  <code>${escapeHtml(appNamePlain)}</code>
 ${PE.card} <b>Package:</b>   <code>${escapeHtml(order.package_name || 'com.client.app')}</code>
-${PE.lock} <b>Protection:</b> <b>100% Clean • Jiagu Hardened</b>
+${PE.lock} <b>Protection:</b> <b>100% Clean • Dex Protect X Secured</b>
 ${PE.verified} <b>Status:</b>     <b>Ready to Install</b> ${PE.check}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -814,7 +746,7 @@ ${PE.card} <b>Timestamp:</b> <code>${new Date().toLocaleString('en-IN', { timeZo
 
 ${PE.user} <b>User:</b> <code>${escapeHtml(data.username)}</code> (#${data.user_id})
 ${PE.crown} <b>App:</b> <code>${escapeHtml(data.app_name)}</code> (Order: <code>#${data.order_id}</code>)
-${PE.lock} <b>Security:</b> <b>100% Antivirus Clean • Jiagu Hardened</b>
+${PE.lock} <b>Security:</b> <b>100% Antivirus Clean • Dex Protect X Hardened</b>
 ${PE.check} <b>Status:</b> <b>Compiled & Archived ✅</b>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━

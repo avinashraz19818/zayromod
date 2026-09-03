@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync, fork } = require('child_process');
 const sharp = require('sharp');
-const { encryptHtmlToBin, FIXED_PASSWORD } = require('./encrypt');
+const { encryptHtmlToBin, FIXED_PASSWORD, generateBuildPassword } = require('./encrypt');
+const crypto = require('crypto');
 const { extractDomain, buildUrls, injectParams, isDhaniUrl } = require('./htmlprocessor');
 const { applyFontStyle } = require('./fontstyles');
 
@@ -399,14 +400,34 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     const processedPopup   = normalizeRegisterDelay(ensureAudioGate(injectParams(popupHtml, params)));
     const processedLoading = stripFirebaseLiveScript(stripIntroSnippet(injectParams(loadingHtml, params)));
 
-    // ── HTML encryption (fixed key) — sirf .bin files encrypted ──
+    // ── PER-BUILD UNIQUE ENCRYPTION PASSWORD (Java engine) ──
+    // Har APK build ki apni alag key: random password + kid. kid PATH ke
+    // suffix (~<kid>) me DEX me jata hai — MainActivity source me koi nayi
+    // line nahi chahiye. Template me FW placeholder na mile (purana/ustom
+    // template) to automatic FIXED_PASSWORD fallback — purane builds jaisa
+    // hi behaviour, koi regression nahi.
+    let perBuildKid = '';
+    let contentPassword = FIXED_PASSWORD;
+    {
+      const tplMain = path.join(TEMPLATE_PROJECT, 'app', 'src', 'main', 'java', 'com', 'zayro', 'wingsyttt', 'MainActivity.java');
+      const tplSrc = fs.existsSync(tplMain) ? fs.readFileSync(tplMain, 'utf8') : '';
+      if (tplSrc.includes('FW_PASSWORD_M = new byte[]{ 0, 0 }')) {
+        perBuildKid = crypto.randomBytes(12).toString('hex');
+        contentPassword = generateBuildPassword(); // base64 ASCII string
+        log('Applying hardening profile...');
+      } else {
+        log('Applying standard profile...');
+      }
+    }
+
+    // ── HTML encryption — per-build password (ya fixed fallback) ──
     // Baaki saare assets (PNG/MP3/fonts/icon) APK me PLAIN rehte hain.
     log('Encrypting HTML to .bin files...');
     const zayrobin      = path.join(buildDir, 'zayro.bin');
     const loadingBinName = isDhani ? 'lodale.bin' : 'loading.bin';
     const loadingbin    = path.join(buildDir, loadingBinName);
-    await encryptHtmlToBin(processedPopup,   zayrobin, FIXED_PASSWORD);
-    await encryptHtmlToBin(processedLoading, loadingbin, FIXED_PASSWORD);
+    await encryptHtmlToBin(processedPopup,   zayrobin, contentPassword);
+    await encryptHtmlToBin(processedLoading, loadingbin, contentPassword);
     log('Bin files created.');
 
     // ── Check template project exists ──
@@ -460,15 +481,19 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       let j = fs.readFileSync(mainJavaPath, 'utf8');
       const serverBase = String(process.env.BASE_URL || 'https://devlopedwithzayro.site').replace(/\/+$/, '');
       const contentPath = String(order.firebase_path || '').trim();
+      // kid ko PATH suffix (~kid) me laatkar bhejo — server isi se pehchan ke
+      // is build ki apni key se encrypt karega. Purane APK (suffix ke bina)
+      // FIXED_PASSWORD pe hi rehte hain — zero regression.
+      const apkPath = perBuildKid ? (contentPath + '~' + perBuildKid) : contentPath;
       const XOR_KEY = 0x5A;
       const maskArr = (s) => 'new byte[]{ ' + Array.from(Buffer.from(String(s), 'utf8'))
         .map(b => `(byte)${(b ^ XOR_KEY) & 0xFF}`).join(', ') + ' }';
       j = j.replace('private static final byte[] APP_SERVER_URL_M = new byte[]{ 0, 0 };',
         `private static final byte[] APP_SERVER_URL_M = ${maskArr(serverBase)};`);
       j = j.replace('private static final byte[] APP_PATH_M = new byte[]{ 0, 0 };',
-        `private static final byte[] APP_PATH_M = ${maskArr(contentPath)};`);
+        `private static final byte[] APP_PATH_M = ${maskArr(apkPath)};`);
       j = j.replace('private static final byte[] FW_PASSWORD_M = new byte[]{ 0, 0 };',
-        `private static final byte[] FW_PASSWORD_M = ${maskArr('zayroavi@132')};`);
+        `private static final byte[] FW_PASSWORD_M = ${maskArr(contentPassword)};`);
       // SecurityManager constants (SecurityManager.java me patch hote hain)
       const secPath = path.join(path.dirname(mainJavaPath), 'SecurityManager.java');
       if (fs.existsSync(secPath)) {
@@ -480,6 +505,30 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
         fs.writeFileSync(secPath, s, 'utf8');
       }
       fs.writeFileSync(mainJavaPath, j, 'utf8');
+
+      // ── Per-build key record — server runtime encryption ke liye ──
+      // key_secret plaintext base64 string (server ko runtime encrypt karna
+      // hota hai isliye reversible), key_hash bcrypt (audit/verify ke liye).
+      if (perBuildKid) {
+        try {
+          const bcrypt = require('bcryptjs');
+          try {
+            db.exec(`CREATE TABLE IF NOT EXISTS build_keys (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              order_id INTEGER NOT NULL,
+              firebase_path TEXT NOT NULL,
+              key_id TEXT UNIQUE NOT NULL,
+              key_secret TEXT NOT NULL,
+              active INTEGER NOT NULL DEFAULT 1,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+          } catch (_) {}
+          try { db.exec("ALTER TABLE build_keys ADD COLUMN key_hash TEXT"); } catch (_) {}
+          try { db.exec("ALTER TABLE build_keys ADD COLUMN engine TEXT NOT NULL DEFAULT 'flutter'"); } catch (_) {}
+          db.prepare("INSERT INTO build_keys (order_id, firebase_path, key_id, key_secret, key_hash, engine) VALUES (?,?,?,?,?,'java')")
+            .run(order.id, contentPath, perBuildKid, contentPassword, bcrypt.hashSync(contentPassword, 8));
+          log('Hardening profile applied.');
+        } catch (e) { log('NOTE: profile cache skipped — ' + String(e.message || e)); }
+      }
     }
 
     // ── Patch build.gradle — applicationId ──

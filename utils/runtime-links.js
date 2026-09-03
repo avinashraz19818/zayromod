@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
 const DEFAULT_FIREBASE_DATABASE_URL = 'https://zayrodev-195f3-default-rtdb.firebaseio.com';
@@ -23,25 +24,42 @@ const DEFAULT_FIREBASE_DATABASE_URL = 'https://zayrodev-195f3-default-rtdb.fireb
 // ───────────────────────────────────────────────────────────────────────────
 let _saCache = null;
 function loadServiceAccount() {
-  // DIAG-VERIFIED SIMPLE VERSION: koi stale cache nahi — har call pe file
-  // dobara padhte hain. (diag-firebase-auth.js isi tarah karta tha aur
-  // Firebase write 200 de chuka hai.)
   try {
     if (_saCache && _saCache.client_email && _saCache.private_key) return _saCache;
-    const filePath = process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_SERVICE_ACCOUNT;
-    const inline = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    const candidates = [
+      process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      process.env.FIREBASE_SERVICE_ACCOUNT,
+      path.join(__dirname, '..', 'firebase-service-account.json'),
+      '/root/apkbuilder/firebase-service-account.json',
+      '/root/firebase-service-account.json'
+    ].filter(Boolean);
+
     let parsed = null;
-    if (filePath && fs.existsSync(filePath)) {
-      parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    } else if (inline) {
+    for (const filePath of candidates) {
+      if (fs.existsSync(filePath)) {
+        try {
+          const content = fs.readFileSync(filePath, 'utf8');
+          parsed = JSON.parse(content);
+          if (parsed && parsed.client_email && parsed.private_key) {
+            _saCache = parsed;
+            console.log('[fb-sa] service account loaded from:', filePath);
+            return parsed;
+          }
+        } catch (_) {}
+      }
+    }
+
+    const inline = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    if (inline) {
       parsed = JSON.parse(inline);
+      if (parsed && parsed.client_email && parsed.private_key) {
+        _saCache = parsed;
+        console.log('[fb-sa] service account loaded from inline JSON');
+        return parsed;
+      }
     }
-    if (parsed && parsed.client_email && parsed.private_key) {
-      _saCache = parsed;
-      console.log('[fb-sa] service account loaded:', parsed.client_email);
-      return parsed;
-    }
-    console.error('[fb-sa] service account NAHI mila — file:', filePath || '(env me path nahi)');
+
+    console.warn('[fb-sa] service account file NAHI mila');
     return null;
   } catch (e) {
     console.error('[fb-sa] service account load fail:', e.message);
@@ -154,10 +172,14 @@ async function firebaseRequest(parts, method = 'GET', body) {
 
   const doFetch = async (tok) => {
     let url = firebaseEndpoint(parts);
-    if (tok) url += (url.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(tok);
+    const headers = { 'Content-Type': 'application/json' };
+    if (tok) {
+      headers['Authorization'] = `Bearer ${tok}`;
+      url += (url.includes('?') ? '&' : '?') + 'access_token=' + encodeURIComponent(tok);
+    }
     return fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15_000)
     });

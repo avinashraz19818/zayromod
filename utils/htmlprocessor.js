@@ -92,31 +92,27 @@ function injectParams(htmlContent, params) {
   // Matches: REGISTER_URL="...", href="...", gameFrame.src="..."
   html = html.replace(
     /(var\s+REGISTER_URL\s*=\s*["'])([^"']+)(["'])/g,
-    '$1$3'
+    `$1${registerUrl}$3`
   );
-  // Cold-start assignments in templates sometimes contain a second hardcoded
-  // register URL. Route every quoted http(s) cold-start URL through the same
-  // live link so database updates also affect initial app loading.
   html = html.replace(
     /((?:gameFrame|gameIframe)\.src\s*=\s*["'])https?:\/\/[^"']+(["'])/g,
-    '$1about:blank$2'
+    `$1${registerUrl}$2`
   );
-  // Some Dhani templates put the initial URL directly on the iframe element.
   html = html.replace(
-    /(<iframe\b[^>]*\bid=["'](?:target-game-frame|gameIframe)["'][^>]*\bsrc=["'])https?:\/\/[^"']+(["'])/gi,
-    '$1about:blank$2'
+    /(<iframe\b[^>]*\bid=["'](?:target-game-frame|gameIframe)["'][^>]*\bsrc=["'])[^"']+(["'])/gi,
+    `$1${registerUrl}$2`
   );
 
   // ── DEPOSIT URL ──
   html = html.replace(
     /(var\s+DEPOSIT_URL\s*=\s*["'])([^"']+)(["'])/g,
-    '$1$3'
+    `$1${depositUrl}$3`
   );
 
   // ── WINGO URL ──
   html = html.replace(
     /(var\s+WINGO_URL\s*=\s*["'])([^"']+)(["'])/g,
-    '$1$3'
+    `$1${wingoUrl}$3`
   );
 
   // ── UNIVERSAL ROUTE NORMALIZATION (Future Designs Auto-Compat) ──
@@ -370,6 +366,24 @@ function injectParams(htmlContent, params) {
     if(++attempts<120)setTimeout(connect,250);
   }
   connect();
+
+  // Instant Cold-Start Navigation
+  if(gameFrame && REGISTER_URL && valid(REGISTER_URL)){
+    var current=gameFrame.src||'';
+    if(!current || current==='about:blank' || current.endsWith('about:blank') || current.startsWith('file:///')){
+      gameFrame.src = REGISTER_URL;
+      if(typeof window.setUrl==='function') try{window.setUrl(REGISTER_URL);}catch(e){}
+    }
+  }
+  setTimeout(function(){
+    if(gameFrame && REGISTER_URL && valid(REGISTER_URL)){
+      var current=gameFrame.src||'';
+      if(!current || current==='about:blank' || current.endsWith('about:blank') || current.startsWith('file:///')){
+        gameFrame.src = REGISTER_URL;
+        if(typeof window.setUrl==='function') try{window.setUrl(REGISTER_URL);}catch(e){}
+      }
+    }
+  }, 150);
 })();
 </script>`;
   if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, `${liveLinksScript}</body>`);

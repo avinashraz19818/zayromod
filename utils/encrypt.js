@@ -66,9 +66,18 @@ function decryptHtmlFromBin(input, password = FIXED_PASSWORD) {
   return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
 }
 
+// ── Per-build password generator (Flutter engine) ──
+// Har Flutter APK build ka ALAG password hota hai. build_keys table me
+// base64 store hota hai; app me 3 fragments (Dart + native C++ + cert-derived)
+// me split hokar jata hai — kahin bhi poora password ek jagah nahi milta.
+function generateBuildPassword() {
+  return crypto.randomBytes(56).toString('base64');
+}
+
 module.exports = {
   MARKER,
   FIXED_PASSWORD,
+  generateBuildPassword,
   encryptHtmlToBin,
   encryptHtmlFileToBin,
   decryptHtmlFromBin

@@ -1,8 +1,8 @@
 'use strict';
 
-// APK compilation uses Gradle and several synchronous shell commands. Keeping
-// those commands in this short-lived child process prevents them from blocking
-// the API server and Telegram bot polling in the parent process.
+// APK compilation uses Gradle and several synchronous shell commands.
+// Keeping those commands in this short-lived child process prevents them from
+// blocking the API server and Telegram bot polling in the parent process.
 const { buildApkInWorker } = require('./apkbuilder');
 
 function sendToParent(message, exitCode = 0) {
@@ -28,12 +28,7 @@ process.once('message', async message => {
   };
 
   try {
-    const result = await buildApkInWorker(
-      message.order,
-      message.design,
-      message.buildId,
-      log
-    );
+    const result = await buildApkInWorker(message.order, message.design, message.buildId, log);
     sendToParent({ type: 'result', result });
   } catch (error) {
     sendToParent({

