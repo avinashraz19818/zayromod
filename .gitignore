@@ -6,3 +6,13 @@ backups/*.db
 backups/*.sqlite
 database/*.db-shm
 database/*.db-wal
+
+# Runtime data and user/credential material — never commit these.
+database/*.db
+database/*.db-*
+backups/
+builds/
+uploads/
+keystore/
+.env*
+!.env.example

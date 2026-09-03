@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const path = require('path');
-const fs = require('fs');
 
 const DB_PATH = path.join(__dirname, 'apkbuilder.db');
 const db = new Database(DB_PATH);
@@ -16,6 +17,14 @@ db.exec(`
     password TEXT NOT NULL,
     coins INTEGER DEFAULT 0,
     telegram_id TEXT,
+    auth_provider TEXT NOT NULL DEFAULT 'password',
+    email_verified_at INTEGER,
+    email_verification_token_hash TEXT,
+    email_verification_expires_at INTEGER,
+    email_verification_sent_at INTEGER,
+    password_reset_token_hash TEXT,
+    password_reset_expires_at INTEGER,
+    session_version INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -108,6 +117,13 @@ db.exec(`
     value TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS sessions (
+    sid TEXT PRIMARY KEY,
+    sess TEXT NOT NULL,
+    expires INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires);
+
   INSERT OR IGNORE INTO settings(key,value) VALUES
     ('upi_qr_image',''),
     ('upi_id',''),
@@ -133,6 +149,14 @@ db.exec(`
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('backup_keep_count','10')"); } catch(e) {}
   try { db.exec("ALTER TABLE coin_requests ADD COLUMN screenshot_file TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'password'"); } catch(e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN email_verified_at INTEGER"); } catch(e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN email_verification_token_hash TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN email_verification_expires_at INTEGER"); } catch(e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN email_verification_sent_at INTEGER"); } catch(e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN password_reset_token_hash TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN password_reset_expires_at INTEGER"); } catch(e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE users ADD COLUMN first_name TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE users ADD COLUMN tg_username TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE users ADD COLUMN photo_url TEXT DEFAULT ''"); } catch(e) {}
@@ -208,5 +232,61 @@ db.exec(`
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('telegram_channel_url','')"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('telegram_log_channel_id','')"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings(key,value) VALUES('telegram_log_enabled','1')"); } catch(e) {}
+  // Older builds sometimes kept admin/provider credentials in settings. They
+  // are no longer a supported source of truth; erase them so the subsequent
+  // admin-settings whitelist cannot expose them.
+  try {
+    db.exec("UPDATE settings SET value='' WHERE key IN ('admin_password','admin_password_hash','session_secret','google_client_secret','resend_api_key','smtp_password','smtp_pass','email_password','restore_secret','firebase_database_auth')");
+  } catch(e) {}
+
+// Token hashes are indexed for constant-time-ish indexed lookups without ever
+// storing the raw verification/reset token in SQLite.
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_users_email_verification_token ON users(email_verification_token_hash)"); } catch(e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_users_password_reset_token ON users(password_reset_token_hash)"); } catch(e) {}
+
+// Legacy versions wrote Telegram passwords and plain_password values directly
+// to disk. Convert any non-bcrypt password value once, then erase the
+// plaintext column. Existing regular bcrypt hashes are left unchanged.
+function isBcryptHash(value) {
+  return /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(String(value || ''));
+}
+try {
+  const legacyUsers = db.prepare(`
+    SELECT id,password,plain_password,auth_provider,is_telegram,google_id,email_verified_at
+    FROM users
+  `).all();
+  const updateUser = db.prepare(`
+    UPDATE users SET password=?, plain_password='', auth_provider=?, email_verified_at=?
+    WHERE id=?
+  `);
+  const migrateUsers = db.transaction(rows => {
+    for (const user of rows) {
+      let passwordHash = user.password;
+      if (!isBcryptHash(passwordHash)) {
+        const legacyPassword = String(user.plain_password || user.password || '');
+        const passwordToHash = legacyPassword || crypto.randomBytes(32).toString('base64url');
+        passwordHash = bcrypt.hashSync(passwordToHash, 12);
+      }
+      const storedProvider = String(user.auth_provider || '').trim();
+      const provider = user.is_telegram
+        ? 'telegram'
+        : (user.google_id ? 'google' : (storedProvider || 'password'));
+      const verifiedAt = user.email_verified_at || (provider === 'telegram' || provider === 'google' ? Date.now() : null);
+      if (passwordHash !== user.password || user.plain_password || provider !== user.auth_provider || verifiedAt !== user.email_verified_at) {
+        updateUser.run(passwordHash, provider, verifiedAt, user.id);
+      }
+    }
+  });
+  migrateUsers(legacyUsers);
+} catch (error) {
+  // Do not print row data or password material. A failed migration should be
+  // visible to the operator, while login remains fail-closed for non-bcrypt
+  // credentials until the migration can run successfully.
+  console.error('[security] legacy password migration failed:', error.message);
+}
+
+// Sessions are expiring records, so remove stale rows during boot as well as
+// periodically from server.js. This is safe to run on every startup.
+try { db.prepare('DELETE FROM sessions WHERE expires<=?').run(Date.now()); } catch (_) {}
 
 module.exports = db;

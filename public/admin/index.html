@@ -958,7 +958,7 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
     </div>
     <div class="card" style="max-width:640px">
       <div class="card-hd"><span class="accent"></span><h3>Telegram Bot &amp; Support</h3></div>
-      <div class="form-group"><label>Bot Token</label><input type="text" id="sTgToken" placeholder="1234567890:AAxxxx…"></div>
+      <div class="form-group"><label>Bot Token <span style="color:var(--muted);font-size:11px">(write-only)</span></label><input type="password" id="sTgToken" autocomplete="new-password" placeholder="Enter only when setting or rotating the token"></div>
       <div class="form-group"><label>Admin Chat ID</label><input type="text" id="sTgAdminId" placeholder="Your chat ID"></div>
       <div class="grid2">
         <div class="form-group"><label>Support Username</label><input type="text" id="sTgSupportUser" placeholder="e.g. @zayroadmin"></div>
@@ -2406,7 +2406,11 @@ async function loadSettings() {
   document.getElementById('sBackupKeep').value = s.backup_keep_count || '10';
   document.getElementById('sSiteName').value = s.site_name || '';
   document.getElementById('sSiteUrl').value = s.site_url || '';
-  document.getElementById('sTgToken').value = s.telegram_bot_token || '';
+  const tgTokenInput = document.getElementById('sTgToken');
+  tgTokenInput.value = '';
+  tgTokenInput.placeholder = s.telegram_bot_token_configured
+    ? 'Configured — enter a new token only to rotate it'
+    : 'Not configured — enter token to enable Telegram';
   document.getElementById('sTgAdminId').value = s.telegram_admin_id || '';
   document.getElementById('sTgSupportUser').value = s.telegram_support_user || '';
   document.getElementById('sTgChannelUrl').value = s.telegram_channel_url || '';
@@ -2430,7 +2434,8 @@ async function saveSettings() {
   fd.append('backup_keep_count', document.getElementById('sBackupKeep').value);
   fd.append('site_name', document.getElementById('sSiteName').value);
   fd.append('site_url', document.getElementById('sSiteUrl').value);
-  fd.append('telegram_bot_token', document.getElementById('sTgToken').value);
+  const telegramToken = document.getElementById('sTgToken').value.trim();
+  if (telegramToken) fd.append('telegram_bot_token', telegramToken);
   fd.append('telegram_admin_id', document.getElementById('sTgAdminId').value);
   fd.append('telegram_support_user', document.getElementById('sTgSupportUser').value);
   fd.append('telegram_channel_url', document.getElementById('sTgChannelUrl').value);
@@ -2574,7 +2579,7 @@ async function doAdminLogin(btn) {
   
   const submitBtn = btn || document.querySelector('#loginOverlay .btn');
   setLoading(submitBtn, true, 'Verifying…');
-  const d = await api('/api/login','POST',{username, password});
+  const d = await api('/api/admin/login','POST',{username, password});
   setLoading(submitBtn, false);
 
   if (d.error || !d.isAdmin) {

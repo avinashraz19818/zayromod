@@ -3,6 +3,7 @@ const https = require('https');
 const fs   = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 let bot = null;
 let deliveryBot = null;
@@ -51,7 +52,8 @@ function getSiteUrl() {
 
 function generateTelegramAuthLink(chatId, subPath = '') {
   const siteUrl = getSiteUrl();
-  const token = _db?.prepare("SELECT value FROM settings WHERE key='telegram_bot_token'").get()?.value || 'zayro_secret';
+  const token = _db?.prepare("SELECT value FROM settings WHERE key='telegram_bot_token'").get()?.value || process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return null;
   const time = Date.now();
   const sig = crypto.createHmac('sha256', token).update(`${chatId}:${time}`).digest('hex');
   const redirectParam = subPath ? `&redirect=${encodeURIComponent(subPath)}` : '';
@@ -138,10 +140,13 @@ function initBot(token, db) {
               finalUsername = `${rawUsername || `tg_${chatId}`}_${attempt++}`;
             }
             const email = `${chatId}@telegram.user`;
-            const plainPass = `tg_${chatId}_${crypto.randomBytes(3).toString('hex')}`;
-            const result = _db.prepare(
-              'INSERT INTO users(username, email, password, plain_password, coins, telegram_id, first_name, tg_username, is_telegram) VALUES(?, ?, ?, ?, 0, ?, ?, ?, 1)'
-            ).run(finalUsername, email, plainPass, plainPass, chatId, msg.from?.first_name || '', rawUsername);
+            const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('base64url'), 12);
+            const result = _db.prepare(`
+              INSERT INTO users(
+                username,email,password,auth_provider,email_verified_at,
+                coins,telegram_id,first_name,tg_username,is_telegram
+              ) VALUES(?,?,?,'telegram',?,0,?,?,?,1)
+            `).run(finalUsername, email, passwordHash, Date.now(), chatId, msg.from?.first_name || '', rawUsername);
             u = _db.prepare('SELECT * FROM users WHERE id=?').get(result.lastInsertRowid);
             sendLogEvent('user_registered', {
               id: u.id,

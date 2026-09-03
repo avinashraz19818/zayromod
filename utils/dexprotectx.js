@@ -46,10 +46,16 @@ class DexProtectX {
 
       // 2) Cryptographic Signing with V1, V2 & V3 Schemes
       log('[Dex Protect X] Applying V1, V2 & V3 keystore signatures...');
-      const ksPass = options.keystorePass || 'pass:zayro@123';
-      const keyPass = options.keyPass || 'pass:zayro@123';
+      const configuredPassword = options.keystorePass || process.env.KEYSTORE_PASSWORD || '';
+      const ksPass = String(configuredPassword).startsWith('pass:')
+        ? String(configuredPassword)
+        : `pass:${configuredPassword}`;
+      const keyPass = options.keyPass
+        ? String(options.keyPass).startsWith('pass:') ? String(options.keyPass) : `pass:${options.keyPass}`
+        : ksPass;
 
       if (fs.existsSync(keystorePath)) {
+        if (!configuredPassword) throw new Error('[Dex Protect X] KEYSTORE_PASSWORD is required when a keystore is present');
         execFileSync('apksigner', [
           'sign',
           '--ks', keystorePath,

@@ -24,10 +24,40 @@ const {
   addFirebaseUser,
   removeFirebaseUser
 } = require('./utils/runtime-links');
+const { SQLiteSessionStore } = require('./utils/session-store');
+const {
+  isEmailDeliveryConfigured,
+  sendVerificationEmail,
+  sendPasswordResetEmail
+} = require('./utils/email');
 
 const app = express();
-app.set('trust proxy', 1);
+app.disable('x-powered-by');
+const NODE_ENV = String(process.env.NODE_ENV || 'development').trim().toLowerCase();
+const TRUST_PROXY_HOPS = Math.max(0, parseInt(process.env.TRUST_PROXY_HOPS || '0', 10) || 0);
+app.set('trust proxy', TRUST_PROXY_HOPS);
 const PORT = process.env.PORT || 3000;
+
+const parseDurationMinutes = (name, fallback, minimum) => {
+  const value = parseInt(process.env[name] || String(fallback), 10);
+  return Math.max(minimum, Number.isFinite(value) ? value : fallback) * 60 * 1000;
+};
+const SESSION_TTL_MS = parseDurationMinutes('SESSION_TTL_MINUTES', 8 * 60, 15);
+const SESSION_IDLE_TIMEOUT_MS = parseDurationMinutes('SESSION_IDLE_TIMEOUT_MINUTES', 30, 5);
+const BCRYPT_ROUNDS = Math.min(15, Math.max(10, parseInt(process.env.BCRYPT_ROUNDS || '12', 10) || 12));
+const SESSION_SECRET_INPUT = String(process.env.SESSION_SECRET || '').trim();
+if (NODE_ENV === 'production' && SESSION_SECRET_INPUT.length < 32) {
+  throw new Error('SESSION_SECRET must be set to at least 32 characters in production');
+}
+// Development gets an ephemeral random secret rather than a committed/static
+// fallback. A restart logs out development sessions, which is safer than
+// making a predictable secret part of the application.
+const SESSION_SECRET = SESSION_SECRET_INPUT || crypto.randomBytes(48).toString('base64url');
+const COOKIE_SECURE = NODE_ENV === 'production'
+  ? true
+  : String(process.env.COOKIE_SECURE || 'false').toLowerCase() === 'true';
+const SESSION_COOKIE_NAME = COOKIE_SECURE ? '__Host-zayro.sid' : 'zayro.sid';
+const sessionStore = new SQLiteSessionStore(db, SESSION_TTL_MS);
 
 // ── Dirs ──
 ['builds','uploads','templates/assets','base-apks','keystore','backups'].forEach(d => {
@@ -56,18 +86,90 @@ function createDatabaseBackup(reason = 'manual') {
 try { createDatabaseBackup('startup'); } catch (error) { console.error('Startup backup failed:', error.message); }
 
 // ── Middleware ──
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'zayro_secret',
+  secret: SESSION_SECRET,
+  name: SESSION_COOKIE_NAME,
+  store: sessionStore,
   resave: false,
   saveUninitialized: false,
+  rolling: false,
   cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000,
+    maxAge: SESSION_TTL_MS,
     httpOnly: true,
-    sameSite: 'lax'
+    sameSite: 'lax',
+    secure: COOKIE_SECURE,
+    path: '/'
   }
 }));
+
+function clearSessionCookie(res) {
+  res.clearCookie(SESSION_COOKIE_NAME, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: COOKIE_SECURE,
+    path: '/'
+  });
+}
+
+function destroyExpiredSession(req, res, next) {
+  if (!req.session) return next();
+  req.session.destroy(() => {
+    clearSessionCookie(res);
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
+    next();
+  });
+}
+
+// Enforce both an absolute lifetime and an idle timeout server-side. Cookie
+// expiry alone is not enough because a client can replay a cookie until the
+// server-side record is gone.
+app.use((req, res, next) => {
+  const current = req.session;
+  if (!current) return next();
+  const hasSessionState = current.userId !== undefined
+    || current.isAdmin === true
+    || current.googleState;
+  if (!hasSessionState) return next();
+
+  const now = Date.now();
+  const createdAt = Number(current.createdAt);
+  const lastActivityAt = Number(current.lastActivityAt);
+  if (!Number.isFinite(createdAt) || !Number.isFinite(lastActivityAt)
+    || createdAt <= 0 || lastActivityAt <= 0
+    || createdAt > now + 60_000 || lastActivityAt > now + 60_000) {
+    // Sessions issued before this hardening, or sessions with tampered state,
+    // are rejected rather than being granted a fresh lifetime.
+    return destroyExpiredSession(req, res, next);
+  }
+  current.createdAt = createdAt;
+  current.lastActivityAt = lastActivityAt;
+
+  if (now - createdAt > SESSION_TTL_MS || now - lastActivityAt > SESSION_IDLE_TIMEOUT_MS) {
+    return destroyExpiredSession(req, res, next);
+  }
+
+  // Password reset/change increments session_version and invalidates every
+  // previously issued session for that user.
+  if (current.userId !== undefined && current.isAdmin !== true) {
+    const sessionVersion = Number(current.sessionVersion);
+    const user = db.prepare('SELECT session_version,email_verified_at,auth_provider,is_telegram FROM users WHERE id=?').get(current.userId);
+    if (!user || !Number.isSafeInteger(sessionVersion) || sessionVersion < 0
+      || Number(user.session_version || 0) !== sessionVersion
+      || !isEmailVerified(user)) {
+      return destroyExpiredSession(req, res, next);
+    }
+  }
+
+  if (now - lastActivityAt >= 60_000) current.lastActivityAt = now;
+  next();
+});
+
+const sessionCleanupTimer = setInterval(() => sessionStore.clearExpired(), 15 * 60 * 1000);
+sessionCleanupTimer.unref?.();
 // ── SECURITY: /builds aur /uploads ka PUBLIC static access HATA diya ──
 // Pehle koi bhi /uploads/<file> ya /builds/<folder>/<apk> direct URL se
 // khol sakta tha (APKs tak public thin!). Ab files sirf authenticated
@@ -81,12 +183,8 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── SECURE FILE SERVING ──
-const FILE_TOKEN_SECRET = process.env.FILE_TOKEN_SECRET || 'zayro-file-token-2026';
-function fileTokenUrl(name, ttlMs = 86400 * 1000) {
+function fileTokenUrl(name) {
   return `/api/files/${encodeURIComponent(name)}`;
-}
-function verifyFileToken(name, sig, exp) {
-  return true;
 }
 // Design media (public preview grid) ke liye clean URLs
 function tokenizeDesignMedia(d) {
@@ -162,14 +260,17 @@ app.get('/api/files/:name', (req, res) => {
   }
   
   const mimeType = detectMimeType(full);
-  const isMedia = mimeType.startsWith('image/') || mimeType.startsWith('video/') || mimeType.startsWith('audio/') || mimeType.startsWith('font/') || isDesignMediaFile(safe);
-  const hasSession = req.session && (req.session.userId !== undefined || req.session.isAdmin);
+  const isPublicDesignMedia = isDesignMediaFile(safe);
+  const hasSession = req.session && (Number(req.session.userId) > 0 || req.session.isAdmin === true);
 
-  if (!isMedia && !hasSession) return res.status(401).send('Login required');
+  // Only files explicitly referenced by public catalog/payment records are
+  // public. A generic image extension must not make private screenshots or
+  // uploaded APKs public.
+  if (!isPublicDesignMedia && !hasSession) return res.status(401).send('Login required');
   
   res.set('Content-Type', mimeType);
   res.set('Accept-Ranges', 'bytes');
-  res.set('Cache-Control', isMedia ? 'public, max-age=86400, stale-while-revalidate=604800' : 'private, max-age=3600');
+  res.set('Cache-Control', isPublicDesignMedia ? 'public, max-age=86400, stale-while-revalidate=604800' : 'private, no-store');
   
   // sendFile Range requests handles partial video stream and seeking
   res.sendFile(full, err => { if (err && !res.headersSent) res.status(404).end(); });
@@ -197,184 +298,483 @@ try {
 
 // ── Auth middleware ──
 function requireAuth(req, res, next) {
-  if (req.session && (req.session.userId !== undefined || req.session.isAdmin)) return next();
+  const isAdmin = req.session && req.session.isAdmin === true;
+  const hasUser = req.session && Number(req.session.userId) > 0;
+  if (isAdmin || hasUser) return next();
   res.status(401).json({ error: 'Login required' });
 }
+
 function requireAdmin(req, res, next) {
-  if (req.session && (req.session.isAdmin || req.session.userId !== undefined)) {
-    req.session.isAdmin = true;
-    return next();
-  }
+  if (req.session && req.session.isAdmin === true) return next();
   res.status(403).json({ error: 'Admin only' });
 }
 
-function checkAdminAuth(username, password) {
-  if (!password) return false;
-  const cleanUser = String(username || '').trim().toLowerCase();
-  const rawPass = String(password);
-  const cleanPass = String(password).trim();
+const PASSWORD_MIN_LENGTH = 12;
+const DUMMY_PASSWORD_HASH = '$2a$12$2FvOmOXatoX0cWCqzkdHiOHt18CWFmtM/Ewc3pXnJXwvolu4.uPF6';
+const EMAIL_VERIFICATION_TTL_MS = parseDurationMinutes('EMAIL_VERIFICATION_TTL_MINUTES', 30, 5);
+const PASSWORD_RESET_TTL_MS = parseDurationMinutes('PASSWORD_RESET_TTL_MINUTES', 30, 5);
 
-  // 1) Environment Variables
-  const envAdminUser = (process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase();
-  const envAdminPass = (process.env.ADMIN_PASSWORD || 'admin123').trim();
-  if ((cleanUser === envAdminUser || cleanUser === 'admin' || cleanUser === '') && (rawPass === envAdminPass || cleanPass === envAdminPass)) {
-    return true;
+function normalizeIdentity(value) {
+  return String(value || '').trim().toLowerCase().slice(0, 254);
+}
+
+function normalizeEmail(value) {
+  const email = normalizeIdentity(value);
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  return email;
+}
+
+function normalizeUsername(value) {
+  const username = String(value || '').trim().toLowerCase();
+  if (!/^[a-z0-9_]{3,32}$/.test(username)) return null;
+  if (new Set(['admin', 'administrator', 'root', 'moderator', 'support', 'system']).has(username)) return null;
+  return username;
+}
+
+function validatePassword(value) {
+  const password = typeof value === 'string' ? value : '';
+  if (password.length < PASSWORD_MIN_LENGTH) return `Password must be at least ${PASSWORD_MIN_LENGTH} characters long`;
+  if (password.length > 256) return 'Password is too long';
+  return null;
+}
+
+function isBcryptHash(value) {
+  return /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(String(value || ''));
+}
+
+function bcryptCost(value) {
+  const match = String(value || '').match(/^\$2[aby]\$(\d{2})\$/);
+  return match ? Number(match[1]) : 0;
+}
+
+function isStrongBcryptHash(value) {
+  return isBcryptHash(value) && bcryptCost(value) >= 10;
+}
+
+if (NODE_ENV === 'production' && !isStrongBcryptHash(process.env.ADMIN_PASSWORD_HASH)) {
+  throw new Error('ADMIN_PASSWORD_HASH must be a valid bcrypt hash with cost 10 or higher in production');
+}
+
+function timingSafeStringEqual(left, right) {
+  const a = crypto.createHash('sha256').update(String(left || ''), 'utf8').digest();
+  const b = crypto.createHash('sha256').update(String(right || ''), 'utf8').digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+function issueOneTimeToken(ttlMs) {
+  const raw = crypto.randomBytes(32).toString('base64url');
+  return {
+    raw,
+    hash: crypto.createHash('sha256').update(raw, 'utf8').digest('hex'),
+    expiresAt: Date.now() + ttlMs
+  };
+}
+
+function hashOneTimeToken(raw) {
+  const token = String(raw || '').trim();
+  if (!/^[A-Za-z0-9_-]{40,64}$/.test(token)) return null;
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isEmailVerified(user) {
+  if (!user) return false;
+  // OAuth providers have already verified ownership of the provider email;
+  // Telegram accounts do not have a deliverable email and are authenticated
+  // by Telegram's signed initData instead.
+  if (user.auth_provider === 'google' || user.auth_provider === 'telegram' || Number(user.is_telegram) === 1) return true;
+  return Number(user.email_verified_at) > 0;
+}
+
+function destroySession(req, res, callback) {
+  if (!req.session) {
+    clearSessionCookie(res);
+    return callback?.();
   }
+  req.session.destroy(() => {
+    clearSessionCookie(res);
+    callback?.();
+  });
+}
 
-  // 2) Database Settings Table (admin_username, admin_password)
-  try {
-    const uRow = db.prepare('SELECT value FROM settings WHERE key="admin_username"').get();
-    const pRow = db.prepare('SELECT value FROM settings WHERE key="admin_password"').get();
-    const dbAdminUser = (uRow?.value || '').trim().toLowerCase();
-    const dbAdminPass = (pRow?.value || '').trim();
-    if (dbAdminPass && (rawPass === dbAdminPass || cleanPass === dbAdminPass)) {
-      if (!dbAdminUser || cleanUser === dbAdminUser || cleanUser === 'admin' || cleanUser === '') return true;
-    }
-  } catch (_) {}
+function establishSession(req, data) {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate(error => {
+      if (error) return reject(error);
+      Object.assign(req.session, data, {
+        createdAt: Date.now(),
+        lastActivityAt: Date.now()
+      });
+      req.session.save(saveError => saveError ? reject(saveError) : resolve());
+    });
+  });
+}
 
-  // 3) Common Admin Defaults (if username is admin or blank)
-  if (cleanUser === 'admin' || cleanUser === 'administrator' || cleanUser === '') {
-    const fallbacks = ['admin123', 'admin', 'admin@123', 'admin1234', '123456', 'zayro123', 'zayromod', 'Avinash12', 'avinash12'];
-    if (fallbacks.includes(rawPass) || fallbacks.includes(cleanPass)) {
-      return true;
-    }
+async function verifyAdminCredentials(username, password) {
+  const suppliedUser = normalizeIdentity(username);
+  const expectedUser = normalizeIdentity(process.env.ADMIN_USERNAME || 'admin');
+  const userMatches = suppliedUser.length > 0 && timingSafeStringEqual(suppliedUser, expectedUser);
+  const suppliedPassword = typeof password === 'string' ? password : '';
+  const configuredHash = String(process.env.ADMIN_PASSWORD_HASH || '').trim();
+
+  // Admin passwords are accepted only as bcrypt hashes. A malformed or
+  // missing configuration deliberately behaves like a wrong password.
+  const passwordMatches = isStrongBcryptHash(configuredHash)
+    ? await bcrypt.compare(suppliedPassword, configuredHash).catch(() => false)
+    : await bcrypt.compare(suppliedPassword, DUMMY_PASSWORD_HASH).catch(() => false);
+  return userMatches && passwordMatches;
+}
+
+async function verifyUserPassword(user, password) {
+  const storedHash = user && isBcryptHash(user.password) ? user.password : DUMMY_PASSWORD_HASH;
+  const suppliedPassword = typeof password === 'string' ? password : '';
+  const matches = await bcrypt.compare(suppliedPassword, storedHash).catch(() => false);
+  if (Boolean(user) && matches && bcryptCost(storedHash) < BCRYPT_ROUNDS) {
+    // Upgrade older but valid bcrypt work factors after a successful login;
+    // the plaintext password exists only in memory for this request.
+    const upgradedHash = await bcrypt.hash(suppliedPassword, BCRYPT_ROUNDS);
+    db.prepare('UPDATE users SET password=?,plain_password=\'\' WHERE id=? AND password=?')
+      .run(upgradedHash, user.id, storedHash);
   }
-
-  // 4) Database users check (any registered user entering credentials)
-  try {
-    const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=? OR LOWER(email)=?').get(cleanUser, cleanUser);
-    if (user) {
-      if (user.plain_password && (user.plain_password === rawPass || user.plain_password === cleanPass)) {
-        return true;
-      }
-      if (user.password) {
-        if (bcrypt.compareSync(rawPass, user.password) || bcrypt.compareSync(cleanPass, user.password)) {
-          return true;
-        }
-      }
-    }
-  } catch (_) {}
-
-  return false;
+  return Boolean(user) && matches;
 }
 
 // ═══════════════════════════════════════════
 // AUTH ROUTES
 // ═══════════════════════════════════════════
-const getClientIp = (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
-const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false, handler: (req, res) => { const ip = getClientIp(req); db.prepare('INSERT OR IGNORE INTO blocked_ips(ip) VALUES(?)').run(ip); res.status(429).json({ error: 'Too many registration attempts. This IP has been blocked.' }); } });
+const getClientIp = req => req.ip || req.socket.remoteAddress || 'unknown';
+const jsonRateLimitHandler = (message) => (req, res) => res.status(429).json({ error: message });
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonRateLimitHandler('Too many login attempts. Please try again later.')
+});
+const loginAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => normalizeIdentity(req.body?.username) || 'missing-account',
+  handler: jsonRateLimitHandler('Too many login attempts. Please try again later.')
+});
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonRateLimitHandler('Too many registration attempts. Please try again later.')
+});
+const verificationActionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonRateLimitHandler('Too many verification attempts. Please try again later.')
+});
+const resendVerificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonRateLimitHandler('Too many verification email requests. Please try again later.')
+});
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonRateLimitHandler('Too many password reset requests. Please try again later.')
+});
+const resetPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonRateLimitHandler('Too many password reset attempts. Please try again later.')
+});
 
-app.use('/api/register', (req, res, next) => { const ip = getClientIp(req); const blocked = db.prepare('SELECT 1 FROM blocked_ips WHERE ip=?').get(ip); if (blocked) return res.status(403).json({ error: 'Registration blocked from this IP.' }); next(); });
 app.post('/api/register', registerLimiter, async (req, res) => {
-  const { username, email, password } = req.body;
-  if (!username || !email || !password) return res.json({ error: 'All fields required' });
-  try {
-    const hash = await bcrypt.hash(password, 10);
-    const stmt = db.prepare('INSERT INTO users(username,email,password,plain_password) VALUES(?,?,?,?)');
-    const result = stmt.run(username.trim().toLowerCase(), email.trim().toLowerCase(), hash, password);
-    req.session.userId = result.lastInsertRowid;
-    req.session.username = username;
-    res.json({ success: true });
+  const username = normalizeUsername(req.body?.username);
+  const email = normalizeEmail(req.body?.email);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const passwordError = validatePassword(password);
+  if (!username) return res.status(400).json({ error: 'Username must be 3-32 characters and may contain only letters, numbers, and underscores' });
+  if (!email) return res.status(400).json({ error: 'Enter a valid email address' });
+  if (passwordError) return res.status(400).json({ error: passwordError });
+  if (!isEmailDeliveryConfigured()) {
+    return res.status(503).json({ error: 'Registration is temporarily unavailable. Please try again later.' });
+  }
 
-    // Send to Telegram Log Channel
+  const verification = issueOneTimeToken(EMAIL_VERIFICATION_TTL_MS);
+  try {
+    const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const result = db.prepare(`
+      INSERT INTO users(
+        username,email,password,auth_provider,
+        email_verification_token_hash,email_verification_expires_at,email_verification_sent_at
+      ) VALUES(?,?,?,'password',?,?,?)
+    `).run(username, email, hash, verification.hash, verification.expiresAt, Date.now());
+
+    try {
+      await sendVerificationEmail({ to: email, username, token: verification.raw });
+    } catch (error) {
+      // Keep the account so the user can use the resend endpoint once mail is
+      // configured/recovered. The raw token is never logged or returned.
+      console.error('[auth] verification email delivery failed:', error.message);
+      return res.status(503).json({ error: 'Registration is temporarily unavailable. Please try again later.' });
+    }
+
     sendLogEvent('user_registered', {
       id: result.lastInsertRowid,
-      username: username.trim(),
-      email: email.trim(),
+      username,
+      email,
       coins: 0,
       ip: getClientIp(req)
     });
-  } catch (e) {
-    res.json({ error: 'Username or email already exists' });
+    return res.status(201).json({
+      success: true,
+      verificationRequired: true,
+      message: 'Account created. Check your email to verify your account before logging in.'
+    });
+  } catch (error) {
+    if (String(error?.code || '').includes('SQLITE_CONSTRAINT')) {
+      return res.status(409).json({ error: 'Username or email is already registered' });
+    }
+    console.error('[auth] registration failed:', error.message);
+    return res.status(500).json({ error: 'Registration failed. Please try again later.' });
   }
 });
 
-app.post('/api/admin/login', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.json({ error: 'Username and password are required' });
-
-  const cleanUser = String(username).trim();
-  const rawPass = String(password);
-  const cleanPass = String(password).trim();
-
-  // 1) Direct Admin check
-  if (checkAdminAuth(cleanUser, password)) {
-    req.session.isAdmin = true;
-    req.session.userId = 0;
-    req.session.username = cleanUser || 'admin';
+async function handleAdminLogin(req, res) {
+  const username = String(req.body?.username || '');
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!username || !password) {
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH).catch(() => false);
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  if (!(await verifyAdminCredentials(username, password))) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  try {
+    await establishSession(req, { isAdmin: true, userId: 0, username: normalizeIdentity(username) || 'admin' });
     return res.json({ success: true, isAdmin: true, username: req.session.username });
+  } catch (error) {
+    console.error('[auth] admin session creation failed:', error.message);
+    return res.status(500).json({ error: 'Login failed. Please try again later.' });
+  }
+}
+
+app.post('/api/admin/login', loginLimiter, loginAccountLimiter, handleAdminLogin);
+
+app.post('/api/login', loginLimiter, loginAccountLimiter, async (req, res) => {
+  const username = normalizeIdentity(req.body?.username);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!username || !password) {
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH).catch(() => false);
+    return res.status(401).json({ error: 'Invalid username or password' });
   }
 
-  // 2) Database user check for admin role
-  const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=? OR LOWER(email)=?').get(cleanUser.toLowerCase(), cleanUser.toLowerCase());
-  if (user) {
-    let ok = false;
-    if (user.password) {
-      ok = await bcrypt.compare(rawPass, user.password).catch(() => false);
-      if (!ok && rawPass !== cleanPass) {
-        ok = await bcrypt.compare(cleanPass, user.password).catch(() => false);
-      }
-    }
-    if (!ok && user.plain_password && (user.plain_password === rawPass || user.plain_password === cleanPass)) {
-      ok = true;
-    }
-    if (ok && (user.username.toLowerCase() === 'admin' || user.is_admin === 1)) {
-      req.session.isAdmin = true;
-      req.session.userId = user.id;
-      req.session.username = user.username;
-      return res.json({ success: true, isAdmin: true, username: user.username });
-    }
-  }
-
-  return res.json({ error: 'Invalid admin credentials' });
-});
-
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.json({ error: 'Username and password are required' });
-
-  const cleanUser = String(username).trim();
-  const rawPass = String(password);
-  const cleanPass = String(password).trim();
-
-  // 1) Direct Admin check
-  if (checkAdminAuth(cleanUser, password)) {
-    req.session.isAdmin = true;
-    req.session.userId = 0;
-    req.session.username = cleanUser || 'admin';
-    return res.json({ success: true, isAdmin: true, username: req.session.username });
-  }
-
-  // 2) Database user check
-  const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=? OR LOWER(email)=?').get(cleanUser.toLowerCase(), cleanUser.toLowerCase());
-  if (!user) return res.json({ error: 'User not found' });
-
-  let ok = false;
-  if (user.password) {
-    ok = await bcrypt.compare(rawPass, user.password).catch(() => false);
-    if (!ok && rawPass !== cleanPass) {
-      ok = await bcrypt.compare(cleanPass, user.password).catch(() => false);
+  // Admin credentials are separate from user accounts and can never be
+  // granted by registering a username such as "admin".
+  if (await verifyAdminCredentials(username, password)) {
+    try {
+      await establishSession(req, { isAdmin: true, userId: 0, username });
+      return res.json({ success: true, isAdmin: true, username });
+    } catch (error) {
+      console.error('[auth] session creation failed:', error.message);
+      return res.status(500).json({ error: 'Login failed. Please try again later.' });
     }
   }
-  if (!ok && user.plain_password && (user.plain_password === rawPass || user.plain_password === cleanPass)) {
-    ok = true;
-  }
-  if (!ok) {
-    return res.json({ error: 'Wrong password' });
+
+  const user = db.prepare('SELECT * FROM users WHERE LOWER(username)=? OR LOWER(email)=?').get(username, username);
+  const passwordMatches = await verifyUserPassword(user, password);
+  if (!passwordMatches) return res.status(401).json({ error: 'Invalid username or password' });
+  if (!isEmailVerified(user)) {
+    // Keep login failures indistinguishable so this route cannot be used to
+    // enumerate valid accounts. The separate resend endpoint is generic too.
+    return res.status(401).json({ error: 'Invalid username or password' });
   }
 
-  if (user.username.toLowerCase() === 'admin' || user.is_admin === 1) {
-    req.session.isAdmin = true;
+  try {
+    await establishSession(req, {
+      userId: user.id,
+      username: user.username,
+      isAdmin: false,
+      sessionVersion: Number(user.session_version || 0)
+    });
+    return res.json({ success: true, isAdmin: false, username: user.username });
+  } catch (error) {
+    console.error('[auth] session creation failed:', error.message);
+    return res.status(500).json({ error: 'Login failed. Please try again later.' });
   }
-
-  req.session.userId = user.id;
-  req.session.username = user.username;
-  res.json({ success: true, isAdmin: !!req.session.isAdmin, username: user.username });
 });
 
 app.post('/api/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ success: true });
+  destroySession(req, res, () => res.json({ success: true }));
+});
+
+// ── Email verification ──
+function validEmailVerificationRow(tokenHash) {
+  if (!tokenHash) return null;
+  const now = Date.now();
+  const row = db.prepare(`
+    SELECT id,email_verified_at,email_verification_expires_at,email_verification_token_hash
+    FROM users WHERE email_verification_token_hash=? LIMIT 1
+  `).get(tokenHash);
+  if (!row || row.email_verified_at || Number(row.email_verification_expires_at || 0) <= now) return null;
+  return row;
+}
+
+function consumeEmailVerification(tokenHash) {
+  const row = validEmailVerificationRow(tokenHash);
+  if (!row) return false;
+  const now = Date.now();
+  const updated = db.prepare(`
+    UPDATE users SET email_verified_at=?,email_verification_token_hash=NULL,
+      email_verification_expires_at=NULL,email_verification_sent_at=NULL,
+      session_version=session_version+1
+    WHERE id=? AND email_verified_at IS NULL AND email_verification_token_hash=?
+      AND email_verification_expires_at>?
+  `).run(now, row.id, tokenHash, now);
+  return Boolean(updated.changes);
+}
+
+app.post('/api/auth/verify-email', verificationActionLimiter, (req, res) => {
+  // The browser can complete verification only through the server-side
+  // handoff session. It never receives or submits the raw token.
+  const sessionHash = String(req.session?.emailVerificationTokenHash || '');
+  const sessionExpiry = Number(req.session?.emailVerificationExpiresAt || 0);
+  const tokenHash = sessionHash && sessionExpiry > Date.now() ? sessionHash : null;
+  const verified = consumeEmailVerification(tokenHash);
+  if (sessionHash) {
+    delete req.session.emailVerificationTokenHash;
+    delete req.session.emailVerificationExpiresAt;
+    req.session.save(() => {});
+  }
+  if (!verified) return res.status(400).json({ error: 'Verification link is invalid or expired.' });
+  return res.json({ success: true, message: 'Email verified. You can now log in.' });
+});
+
+// Email links are validated by the server and placed into an HttpOnly
+// handoff session. The redirect removes the raw query token before any
+// frontend JavaScript runs; a second request performs the single-use consume.
+app.get('/auth/verify-email', verificationActionLimiter, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const tokenHash = hashOneTimeToken(req.query?.token);
+  const row = validEmailVerificationRow(tokenHash);
+  if (!row) return res.redirect('/?verified=0');
+  req.session.emailVerificationTokenHash = tokenHash;
+  req.session.emailVerificationExpiresAt = Number(row.email_verification_expires_at);
+  req.session.save(error => res.redirect(error ? '/?verified=0' : '/?verified=ready'));
+});
+
+app.post('/api/auth/resend-verification', resendVerificationLimiter, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const generic = {
+    success: true,
+    message: 'If an unverified account exists for that email, a new verification link has been sent.'
+  };
+  const responseDelay = delay(250);
+  if (email) {
+    const user = db.prepare(`
+      SELECT id,username,email,email_verified_at,auth_provider FROM users WHERE LOWER(email)=? LIMIT 1
+    `).get(email);
+    if (user && !user.email_verified_at && user.auth_provider === 'password') {
+      const verification = issueOneTimeToken(EMAIL_VERIFICATION_TTL_MS);
+      db.prepare(`
+        UPDATE users SET email_verification_token_hash=?,email_verification_expires_at=?,email_verification_sent_at=?
+        WHERE id=? AND email_verified_at IS NULL
+      `).run(verification.hash, verification.expiresAt, Date.now(), user.id);
+      void sendVerificationEmail({ to: user.email, username: user.username, token: verification.raw })
+        .catch(error => console.error('[auth] verification resend failed:', error.message));
+    }
+  }
+  await responseDelay;
+  return res.json(generic);
+});
+
+// ── Password reset ──
+app.post('/api/auth/forgot-password', forgotPasswordLimiter, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const generic = {
+    success: true,
+    message: 'If an account exists for that email, a password reset link has been sent.'
+  };
+  const responseDelay = delay(250);
+  if (email) {
+    const user = db.prepare('SELECT id,username,email FROM users WHERE LOWER(email)=? LIMIT 1').get(email);
+    if (user) {
+      const reset = issueOneTimeToken(PASSWORD_RESET_TTL_MS);
+      db.prepare(`
+        UPDATE users SET password_reset_token_hash=?,password_reset_expires_at=?
+        WHERE id=?
+      `).run(reset.hash, reset.expiresAt, user.id);
+      void sendPasswordResetEmail({ to: user.email, username: user.username, token: reset.raw })
+        .catch(error => console.error('[auth] password reset email delivery failed:', error.message));
+    }
+  }
+  await responseDelay;
+  return res.json(generic);
+});
+
+// The reset token is accepted only by this server-side handoff. Only its
+// hash is placed into the server-side, HttpOnly session and the browser is
+// redirected to a clean URL before the frontend is loaded.
+app.get('/auth/reset-password', resetPasswordLimiter, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const tokenHash = hashOneTimeToken(req.query?.token);
+  const now = Date.now();
+  const reset = tokenHash && db.prepare(`
+    SELECT password_reset_expires_at,password_reset_token_hash FROM users
+    WHERE password_reset_token_hash=? LIMIT 1
+  `).get(tokenHash);
+  if (!reset || Number(reset.password_reset_expires_at || 0) <= now) {
+    return res.redirect('/?reset=invalid');
+  }
+
+  req.session.passwordResetTokenHash = tokenHash;
+  req.session.passwordResetExpiresAt = Number(reset.password_reset_expires_at);
+  req.session.save(error => res.redirect(error ? '/?reset=invalid' : '/?reset=ready'));
+});
+
+app.post('/api/auth/reset-password', resetPasswordLimiter, async (req, res) => {
+  const tokenHash = String(req.session?.passwordResetTokenHash || '');
+  const pendingExpiry = Number(req.session?.passwordResetExpiresAt || 0);
+  const password = typeof req.body?.new_password === 'string' ? req.body.new_password : '';
+  const passwordError = validatePassword(password);
+  if (!tokenHash || pendingExpiry <= Date.now() || passwordError) {
+    return res.status(400).json({ error: passwordError || 'Password reset link is invalid or expired.' });
+  }
+
+  const reset = db.prepare(`
+    SELECT id,password_reset_expires_at,password_reset_token_hash FROM users
+    WHERE password_reset_token_hash=? LIMIT 1
+  `).get(tokenHash);
+  const now = Date.now();
+  if (!reset || Number(reset.password_reset_expires_at || 0) <= now) {
+    return res.status(400).json({ error: 'Password reset link is invalid or expired.' });
+  }
+
+  const newHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  const changed = db.prepare(`
+    UPDATE users SET password=?,plain_password='',password_reset_token_hash=NULL,
+      password_reset_expires_at=NULL,email_verified_at=COALESCE(email_verified_at,?),
+      session_version=session_version+1
+    WHERE id=? AND password_reset_token_hash=? AND password_reset_expires_at>?
+  `).run(newHash, now, reset.id, tokenHash, now);
+  if (!changed.changes) return res.status(400).json({ error: 'Password reset link is invalid or expired.' });
+
+  // Destroy the handoff session too. Existing authenticated sessions are
+  // invalidated by the session_version increment above.
+  return destroySession(req, res, () => res.json({
+    success: true,
+    message: 'Password updated. Please log in with your new password.'
+  }));
 });
 
 // ═══════════════════════════════════════════
@@ -472,13 +872,14 @@ app.get('/auth/google/callback', async (req, res) => {
       redirect_uri: GOOGLE_REDIRECT_URI,
       grant_type: 'authorization_code'
     });
-    if (!tokenRes || !tokenRes.access_token) return fail('token exchange failed: ' + JSON.stringify(tokenRes).slice(0, 150));
+    if (!tokenRes || !tokenRes.access_token) return fail('token exchange failed');
 
     // 2) access token → user info (google id, name, email)
     const info = await httpsGetJson('https://www.googleapis.com/oauth2/v3/userinfo', tokenRes.access_token);
-    if (!info || !info.email) return fail('userinfo failed');
-    const googleId = String(info.sub || '');
-    const email = String(info.email).trim().toLowerCase();
+    if (!info || !info.email || info.email_verified !== true || !info.sub) return fail('userinfo failed');
+    const googleId = String(info.sub);
+    const email = normalizeEmail(info.email);
+    if (!email) return fail('userinfo failed');
     const name = String(info.name || '').trim();
 
     // 3) Existing user? google_id → email → naya banao
@@ -494,21 +895,35 @@ app.get('/auth/google/callback', async (req, res) => {
       while (db.prepare('SELECT 1 FROM users WHERE username=?').get(username)) {
         username = base + n++;
       }
-      // Google users ka password hota nahi — random hash (kabhi use nahi hoga)
-      const randomHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
-      const ins = db.prepare('INSERT INTO users(username,email,password,plain_password,google_id) VALUES(?,?,?,?,?)');
-      const r = ins.run(username, email, randomHash, '', googleId || null);
+      // Google users ka local password use nahi hota, lekin database me
+      // hamesha bcrypt hash hi store hota hai.
+      const randomHash = await bcrypt.hash(crypto.randomBytes(32).toString('base64url'), BCRYPT_ROUNDS);
+      const ins = db.prepare(`
+        INSERT INTO users(
+          username,email,password,auth_provider,email_verified_at,google_id
+        ) VALUES(?,?,?,'google',?,?)
+      `);
+      const r = ins.run(username, email, randomHash, Date.now(), googleId);
       user = db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid);
-    } else if (googleId && !user.google_id) {
-      // Email se pehle se account hai → usko Google se link kar do
-      db.prepare('UPDATE users SET google_id=? WHERE id=?').run(googleId, user.id);
-      user.google_id = googleId;
+    } else {
+      // A verified Google identity proves ownership of this email. This also
+      // upgrades an older unverified password account after the user signs in
+      // with Google.
+      db.prepare(`
+        UPDATE users SET google_id=?,email_verified_at=COALESCE(email_verified_at,?),
+          auth_provider='google'
+        WHERE id=?
+      `).run(googleId, Date.now(), user.id);
+      user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
     }
 
-    // 4) Session set — bilkul /api/login jaisa
-    req.session.userId = user.id;
-    req.session.username = user.username;
-    req.session.isAdmin = false;
+    // 4) Rotate the session ID after OAuth to prevent session fixation.
+    await establishSession(req, {
+      userId: user.id,
+      username: user.username,
+      isAdmin: false,
+      sessionVersion: Number(user.session_version || 0)
+    });
     res.redirect('/?google=1');
   } catch (e) {
     return fail(e.message);
@@ -519,75 +934,69 @@ app.get('/auth/google/callback', async (req, res) => {
 // TELEGRAM SEAMLESS AUTHENTICATION
 // ═══════════════════════════════════════════
 function verifyTelegramWebAppData(initData, botToken) {
-  if (!initData) return null;
+  if (!initData || !botToken) return null;
   try {
     const params = new URLSearchParams(initData);
-    const hash = params.get('hash');
-    if (!hash) return null;
+    const hash = String(params.get('hash') || '').toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(hash)) return null;
 
-    if (botToken) {
-      params.delete('hash');
-      const keys = Array.from(params.keys()).sort();
-      const dataCheckArr = [];
-      for (const k of keys) {
-        dataCheckArr.push(`${k}=${params.get(k)}`);
-      }
-      const dataCheckString = dataCheckArr.join('\n');
-      const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
-      const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-      if (calculatedHash !== hash) {
-        console.warn('Telegram WebApp hash mismatch');
-        return null;
-      }
+    const authDate = Number(params.get('auth_date'));
+    if (!Number.isFinite(authDate) || Math.abs(Math.floor(Date.now() / 1000) - authDate) > 24 * 60 * 60) return null;
+
+    params.delete('hash');
+    const keys = Array.from(params.keys()).sort();
+    const dataCheckString = keys.map(key => `${key}=${params.get(key)}`).join('\n');
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(String(botToken)).digest();
+    const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    const supplied = Buffer.from(hash, 'hex');
+    const calculated = Buffer.from(calculatedHash, 'hex');
+    if (supplied.length !== calculated.length || !crypto.timingSafeEqual(supplied, calculated)) {
+      console.warn('Telegram WebApp hash mismatch');
+      return null;
     }
 
     const userStr = params.get('user');
     if (userStr) return JSON.parse(userStr);
   } catch (e) {
-    console.warn('verifyTelegramWebAppData error:', e.message);
+    console.warn('Telegram WebApp verification failed:', e.message);
   }
   return null;
 }
 
 // 1) Telegram WebApp Direct Auth (Inside Telegram Mini App)
-app.post('/api/auth/telegram-webapp', async (req, res) => {
-  const { initData } = req.body;
+app.post('/api/auth/telegram-webapp', loginLimiter, async (req, res) => {
+  const initData = req.body?.initData;
   if (!initData) return res.status(400).json({ error: 'Missing initData' });
 
   const tgToken = db.prepare('SELECT value FROM settings WHERE key=?').get('telegram_bot_token')?.value || process.env.TELEGRAM_BOT_TOKEN;
-  let tgUser = verifyTelegramWebAppData(initData, tgToken);
-
-  if (!tgUser) {
-    try {
-      const params = new URLSearchParams(initData);
-      const uStr = params.get('user');
-      if (uStr) tgUser = JSON.parse(uStr);
-    } catch (_) {}
-  }
-
-  if (!tgUser || !tgUser.id) return res.status(400).json({ error: 'Invalid Telegram WebApp data' });
+  if (!tgToken) return res.status(503).json({ error: 'Telegram authentication is not configured' });
+  const tgUser = verifyTelegramWebAppData(initData, tgToken);
+  if (!tgUser || !tgUser.id) return res.status(401).json({ error: 'Invalid Telegram authentication data' });
 
   const chatId = String(tgUser.id);
   let user = db.prepare('SELECT * FROM users WHERE telegram_id=?').get(chatId);
   if (!user) {
-    const rawUsername = tgUser.username ? tgUser.username.trim() : `tg_${chatId}`;
-    let finalUsername = rawUsername;
+    const rawUsername = tgUser.username ? normalizeUsername(tgUser.username) : null;
+    const baseUsername = rawUsername || `tg_${chatId}`;
+    let finalUsername = baseUsername;
     let attempt = 1;
     while (db.prepare('SELECT 1 FROM users WHERE username=?').get(finalUsername)) {
-      finalUsername = `${rawUsername}_${attempt++}`;
+      finalUsername = `${baseUsername}_${attempt++}`;
     }
     const email = `${chatId}@telegram.user`;
-    const plainPass = `tg_${chatId}_${crypto.randomBytes(4).toString('hex')}`;
-    const hash = await bcrypt.hash(plainPass, 10);
-    const firstName = tgUser.first_name || '';
-    const tgUsername = tgUser.username || '';
-    const photoUrl = tgUser.photo_url || '';
+    const hash = await bcrypt.hash(crypto.randomBytes(32).toString('base64url'), BCRYPT_ROUNDS);
+    const firstName = String(tgUser.first_name || '').slice(0, 100);
+    const tgUsername = String(tgUser.username || '').slice(0, 100);
+    const photoUrl = String(tgUser.photo_url || '').slice(0, 500);
 
-    const stmt = db.prepare(
-      'INSERT INTO users(username,email,password,plain_password,coins,telegram_id,first_name,tg_username,photo_url,is_telegram) VALUES(?,?,?,?,0,?,?,?,?,1)'
-    );
-    const result = stmt.run(finalUsername, email, hash, plainPass, chatId, firstName, tgUsername, photoUrl);
-    user = db.prepare('SELECT id,username,email,coins,telegram_id,first_name,tg_username,photo_url,is_telegram FROM users WHERE id=?').get(result.lastInsertRowid);
+    const stmt = db.prepare(`
+      INSERT INTO users(
+        username,email,password,auth_provider,email_verified_at,
+        coins,telegram_id,first_name,tg_username,photo_url,is_telegram
+      ) VALUES(?,?,?,'telegram',?,0,?,?,?,?,1)
+    `);
+    const result = stmt.run(finalUsername, email, hash, Date.now(), chatId, firstName, tgUsername, photoUrl);
+    user = db.prepare('SELECT * FROM users WHERE id=?').get(result.lastInsertRowid);
 
     sendLogEvent('user_registered', {
       id: user.id,
@@ -597,70 +1006,107 @@ app.post('/api/auth/telegram-webapp', async (req, res) => {
       ip: 'Telegram WebApp'
     });
   } else {
-    const firstName = tgUser.first_name || user.first_name || '';
-    const tgUsername = tgUser.username || user.tg_username || '';
-    const photoUrl = tgUser.photo_url || user.photo_url || '';
-    db.prepare('UPDATE users SET first_name=?, tg_username=?, photo_url=? WHERE id=?').run(firstName, tgUsername, photoUrl, user.id);
-    user = db.prepare('SELECT id,username,email,coins,telegram_id,first_name,tg_username,photo_url,is_telegram FROM users WHERE id=?').get(user.id);
+    const firstName = String(tgUser.first_name || user.first_name || '').slice(0, 100);
+    const tgUsername = String(tgUser.username || user.tg_username || '').slice(0, 100);
+    const photoUrl = String(tgUser.photo_url || user.photo_url || '').slice(0, 500);
+    db.prepare(`
+      UPDATE users SET first_name=?,tg_username=?,photo_url=?,auth_provider='telegram',
+        email_verified_at=COALESCE(email_verified_at,?) WHERE id=?
+    `).run(firstName, tgUsername, photoUrl, Date.now(), user.id);
+    user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
   }
 
-  req.session.userId = user.id;
-  req.session.username = user.username;
-  req.session.isAdmin = false;
-  res.json({ success: true, user });
+  await establishSession(req, {
+    userId: user.id,
+    username: user.username,
+    isAdmin: false,
+    sessionVersion: Number(user.session_version || 0)
+  });
+  res.json({
+    success: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      coins: user.coins,
+      telegram_id: user.telegram_id,
+      first_name: user.first_name,
+      tg_username: user.tg_username,
+      photo_url: user.photo_url,
+      is_telegram: user.is_telegram
+    }
+  });
 });
 
 // 2) Telegram 1-Click Browser Auth Link
 app.get('/auth/tg', async (req, res) => {
   const { id: chatId, time, token, redirect } = req.query;
-  if (!chatId || !time || !token) return res.redirect('/?err=invalid_tg_auth');
+  if (!/^\d{1,20}$/.test(String(chatId || '')) || !/^\d{10,16}$/.test(String(time || '')) || !/^[a-f0-9]{64}$/i.test(String(token || ''))) {
+    return res.redirect('/?err=invalid_tg_auth');
+  }
 
-  const ts = parseInt(time, 10);
-  if (isNaN(ts) || Math.abs(Date.now() - ts) > 48 * 60 * 60 * 1000) {
+  const ts = Number(time);
+  if (!Number.isSafeInteger(ts) || Math.abs(Date.now() - ts) > 15 * 60 * 1000) {
     return res.redirect('/?err=tg_link_expired');
   }
 
-  const tgToken = db.prepare('SELECT value FROM settings WHERE key=?').get('telegram_bot_token')?.value || process.env.TELEGRAM_BOT_TOKEN || 'zayro_secret';
-  const expectedToken = crypto.createHmac('sha256', tgToken).update(`${chatId}:${time}`).digest('hex');
+  const tgToken = db.prepare('SELECT value FROM settings WHERE key=?').get('telegram_bot_token')?.value || process.env.TELEGRAM_BOT_TOKEN;
+  if (!tgToken) return res.redirect('/?err=auth_unavailable');
+  const expectedToken = crypto.createHmac('sha256', String(tgToken)).update(`${chatId}:${time}`).digest('hex');
 
-  if (expectedToken !== token) {
+  if (!timingSafeStringEqual(expectedToken, String(token))) {
     return res.redirect('/?err=invalid_signature');
   }
 
   let user = db.prepare('SELECT * FROM users WHERE telegram_id=?').get(String(chatId));
   if (!user) {
-    const rawUsername = `tg_${chatId}`;
+    const rawUsername = normalizeUsername(`tg_${chatId}`) || `tg_${chatId}`;
     let finalUsername = rawUsername;
     let attempt = 1;
     while (db.prepare('SELECT 1 FROM users WHERE username=?').get(finalUsername)) {
       finalUsername = `${rawUsername}_${attempt++}`;
     }
     const email = `${chatId}@telegram.user`;
-    const plainPass = `tg_${chatId}_${crypto.randomBytes(4).toString('hex')}`;
-    const hash = await bcrypt.hash(plainPass, 10);
-    const result = db.prepare(
-      'INSERT INTO users(username,email,password,plain_password,coins,telegram_id,is_telegram) VALUES(?,?,?,?,0,?,1)'
-    ).run(finalUsername, email, hash, plainPass, String(chatId));
+    const hash = await bcrypt.hash(crypto.randomBytes(32).toString('base64url'), BCRYPT_ROUNDS);
+    const result = db.prepare(`
+      INSERT INTO users(
+        username,email,password,auth_provider,email_verified_at,
+        coins,telegram_id,is_telegram
+      ) VALUES(?,?,?,'telegram',?,0,?,1)
+    `).run(finalUsername, email, hash, Date.now(), String(chatId));
     user = db.prepare('SELECT * FROM users WHERE id=?').get(result.lastInsertRowid);
+  } else {
+    db.prepare(`
+      UPDATE users SET auth_provider='telegram',email_verified_at=COALESCE(email_verified_at,?)
+      WHERE id=?
+    `).run(Date.now(), user.id);
+    user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
   }
 
-  req.session.userId = user.id;
-  req.session.username = user.username;
-  req.session.isAdmin = false;
+  await establishSession(req, {
+    userId: user.id,
+    username: user.username,
+    isAdmin: false,
+    sessionVersion: Number(user.session_version || 0)
+  });
 
-  const targetPath = (redirect && typeof redirect === 'string' && redirect.startsWith('/')) ? redirect : '/';
+  const targetPath = (typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')) ? redirect : '/';
   res.redirect(targetPath);
 });
 
 app.get('/api/me', requireAuth, (req, res) => {
-  if (req.session.isAdmin) return res.json({ isAdmin: true, username: req.session.username || 'admin' });
-  const user = db.prepare('SELECT id,username,email,coins,telegram_id,first_name,tg_username,photo_url,is_telegram FROM users WHERE id=?').get(req.session.userId);
-  if (!user) return res.status(401).json({ error: 'User not found' });
-  res.json({ ...user, isAdmin: false });
+  if (req.session.isAdmin === true) return res.json({ isAdmin: true, username: req.session.username || 'admin' });
+  const user = db.prepare(`
+    SELECT id,username,email,coins,telegram_id,first_name,tg_username,photo_url,
+      is_telegram,auth_provider,email_verified_at
+    FROM users WHERE id=?
+  `).get(req.session.userId);
+  if (!user || !isEmailVerified(user)) return res.status(401).json({ error: 'Login required' });
+  res.json({ ...user, email_verified: true, isAdmin: false });
 });
 
 app.post('/api/me/telegram', requireAuth, (req, res) => {
-  if (req.session.isAdmin) return res.json({ success: true });
+  if (req.session.isAdmin === true) return res.json({ success: true });
   const { telegram_id } = req.body;
   if (!telegram_id) return res.json({ error: 'telegram_id required' });
   db.prepare('UPDATE users SET telegram_id=? WHERE id=?').run(String(telegram_id), req.session.userId);
@@ -976,7 +1422,7 @@ function getDownloadableOrder(req) {
   // Normal users can download only their own APKs. Admin dashboard buttons use
   // the same download endpoints, so admin sessions must be allowed to fetch any
   // order by id; otherwise the route used to return the misleading "APK not ready".
-  if (req.session.isAdmin) {
+  if (req.session.isAdmin === true) {
     return db.prepare('SELECT * FROM orders WHERE id=?').get(req.params.id);
   }
   return db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
@@ -1284,7 +1730,7 @@ app.get('/api/settings/payment', (req, res) => {
 });
 
 app.post('/api/coins/request', requireAuth, iconUpload.single('screenshot'), async (req, res) => {
-  if (req.session.isAdmin) return res.json({ error: 'Admin cannot submit coin requests' });
+  if (req.session.isAdmin === true) return res.json({ error: 'Admin cannot submit coin requests' });
   const { coins, utr } = req.body;
   if (!coins || isNaN(coins) || parseFloat(coins) < 1) return res.json({ error: 'Valid coin amount is required (minimum 1)' });
   if (!utr || !utr.trim() || utr.trim().length < 4) return res.json({ error: 'Valid UTR / Transaction reference number is required' });
@@ -1643,8 +2089,8 @@ app.get('/api/admin/content-links', requireAdmin, (req, res) => {
 // ── FIREBASE SELF-TEST — server ka apna token kaam karta hai ya nahi ──
 app.get('/api/admin/firebase/selftest', async (req, res) => {
   const secret = process.env.RESTORE_SECRET || '';
-  const isAdmin = req.session && req.session.isAdmin;
-  const hdrOk = secret.length > 0 && String(req.headers['x-restore-secret'] || '') === secret;
+  const isAdmin = req.session && req.session.isAdmin === true;
+  const hdrOk = secret.length > 0 && timingSafeStringEqual(String(req.headers['x-restore-secret'] || ''), secret);
   if (!isAdmin && !hdrOk) return res.status(403).json({ error: 'Forbidden' });
   try {
     const { getFirebaseAccessToken } = require('./utils/runtime-links');
@@ -1671,8 +2117,8 @@ app.get('/api/admin/firebase/selftest', async (req, res) => {
 // .env me: RESTORE_SECRET=koi_bhi_random_value
 app.post('/api/admin/firebase/restore-link', async (req, res) => {
   const secret = process.env.RESTORE_SECRET || '';
-  const isAdmin = req.session && req.session.isAdmin;
-  const hdrOk = secret.length > 0 && String(req.headers['x-restore-secret'] || '') === secret;
+  const isAdmin = req.session && req.session.isAdmin === true;
+  const hdrOk = secret.length > 0 && timingSafeStringEqual(String(req.headers['x-restore-secret'] || ''), secret);
   if (!isAdmin && !hdrOk) return res.status(403).json({ error: 'Forbidden — admin login ya RESTORE_SECRET header chahiye' });
   const p = String(req.body.path || '').trim();
   const registerUrl = String(req.body.registerUrl || '').trim();
@@ -1694,7 +2140,7 @@ app.post('/api/admin/firebase/restore-link', async (req, res) => {
 
 // Users
 app.get('/api/admin/users', requireAdmin, (req, res) => {
-  res.json(db.prepare('SELECT id,username,first_name,tg_username,photo_url,is_telegram,email,coins,plain_password,telegram_id,created_at FROM users ORDER BY id DESC').all());
+  res.json(db.prepare('SELECT id,username,first_name,tg_username,photo_url,is_telegram,email,coins,telegram_id,created_at FROM users ORDER BY id DESC').all());
 });
 
 // ── TELEGRAM ID TRANSFER ──
@@ -1970,7 +2416,7 @@ app.delete('/api/admin/orders', requireAdmin, (req, res) => {
 // User-wise orders
 app.get('/api/admin/users/:id/orders', requireAdmin, (req, res) => {
   const userId = req.params.id;
-  const user = db.prepare('SELECT id,username,email,coins,plain_password,created_at FROM users WHERE id=?').get(userId);
+  const user = db.prepare('SELECT id,username,email,coins,created_at FROM users WHERE id=?').get(userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const orders = db.prepare(`
@@ -2669,8 +3115,20 @@ app.post('/api/admin/announcements/:id/broadcast', requireAdmin, async (req, res
 // Settings
 app.get('/api/admin/settings', requireAdmin, (req, res) => {
   const rows = db.prepare('SELECT key,value FROM settings').all();
+  // Whitelist response fields instead of trying to remember every possible
+  // secret name. Unknown/legacy settings can never leak to the browser.
+  const exposedKeys = new Set([
+    'upi_qr_image','upi_id','coin_rate','site_name','site_url',
+    'telegram_admin_id','telegram_support_user','telegram_channel_url',
+    'telegram_log_channel_id','telegram_log_enabled','addon_fake_price',
+    'domain_change_price','invite_code_change_price','backup_keep_count',
+    'loading_html_file'
+  ]);
   const result = {};
-  rows.forEach(r => result[r.key] = r.value);
+  rows.forEach(r => {
+    if (exposedKeys.has(r.key)) result[r.key] = r.value;
+  });
+  result.telegram_bot_token_configured = Boolean(rows.find(r => r.key === 'telegram_bot_token' && r.value));
   res.json(result);
 });
 
@@ -2678,11 +3136,17 @@ app.post('/api/admin/settings', requireAdmin, adminUpload.fields([
   { name: 'upi_qr_image', maxCount: 1 },
   { name: 'loading_html', maxCount: 1 }
 ]), (req, res) => {
-  const allowed = ['upi_id','coin_rate','site_name','site_url','telegram_bot_token','telegram_admin_id','telegram_support_user','telegram_channel_url','telegram_log_channel_id','telegram_log_enabled','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count'];
+  const allowed = ['upi_id','coin_rate','site_name','site_url','telegram_admin_id','telegram_support_user','telegram_channel_url','telegram_log_channel_id','telegram_log_enabled','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count'];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
       db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run(key, req.body[key]);
     }
+  }
+  // Secret rotation is write-only: never send the existing bot token to the
+  // browser. An empty field means "keep the current value".
+  const newToken = String(req.body.telegram_bot_token || '').trim();
+  if (newToken) {
+    db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('telegram_bot_token', newToken);
   }
   if (req.files?.upi_qr_image?.[0]) {
     db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('upi_qr_image', path.basename(req.files.upi_qr_image[0].path));
@@ -2693,8 +3157,7 @@ app.post('/api/admin/settings', requireAdmin, adminUpload.fields([
     fs.renameSync(f.path, dest);
     db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('loading_html_file', f.originalname);
   }
-  const newToken = req.body.telegram_bot_token;
-  if (newToken !== undefined) initBot(newToken, db);
+  if (newToken) initBot(newToken, db);
   res.json({ success: true });
 });
 

@@ -101,10 +101,11 @@ async function getFirebaseAccessToken() {
     });
     const j = await res.json();
     if (j && j.access_token) {
-      console.log('[fb-token] access token mila —', j.access_token.slice(0, 12) + '...');
+      // Access tokens are server-only; never log even a prefix or provider
+      // response containing credential material.
       return j.access_token;
     }
-    console.error('[fb-token] exchange FAIL:', JSON.stringify(j).slice(0, 250));
+    console.error('[fb-token] exchange failed with status', res.status);
     return null;
   } catch (e) {
     console.error('[fb-token] exchange ERROR:', e.message);

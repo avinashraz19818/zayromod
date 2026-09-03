@@ -38,9 +38,13 @@ mkdir -p /var/www/apkbuilder
 
 ## Step 3: Dependencies install karo
 
+Node.js 20 or newer use karo. `package-lock.json` mein Node 20-compatible
+`better-sqlite3` release locked hai; different Node ABI ke saath native module
+startup crash kar sakta hai.
+
 ```bash
 cd /var/www/apkbuilder
-npm install
+npm ci
 ```
 
 ## Step 4: .env file banao
@@ -48,17 +52,34 @@ npm install
 ```bash
 cp .env.example .env
 nano .env
-# Fill in: PORT, SESSION_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD, TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_CHAT_ID, BASE_URL
+# Fill in: BASE_URL, SESSION_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD_HASH,
+# RESEND_API_KEY, EMAIL_FROM, TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_CHAT_ID
+# and the optional Google/Firebase values you use.
+# Never commit .env, service-account JSON, database files, backups, or tokens.
+
+# Generate a bcrypt hash for the admin password without putting the password
+# in the repository or returning it through the admin UI:
+node -e "require('bcryptjs').hash(process.env.ADMIN_PASSWORD_INPUT, 12).then(console.log)"
+# Run that with ADMIN_PASSWORD_INPUT set only in your private shell, then put
+# the printed hash in ADMIN_PASSWORD_HASH and unset ADMIN_PASSWORD_INPUT.
+# Do not use ADMIN_PASSWORD; plaintext admin passwords are unsupported.
+chmod 600 .env
 ```
 
 ## Step 5: Keystore banao (APK signing ke liye)
 
 ```bash
 mkdir -p keystore
+# Keep these values in a private shell/secret manager, never in Git.
+read -rsp 'Keystore password: ' KEYSTORE_PASSWORD; echo
+export KEYSTORE_PASSWORD
+export KEYSTORE_ALIAS=zayro
 keytool -genkey -v -keystore keystore/release.keystore \
-  -alias zayro -keyalg RSA -keysize 2048 -validity 10000 \
-  -storepass zayro@123 -keypass zayro@123 \
+  -alias "$KEYSTORE_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+  -storepass "$KEYSTORE_PASSWORD" -keypass "$KEYSTORE_PASSWORD" \
   -dname "CN=Zayro, OU=Dev, O=Zayro, L=IN, S=IN, C=IN"
+# Put KEYSTORE_PASSWORD/KEYSTORE_ALIAS in the process secret manager used by PM2.
+unset KEYSTORE_PASSWORD
 ```
 
 ## Step 6: Base APK upload karo
@@ -110,6 +131,8 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
     }
 }
@@ -241,5 +264,51 @@ Pura protection system docs: **SECURITY.md** (repo root me) — layers,
 build variants, verification, troubleshooting.
 
 ## Admin Login
-Default: admin / admin123 (change in .env)
-Admin URL: yourdomain.com/admin/
+There is no default administrator password. Set `ADMIN_USERNAME` and a bcrypt
+`ADMIN_PASSWORD_HASH` in `.env`; production startup refuses missing, malformed,
+or weak hashes.
+Keep the hash and `.env` server-only. The admin UI never receives the Telegram
+bot token or any other secret; secret fields are write-only for rotation.
+
+Admin URL: `https://yourdomain.com/admin/`
+
+## Authentication and email delivery
+
+Password registrations are stored as bcrypt hashes and remain locked until the
+user verifies the email address. Verification and password-reset tokens are
+32-byte random values whose SHA-256 hashes (not raw values) are stored in
+SQLite. They expire and are single-use. Resetting a password increments the
+user session version and invalidates existing sessions.
+
+Configure Resend before enabling password registration:
+
+```dotenv
+BASE_URL=https://yourdomain.com
+RESEND_API_KEY=re_...
+EMAIL_FROM=Zayro Mod Builder <noreply@yourdomain.com>
+EMAIL_REPLY_TO=security@yourdomain.com
+```
+
+`BASE_URL` must be HTTPS in production. The email links are handled by
+server-side routes and immediately redirected to a clean frontend URL; raw
+tokens are never returned in JSON or included in `/api/me`, settings, or
+admin responses. If `BASE_URL`, `RESEND_API_KEY`, or `EMAIL_FROM` is absent,
+new password registration is refused rather than creating an account that can
+never verify.
+
+Sessions use a SQLite store with an absolute lifetime and an idle timeout.
+Production cookies are Secure, HttpOnly, SameSite=Lax, and use a `__Host-`
+name. Set `TRUST_PROXY_HOPS` to the exact number of trusted reverse proxies
+(usually `1` behind the Nginx configuration above; use `0` when direct). Do
+not trust arbitrary `X-Forwarded-*` headers.
+
+Login is limited independently by client IP and normalized account
+identifier. Failed login responses are deliberately generic; forgot-password
+and resend-verification responses are also account-enumeration resistant.
+
+### Rotating the Telegram token
+
+Enter a new token in Admin → Settings → Telegram Bot & Support. The existing
+token is never populated into the browser; leaving the field blank keeps the
+current server-side value. Revoke any token that was ever committed or placed
+in a database backup, then rotate it in BotFather and `.env`/the admin panel.

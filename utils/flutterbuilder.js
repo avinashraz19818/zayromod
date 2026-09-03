@@ -33,6 +33,8 @@ const TEMPLATES_DIR    = path.join(__dirname, '..', 'templates');
 const UPLOADS_DIR      = path.join(__dirname, '..', 'uploads');
 const ANDROID_HOME     = process.env.ANDROID_HOME || '/opt/android-sdk';
 const FLUTTER_BIN      = process.env.FLUTTER_BIN || 'flutter';
+const KEYSTORE_PASSWORD = String(process.env.KEYSTORE_PASSWORD || '');
+const KEYSTORE_ALIAS    = String(process.env.KEYSTORE_ALIAS || 'zayro');
 
 const KEY_XOR = 0x5A;
 
@@ -133,7 +135,7 @@ async function buildFlutterApkInWorker(order, design, buildId, logCallback) {
     let certSha256Hex = '';
     if (fs.existsSync(keystorePath)) {
       try {
-        const kt = execFileSync('keytool', ['-list', '-v', '-keystore', keystorePath, '-storepass', 'zayro@123'], { stdio: 'pipe', encoding: 'utf8' });
+        const kt = execFileSync('keytool', ['-list', '-v', '-keystore', keystorePath, '-storepass', KEYSTORE_PASSWORD], { stdio: 'pipe', encoding: 'utf8' });
         const m = kt.match(/SHA256:\s*([0-9A-Fa-f:]+)/);
         if (m) certSha256Hex = m[1].replace(/:/g, '').toLowerCase();
       } catch (e) { certSha256Hex = ''; }
@@ -390,8 +392,8 @@ async function buildFlutterApkInWorker(order, design, buildId, logCallback) {
       execFileSync(apksignerBin, [
         'sign',
         '--ks', keystorePath,
-        '--ks-pass', 'pass:zayro@123',
-        '--key-pass', 'pass:zayro@123',
+        '--ks-pass', `pass:${KEYSTORE_PASSWORD}`,
+        '--key-pass', `pass:${KEYSTORE_PASSWORD}`,
         '--v1-signing-enabled', 'true',
         '--v2-signing-enabled', 'true',
         '--v3-signing-enabled', 'true',

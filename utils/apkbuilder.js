@@ -11,7 +11,9 @@ const BUILDS_DIR        = path.join(__dirname, '..', 'builds');
 const TEMPLATE_PROJECT  = path.join(__dirname, '..', 'android-project');
 const TEMPLATES_DIR     = path.join(__dirname, '..', 'templates');
 const UPLOADS_DIR       = path.join(__dirname, '..', 'uploads');
-const ANDROID_HOME      = '/opt/android-sdk';
+const ANDROID_HOME      = process.env.ANDROID_HOME || '/opt/android-sdk';
+const KEYSTORE_PASSWORD = String(process.env.KEYSTORE_PASSWORD || '');
+const KEYSTORE_ALIAS    = String(process.env.KEYSTORE_ALIAS || 'zayro');
 
 // ── Generate package name from app name ──
 function makePackageName(appName, counter = 1) {
@@ -460,7 +462,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     let certSha256Hex = '';
     if (fs.existsSync(keystorePath)) {
       try {
-        const kt = execFileSync('keytool', ['-list', '-v', '-keystore', keystorePath, '-storepass', 'zayro@123'], { stdio: 'pipe', encoding: 'utf8' });
+        const kt = execFileSync('keytool', ['-list', '-v', '-keystore', keystorePath, '-storepass', KEYSTORE_PASSWORD], { stdio: 'pipe', encoding: 'utf8' });
         const m = kt.match(/SHA256:\s*([0-9A-Fa-f:]+)/);
         if (m) certSha256Hex = m[1].replace(/:/g, '').toLowerCase();
       } catch (e) { certSha256Hex = ''; }
@@ -707,8 +709,8 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
         execFileSync('apksigner', [
           'sign',
           '--ks', keystorePath,
-          '--ks-pass', 'pass:zayro@123',
-          '--key-pass', 'pass:zayro@123',
+          '--ks-pass', `pass:${KEYSTORE_PASSWORD}`,
+          '--key-pass', `pass:${KEYSTORE_PASSWORD}`,
           '--v1-signing-enabled', 'true',
           '--v2-signing-enabled', 'true',
           '--v3-signing-enabled', 'true',
@@ -762,9 +764,9 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
             '-jar', frezrikJar,
             '-apk', preSignedApk,
             '-key', keystorePath,
-            '-kp', 'zayro@123',
-            '-alias', process.env.FREZRIK_ALIAS || 'zayro',
-            '-ap', 'zayro@123'
+            '-kp', KEYSTORE_PASSWORD,
+            '-alias', process.env.FREZRIK_ALIAS || KEYSTORE_ALIAS,
+            '-ap', KEYSTORE_PASSWORD
           ], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', cwd: buildDir, timeout: 600000 }) || '');
           let packed = null;
           // Final output cwd/output me aata hai; fallback: pack.jar ke
@@ -842,7 +844,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
           log('360 Jiagu: hardening in progress...');
           const jiaguOut = path.join(buildDir, `${buildId}_jiagu_protected.apk`);
           const jiaguScript = path.join(__dirname, '..', 'scripts', 'jiagu-protect.sh');
-          execFileSync('bash', [jiaguScript, jiaguJar, builtApk, jiaguOut, keystorePath, 'zayro@123', 'zayro', 'zayro@123'], {
+          execFileSync('bash', [jiaguScript, jiaguJar, builtApk, jiaguOut, keystorePath, KEYSTORE_PASSWORD, KEYSTORE_ALIAS, KEYSTORE_PASSWORD], {
             stdio: 'pipe',
             timeout: 900000,
             env: {
@@ -899,8 +901,8 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       execFileSync('apksigner', [
         'sign',
         '--ks', keystorePath,
-        '--ks-pass', 'pass:zayro@123',
-        '--key-pass', 'pass:zayro@123',
+        '--ks-pass', `pass:${KEYSTORE_PASSWORD}`,
+        '--key-pass', `pass:${KEYSTORE_PASSWORD}`,
         '--v1-signing-enabled', 'true',
         '--v2-signing-enabled', 'true',
         '--v3-signing-enabled', 'true',
