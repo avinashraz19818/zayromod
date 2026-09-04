@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "SUKUNA SURESHOT PANEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "7f9f02f5ad1d9238c76a295e22c10f42c26e3328ba2484cb1d5ada796a6f3d7c",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

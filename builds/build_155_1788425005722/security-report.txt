@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "SHREE WIN PANNEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "2de9b7d820586d64fb6717a4524c001329783cd6ea9abd6b7bdd1e7dd9c5b0e5",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗝𝗘𝗦𝗦𝗬 𝗩𝗜𝗣 𝗛𝗔𝗖𝗞",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "1c4ac35dcb6b300dcb670048395810a5f5d181ecdff6d14dc0fb441c71ef8395",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

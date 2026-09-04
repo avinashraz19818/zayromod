@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "@BillubossTOP1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "433b4774b32fbec8999aab82ff241e940fd9c59117b0993b5ff53e79d3f5dbc2",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

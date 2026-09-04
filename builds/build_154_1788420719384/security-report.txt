@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝐒𝐡𝐫𝐞𝐞 𝐰𝐢𝐧 𝐯𝐢𝐩 𝐩𝐚𝐧𝐞𝐥",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "9a9c6afc2fd1af813bbd01539ce8ed8bc730e797cbdf696cb81bbfa1529aa666",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

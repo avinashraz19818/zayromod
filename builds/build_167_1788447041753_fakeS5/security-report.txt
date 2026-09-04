@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "MAGIC TOOL Fake 2",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "16d6cebf596af349eec7dbb641c5a35aa4e25b44b7882fce6e8add5a18a41fa8",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}
