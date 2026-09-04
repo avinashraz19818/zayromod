@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "YUKI PANEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "620b246e52b824350dd7652ddf4f8af5b1fb82d788a1571afa5af91b10beacbc",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

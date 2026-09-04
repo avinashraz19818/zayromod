@@ -16,3 +16,17 @@ uploads/
 keystore/
 .env*
 !.env.example
+
+# Local/runtime/private files
+firebase-service-account.json
+firebase-service-account*.json
+node_modules/
+builds/
+uploads/
+backups/
+database/*.db
+database/*.db-wal
+database/*.db-shm
+keystore/*.keystore
+*.backup.*
+*.before-*
