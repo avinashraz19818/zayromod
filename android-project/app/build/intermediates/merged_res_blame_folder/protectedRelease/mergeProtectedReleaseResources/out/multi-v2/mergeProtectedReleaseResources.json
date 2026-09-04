@@ -1,0 +1,62 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.zayro.wingsyttt.app-protectedRelease-5:/values_values.arsc.flat",
+            "map": [
+                {
+                    "source": "/root/apkbuilder/android-project/app/src/main/res/values/strings.xml",
+                    "from": {
+                        "startLines": "1",
+                        "startColumns": "1",
+                        "startOffsets": "14",
+                        "endColumns": "72",
+                        "endOffsets": "85"
+                    },
+                    "to": {
+                        "startLines": "7",
+                        "startColumns": "4",
+                        "startOffsets": "308",
+                        "endColumns": "75",
+                        "endOffsets": "379"
+                    }
+                },
+                {
+                    "source": "/root/apkbuilder/android-project/app/src/main/res/values/styles.xml",
+                    "from": {
+                        "startLines": "1,25,8,15,22",
+                        "startColumns": "1,1,1,1,1",
+                        "startOffsets": "14,1493,466,929,1382",
+                        "endLines": "7,25,14,21,24",
+                        "endColumns": "9,58,9,9,9",
+                        "endOffsets": "463,1550,926,1379,1490"
+                    },
+                    "to": {
+                        "startLines": "8,15,16,23,30",
+                        "startColumns": "4,4,4,4,4",
+                        "startOffsets": "384,832,893,1352,1801",
+                        "endLines": "14,15,22,29,32",
+                        "endColumns": "9,60,9,9,9",
+                        "endOffsets": "827,888,1347,1796,1907"
+                    }
+                },
+                {
+                    "source": "/root/apkbuilder/android-project/app/src/main/res/values/colors.xml",
+                    "from": {
+                        "startLines": "3,4,5,1,2",
+                        "startColumns": "1,1,1,1,1",
+                        "startOffsets": "108,152,206,14,59",
+                        "endColumns": "42,52,49,43,47",
+                        "endOffsets": "149,203,254,56,105"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6",
+                        "startColumns": "4,4,4,4,4",
+                        "startOffsets": "55,101,157,210,257",
+                        "endColumns": "45,55,52,46,50",
+                        "endOffsets": "96,152,205,252,303"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,15 @@
+com.zayro.wingsyttt:style/NoActionBar = 0x7f070003
+com.zayro.wingsyttt:style/FullScreen = 0x7f070002
+com.zayro.wingsyttt:style/AppTheme.DebugActivity = 0x7f070001
+com.zayro.wingsyttt:string/app_name = 0x7f060000
+com.zayro.wingsyttt:layout/main = 0x7f040000
+com.zayro.wingsyttt:style/AppTheme = 0x7f070000
+com.zayro.wingsyttt:color/colorPrimaryDark = 0x7f010004
+com.zayro.wingsyttt:id/webview1 = 0x7f030000
+com.zayro.wingsyttt:style/NoStatusBar = 0x7f070004
+com.zayro.wingsyttt:color/colorPrimary = 0x7f010003
+com.zayro.wingsyttt:drawable/default_image = 0x7f020000
+com.zayro.wingsyttt:color/colorAccent = 0x7f010000
+com.zayro.wingsyttt:color/colorControlNormal = 0x7f010002
+com.zayro.wingsyttt:color/colorControlHighlight = 0x7f010001
+com.zayro.wingsyttt:mipmap/ic_launcher = 0x7f050000

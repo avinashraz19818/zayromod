@@ -1,0 +1,19 @@
+<libraries>
+  <library
+      name="androidx.databinding:viewbinding:8.12.0@aar"
+      jars="/root/.gradle/caches/8.13/transforms/355be805f1705674dc38ed7f2f773f1c/transformed/jetified-viewbinding-8.12.0/jars/classes.jar"
+      resolved="androidx.databinding:viewbinding:8.12.0"
+      folder="/root/.gradle/caches/8.13/transforms/355be805f1705674dc38ed7f2f773f1c/transformed/jetified-viewbinding-8.12.0"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
+      name="androidx.annotation:annotation:1.0.0@jar"
+      jars="/root/.gradle/caches/modules-2/files-2.1/androidx.annotation/annotation/1.0.0/45599f2cd5965ac05a1488fa2a5c0cdd7c499ead/annotation-1.0.0.jar"
+      resolved="androidx.annotation:annotation:1.0.0"/>
+</libraries>

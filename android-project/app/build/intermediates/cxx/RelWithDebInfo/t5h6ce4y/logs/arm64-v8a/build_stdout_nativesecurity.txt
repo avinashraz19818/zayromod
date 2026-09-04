@@ -1,0 +1,2 @@
+ninja: Entering directory `/root/apkbuilder/android-project/app/.cxx/RelWithDebInfo/t5h6ce4y/arm64-v8a'
+ninja: no work to do.

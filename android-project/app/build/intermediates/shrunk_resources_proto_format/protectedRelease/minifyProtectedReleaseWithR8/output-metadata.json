@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "artifactType": {
+    "type": "SHRUNK_RESOURCES_PROTO_FORMAT",
+    "kind": "Directory"
+  },
+  "applicationId": "com.zayro.wingsyttt",
+  "variantName": "protectedRelease",
+  "elements": [
+    {
+      "type": "SINGLE",
+      "filters": [],
+      "attributes": [],
+      "versionCode": 1,
+      "versionName": "1.0",
+      "outputFile": "shrunk-resources-proto-format-protectedRelease.ap_"
+    }
+  ],
+  "elementType": "File"
+}

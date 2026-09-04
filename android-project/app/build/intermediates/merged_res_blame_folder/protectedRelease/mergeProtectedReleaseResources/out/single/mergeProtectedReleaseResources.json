@@ -1,0 +1,14 @@
+[
+    {
+        "merged": "com.zayro.wingsyttt.app-protectedRelease-5:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.zayro.wingsyttt.app-main-6:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.zayro.wingsyttt.app-protectedRelease-5:/layout_main.xml.flat",
+        "source": "com.zayro.wingsyttt.app-main-6:/layout/main.xml"
+    },
+    {
+        "merged": "com.zayro.wingsyttt.app-protectedRelease-5:/drawable-xhdpi_default_image.png.flat",
+        "source": "com.zayro.wingsyttt.app-main-6:/drawable-xhdpi/default_image.png"
+    }
+]

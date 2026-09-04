@@ -1,0 +1,8 @@
+com.zayro.wingsyttt.app-pngs-0 /root/apkbuilder/android-project/app/build/generated/res/pngs/protectedRelease
+com.zayro.wingsyttt.app-resValues-1 /root/apkbuilder/android-project/app/build/generated/res/resValues/protectedRelease
+com.zayro.wingsyttt.app-packageProtectedReleaseResources-2 /root/apkbuilder/android-project/app/build/intermediates/incremental/protectedRelease/packageProtectedReleaseResources/merged.dir
+com.zayro.wingsyttt.app-packageProtectedReleaseResources-3 /root/apkbuilder/android-project/app/build/intermediates/incremental/protectedRelease/packageProtectedReleaseResources/stripped.dir
+com.zayro.wingsyttt.app-merged-not-compiled-resources-4 /root/apkbuilder/android-project/app/build/intermediates/merged-not-compiled-resources/protectedRelease
+com.zayro.wingsyttt.app-protectedRelease-5 /root/apkbuilder/android-project/app/build/intermediates/merged_res/protectedRelease/mergeProtectedReleaseResources
+com.zayro.wingsyttt.app-main-6 /root/apkbuilder/android-project/app/src/main/res
+com.zayro.wingsyttt.app-protectedRelease-7 /root/apkbuilder/android-project/app/src/protectedRelease/res

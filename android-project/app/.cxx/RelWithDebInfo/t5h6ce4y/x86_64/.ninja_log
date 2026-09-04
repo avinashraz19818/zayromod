@@ -1,0 +1,3 @@
+# ninja log v5
+0	1366	1788542487736072638	CMakeFiles/nativesecurity.dir/native-security.cpp.o	7649cda98da1ffe
+1368	1464	1788542487835071491	/root/apkbuilder/android-project/app/build/intermediates/cxx/RelWithDebInfo/t5h6ce4y/obj/x86_64/libnativesecurity.so	6359648496fc6001

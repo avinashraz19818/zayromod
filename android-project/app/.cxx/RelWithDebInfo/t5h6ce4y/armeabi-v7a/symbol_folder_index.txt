@@ -1,0 +1,1 @@
+/root/apkbuilder/android-project/app/build/intermediates/cxx/RelWithDebInfo/t5h6ce4y/obj/armeabi-v7a

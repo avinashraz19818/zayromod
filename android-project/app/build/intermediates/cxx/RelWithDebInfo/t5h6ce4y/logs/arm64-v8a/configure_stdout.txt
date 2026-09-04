@@ -1,0 +1,9 @@
+-- The CXX compiler identification is Clang 18.0.1
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /opt/android-sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /root/apkbuilder/android-project/app/.cxx/RelWithDebInfo/t5h6ce4y/arm64-v8a

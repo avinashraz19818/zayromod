@@ -1,0 +1,17 @@
+R_DEF: Internal format may change without notice
+local
+color colorAccent
+color colorControlHighlight
+color colorControlNormal
+color colorPrimary
+color colorPrimaryDark
+drawable default_image
+id webview1
+layout main
+mipmap ic_launcher
+string app_name
+style AppTheme
+style AppTheme.DebugActivity
+style FullScreen
+style NoActionBar
+style NoStatusBar
