@@ -185,6 +185,8 @@ function ensureAudioGate(html) {
     '  var __umap=null, __uloaded=false;',
     '  function __loadUsers(){',
     '    try{',
+    '      /* Never read Firebase root when a dynamic users path was not detected. */',
+    '      if(!usersBase)return;',
     '      if(!__uloaded&&typeof rtdb==="object"&&rtdb&&rtdb.ref){',
     '        __uloaded=true;',
     '        rtdb.ref("' + usersBase + '").once("value").then(function(snap){',
