@@ -1583,191 +1583,6 @@ app.delete('/api/orders/:id/demo-users/:userKey', requireAuth, async (req, res) 
 // ADMIN ROUTES
 // ═══════════════════════════════════════════
 
-// Dashboard summary — aggregate counts come from SQL so the admin dashboard
-// is accurate even when the Orders table has more rows than one page.
-// Date-based figures use Asia/Kolkata (UTC+05:30), matching the operator's
-// local timezone and SQLite's UTC CURRENT_TIMESTAMP values.
-const ADMIN_TODAY_SQL = "date(created_at, '+5 hours', '+30 minutes') = date('now', '+5 hours', '+30 minutes')";
-
-app.get('/api/admin/dashboard', requireAdmin, (req, res) => {
-  const todaySql = ADMIN_TODAY_SQL;
-  try {
-    const totals = db.prepare(`
-      SELECT
-        (SELECT COUNT(*) FROM users) AS total_users,
-        (SELECT COUNT(*) FROM users WHERE ${todaySql}) AS users_today,
-        (SELECT COUNT(*) FROM orders) AS total_orders,
-        (SELECT COUNT(*) FROM orders WHERE ${todaySql}) AS orders_today,
-        (SELECT COUNT(*) FROM orders WHERE status='done') AS completed_orders,
-        (SELECT COUNT(*) FROM orders WHERE status='done' AND ${todaySql}) AS completed_orders_today,
-        (SELECT COUNT(*) FROM orders WHERE status='building') AS building_orders,
-        (SELECT COUNT(*) FROM orders WHERE status='pending') AS pending_orders,
-        (SELECT COUNT(*) FROM orders WHERE status='failed') AS failed_orders,
-        (SELECT COALESCE(SUM(coins), 0) FROM users) AS total_user_coins,
-        (SELECT COALESCE(SUM(coins_spent), 0) FROM orders) AS coins_spent_total,
-        (SELECT COALESCE(SUM(coins_spent), 0) FROM orders WHERE ${todaySql}) AS coins_spent_today,
-        (SELECT COUNT(*) FROM designs WHERE active=1) AS active_designs,
-        (SELECT COUNT(*) FROM designs WHERE active<>1 OR active IS NULL) AS hidden_designs,
-        (SELECT COUNT(*) FROM coin_requests WHERE status='pending') AS pending_coin_requests,
-        (SELECT COALESCE(SUM(coins_requested), 0) FROM coin_requests WHERE status='pending') AS pending_coins_requested,
-        (SELECT COALESCE(SUM(amount_paid), 0) FROM coin_requests WHERE status='pending') AS pending_coin_amount
-    `).get();
-
-    // Count actual generated APK files, including primary and extra fake APKs.
-    // An order can be complete even when an optional fake build failed, so
-    // counting file columns is more accurate than counting done orders.
-    const apkStats = db.prepare(`
-      SELECT
-        (SELECT COUNT(*) FROM (
-          SELECT apk_file AS artifact, created_at FROM orders
-          WHERE apk_file IS NOT NULL AND TRIM(apk_file) <> ''
-          UNION ALL
-          SELECT fake_apk_file AS artifact, created_at FROM orders
-          WHERE fake_apk_file IS NOT NULL AND TRIM(fake_apk_file) <> ''
-          UNION ALL
-          SELECT apk_file AS artifact, created_at FROM order_fake_sites
-          WHERE apk_file IS NOT NULL AND TRIM(apk_file) <> ''
-        ) WHERE artifact IS NOT NULL AND TRIM(artifact) <> '') AS total_apks_built,
-        (SELECT COUNT(*) FROM (
-          SELECT apk_file AS artifact, created_at FROM orders
-          WHERE apk_file IS NOT NULL AND TRIM(apk_file) <> ''
-          UNION ALL
-          SELECT fake_apk_file AS artifact, created_at FROM orders
-          WHERE fake_apk_file IS NOT NULL AND TRIM(fake_apk_file) <> ''
-          UNION ALL
-          SELECT apk_file AS artifact, created_at FROM order_fake_sites
-          WHERE apk_file IS NOT NULL AND TRIM(apk_file) <> ''
-        ) WHERE artifact IS NOT NULL AND TRIM(artifact) <> '' AND ${todaySql}) AS apks_built_today,
-        (SELECT COUNT(*) FROM orders WHERE apk_file IS NOT NULL AND TRIM(apk_file) <> '') AS real_apks_built,
-        (SELECT COUNT(*) FROM orders WHERE fake_apk_file IS NOT NULL AND TRIM(fake_apk_file) <> '')
-          + (SELECT COUNT(*) FROM order_fake_sites WHERE apk_file IS NOT NULL AND TRIM(apk_file) <> '') AS fake_apks_built
-    `).get();
-
-    const recentOrders = db.prepare(`
-      SELECT
-        o.id, o.app_name, o.status, o.created_at, o.apk_file, o.fake_apk_file,
-        COALESCE(u.username, 'Unknown') AS username,
-        COALESCE(NULLIF(u.first_name, ''), NULLIF(u.username, ''), 'Unknown') AS user_name,
-        COALESCE(d.name, 'Default') AS design_name,
-        (
-          CASE WHEN o.apk_file IS NOT NULL AND TRIM(o.apk_file) <> '' THEN 1 ELSE 0 END
-          + CASE WHEN o.fake_apk_file IS NOT NULL AND TRIM(o.fake_apk_file) <> '' THEN 1 ELSE 0 END
-          + (SELECT COUNT(*) FROM order_fake_sites fs
-             WHERE fs.order_id=o.id AND fs.apk_file IS NOT NULL AND TRIM(fs.apk_file) <> '')
-        ) AS apk_count
-      FROM orders o
-      LEFT JOIN users u ON u.id=o.user_id
-      LEFT JOIN designs d ON d.id=o.design_id
-      ORDER BY o.id DESC
-      LIMIT 12
-    `).all();
-
-    res.json({
-      timezone: 'Asia/Kolkata',
-      stats: {
-        total_users: Number(totals.total_users || 0),
-        users_today: Number(totals.users_today || 0),
-        total_orders: Number(totals.total_orders || 0),
-        orders_today: Number(totals.orders_today || 0),
-        completed_orders: Number(totals.completed_orders || 0),
-        completed_orders_today: Number(totals.completed_orders_today || 0),
-        building_orders: Number(totals.building_orders || 0),
-        pending_orders: Number(totals.pending_orders || 0),
-        failed_orders: Number(totals.failed_orders || 0),
-        total_apks_built: Number(apkStats.total_apks_built || 0),
-        apks_built_today: Number(apkStats.apks_built_today || 0),
-        real_apks_built: Number(apkStats.real_apks_built || 0),
-        fake_apks_built: Number(apkStats.fake_apks_built || 0),
-        total_user_coins: Number(totals.total_user_coins || 0),
-        coins_spent_total: Number(totals.coins_spent_total || 0),
-        coins_spent_today: Number(totals.coins_spent_today || 0),
-        active_designs: Number(totals.active_designs || 0),
-        hidden_designs: Number(totals.hidden_designs || 0),
-        pending_coin_requests: Number(totals.pending_coin_requests || 0),
-        pending_coins_requested: Number(totals.pending_coins_requested || 0),
-        pending_coin_amount: Number(totals.pending_coin_amount || 0)
-      },
-      recent_orders: recentOrders
-    });
-  } catch (error) {
-    console.error('[admin-dashboard] summary failed:', error.message);
-    res.status(500).json({ error: 'Dashboard summary unavailable' });
-  }
-});
-
-// Full APK artifact list for dashboard drill-down. Each primary/fake artifact
-// is returned separately so the admin can see every build made today, who
-// requested it, and whether a coupon was used. Timestamps are interpreted in
-// Asia/Kolkata, matching the dashboard counters above.
-app.get('/api/admin/dashboard/apks', requireAdmin, (req, res) => {
-  const period = String(req.query.period || 'today').trim().toLowerCase() === 'all' ? 'all' : 'today';
-  const dateWhere = period === 'all' ? ''
-    : `WHERE date(created_at, '+5 hours', '+30 minutes') = date('now', '+5 hours', '+30 minutes')`;
-  try {
-    const rows = db.prepare(`
-      SELECT * FROM (
-        SELECT
-          o.id AS order_id, o.user_id, o.app_name, o.package_name,
-          o.status, o.created_at, o.coupon_code, o.discount_coins,
-          o.apk_file AS artifact_file,
-          CASE WHEN COALESCE(o.design_variant, 'real')='fake' THEN 'Fake APK' ELSE 'Real APK' END AS artifact_type,
-          COALESCE(u.username, 'Unknown') AS username,
-          COALESCE(NULLIF(u.first_name, ''), NULLIF(u.username, ''), 'Unknown') AS user_name,
-          COALESCE(u.email, '') AS email,
-          COALESCE(u.tg_username, '') AS tg_username,
-          COALESCE(u.telegram_id, '') AS telegram_id,
-          COALESCE(d.name, 'Default') AS design_name
-        FROM orders o
-        LEFT JOIN users u ON u.id=o.user_id
-        LEFT JOIN designs d ON d.id=o.design_id
-        WHERE o.apk_file IS NOT NULL AND TRIM(o.apk_file) <> ''
-
-        UNION ALL
-
-        SELECT
-          o.id AS order_id, o.user_id, o.app_name, o.package_name,
-          o.status, o.created_at, o.coupon_code, o.discount_coins,
-          o.fake_apk_file AS artifact_file, 'Fake APK 1' AS artifact_type,
-          COALESCE(u.username, 'Unknown') AS username,
-          COALESCE(NULLIF(u.first_name, ''), NULLIF(u.username, ''), 'Unknown') AS user_name,
-          COALESCE(u.email, '') AS email,
-          COALESCE(u.tg_username, '') AS tg_username,
-          COALESCE(u.telegram_id, '') AS telegram_id,
-          COALESCE(d.name, 'Default') AS design_name
-        FROM orders o
-        LEFT JOIN users u ON u.id=o.user_id
-        LEFT JOIN designs d ON d.id=o.design_id
-        WHERE o.fake_apk_file IS NOT NULL AND TRIM(o.fake_apk_file) <> ''
-
-        UNION ALL
-
-        SELECT
-          o.id AS order_id, o.user_id, o.app_name, o.package_name,
-          COALESCE(fs.status, o.status) AS status, fs.created_at,
-          o.coupon_code, o.discount_coins,
-          fs.apk_file AS artifact_file, 'Extra Fake APK' AS artifact_type,
-          COALESCE(u.username, 'Unknown') AS username,
-          COALESCE(NULLIF(u.first_name, ''), NULLIF(u.username, ''), 'Unknown') AS user_name,
-          COALESCE(u.email, '') AS email,
-          COALESCE(u.tg_username, '') AS tg_username,
-          COALESCE(u.telegram_id, '') AS telegram_id,
-          COALESCE(d.name, 'Default') AS design_name
-        FROM order_fake_sites fs
-        JOIN orders o ON o.id=fs.order_id
-        LEFT JOIN users u ON u.id=o.user_id
-        LEFT JOIN designs d ON d.id=o.design_id
-        WHERE fs.apk_file IS NOT NULL AND TRIM(fs.apk_file) <> ''
-      ) AS artifacts
-      ${dateWhere}
-      ORDER BY created_at DESC, order_id DESC, artifact_type ASC
-    `).all();
-    res.json({ period, timezone: 'Asia/Kolkata', total: rows.length, apks: rows });
-  } catch (error) {
-    console.error('[admin-dashboard-apks] list failed:', error.message);
-    res.status(500).json({ error: 'APK activity unavailable' });
-  }
-});
-
 // Designs CRUD
 app.get('/api/admin/designs', requireAdmin, (req, res) => {
   res.json(db.prepare('SELECT * FROM designs ORDER BY id DESC').all().map(withPreviewImages));
@@ -2077,35 +1892,9 @@ app.post('/api/admin/firebase/restore-link', async (req, res) => {
   }
 });
 
-// Users — admin-side search by ID, username, display name, email or Telegram ID.
-// The optional today=1 filter powers the dashboard's clickable "new users"
-// card without sending the entire user table to the browser first.
+// Users
 app.get('/api/admin/users', requireAdmin, (req, res) => {
-  const search = String(req.query.search || '').trim().slice(0, 80);
-  const todayOnly = ['1', 'true', 'today'].includes(String(req.query.today || '').trim().toLowerCase());
-  const fields = `
-    id,username,first_name,tg_username,photo_url,is_telegram,
-    email,coins,telegram_id,created_at
-  `;
-  const clauses = [];
-  const params = [];
-
-  if (todayOnly) clauses.push(ADMIN_TODAY_SQL);
-  if (search) {
-    const term = `%${search}%`;
-    clauses.push(`(
-      CAST(id AS TEXT) LIKE ?
-      OR COALESCE(username, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(first_name, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(tg_username, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(email, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(telegram_id, '') LIKE ? COLLATE NOCASE
-    )`);
-    params.push(term, term, term, term, term, term);
-  }
-
-  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  res.json(db.prepare(`SELECT ${fields} FROM users ${where} ORDER BY id DESC`).all(...params));
+  res.json(db.prepare('SELECT id,username,first_name,tg_username,photo_url,is_telegram,email,coins,telegram_id,created_at FROM users ORDER BY id DESC').all());
 });
 
 // ── TELEGRAM ID TRANSFER ──
@@ -2212,30 +2001,10 @@ app.get('/api/admin/orders', requireAdmin, (req, res) => {
     }
   }
 
-  const searchTerm = String(search || '').trim().slice(0, 80);
-  if (searchTerm) {
-    // Search by order/user ID, username, display name, email, Telegram ID,
-    // app/package name, design name, domain or register URL.
-    where += ` AND (
-      CAST(o.id AS TEXT) LIKE ?
-      OR COALESCE(o.app_name, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(o.package_name, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(o.domain, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(o.register_url, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(u.username, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(u.first_name, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(u.email, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(u.tg_username, '') LIKE ? COLLATE NOCASE
-      OR COALESCE(u.telegram_id, '') LIKE ? COLLATE NOCASE
-      OR CAST(u.id AS TEXT) LIKE ?
-      OR COALESCE(d.name, '') LIKE ? COLLATE NOCASE
-    )`;
-    const term = `%${searchTerm}%`;
-    params.push(
-      term, term, term, term, term,
-      term, term, term, term, term,
-      term, term
-    );
+  if (search) {
+    where += ` AND (o.id LIKE ? OR u.username LIKE ? OR u.id LIKE ? OR d.name LIKE ?)`;
+    const searchTerm = `%${search}%`;
+    params.push(searchTerm, searchTerm, searchTerm, searchTerm);
   }
 
   const orderBy = sort === 'asc' ? 'ASC' : 'DESC';
@@ -2695,9 +2464,7 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
     return res.json({ error: error.message || 'Enter a valid http(s) register URL' });
   }
 
-  // Hidden designs stay unavailable to normal users, but admins can
-  // intentionally create a test/build order with any admin-listed design.
-  const design = db.prepare('SELECT * FROM designs WHERE id=?').get(design_id);
+  const design = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(design_id);
   if (!design) return res.json({ error: 'Design not found' });
 
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(user_id);
@@ -2847,11 +2614,7 @@ app.get('/api/admin/orders/:id/firebase', requireAdmin, async (req, res) => {
         depositUrl: state.config.depositUrl || '',
         wingoUrl: state.config.wingoUrl || ''
       },
-      users,
-      // /users may be locked by the deployed Firebase rules while /config
-      // remains readable. Preserve the valid config response and let the
-      // admin UI explain the missing permission instead of showing a spinner.
-      users_error: state.usersError || null
+      users
     });
   } catch (error) {
     res.status(502).json({ error: error.message });

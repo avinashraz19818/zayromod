@@ -174,9 +174,6 @@ a{color:inherit;text-decoration:none}
   position:relative;overflow:hidden;animation:slideUp .35s ease both;
   box-shadow:var(--shadow);
 }
-.stat-card.is-clickable{cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
-.stat-card.is-clickable:hover{transform:translateY(-3px);border-color:rgba(139,124,255,.45);box-shadow:var(--shadow),0 0 24px -12px var(--glow)}
-.stat-card.is-clickable:focus-visible{outline:2px solid var(--emerald);outline-offset:3px}
 .stat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad-blue);opacity:.95;box-shadow:0 0 12px rgba(139,124,255,.45)}
 .stat-card .icn{width:38px;height:38px;border-radius:11px;background:rgba(139,124,255,.12);display:grid;place-items:center;margin-bottom:12px;color:var(--emerald)}
 .stat-card .icn svg{width:20px;height:20px}
@@ -604,10 +601,7 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
   <div id="sec-dashboard" class="section active">
     <div class="topbar">
       <h1>Admin Dashboard<small>Overview of Zayro Mod Builder</small></h1>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-        <div class="status-pill"><span class="dot"></span> System Online</div>
-        <button type="button" class="btn btn-sm btn-outline" onclick="loadDashboard()">↻ Refresh</button>
-      </div>
+      <div class="status-pill"><span class="dot"></span> System Online</div>
     </div>
     <div class="stat-cards" id="statsCards">
       <div class="stat-card"><div class="icn"><svg><use href="#i-users"/></svg></div><div class="val">—</div><div class="lbl">Total Users</div></div>
@@ -616,26 +610,8 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
       <div class="stat-card gold"><div class="icn"><svg><use href="#i-coin"/></svg></div><div class="val">—</div><div class="lbl">Pending Coins</div></div>
     </div>
     <div class="card">
-      <div class="card-hd"><span class="accent"></span><h3>Recent Activity</h3><span class="hint" id="dashUpdatedAt">Loading…</span></div>
-      <div id="dashRecentOrders" style="color:var(--dim)">Loading…</div>
-    </div>
-    <div class="card">
       <div class="card-hd"><span class="accent"></span><h3>Pending Coin Requests</h3><span class="hint">Needs approval</span></div>
       <div id="dashPendingCoins" style="color:var(--dim)">Loading…</div>
-    </div>
-  </div>
-
-  <!-- DASHBOARD DRILL-DOWN -->
-  <div id="dashboardDetailModal" class="emodal" style="z-index:100004">
-    <div class="esheet" role="dialog" aria-modal="true" style="max-width:1180px">
-      <div class="ehead">
-        <h3><span id="dashboardDetailTitle">Dashboard Details</span></h3>
-        <button class="close" onclick="closeDashboardDetail()" aria-label="Close">✕</button>
-      </div>
-      <div class="ebody">
-        <div id="dashboardDetailSummary" class="hint" style="margin-bottom:14px">Loading…</div>
-        <div id="dashboardDetailBody" style="color:var(--dim)">Loading…</div>
-      </div>
     </div>
   </div>
 
@@ -682,11 +658,10 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
       <div class="card-hd"><span class="accent"></span><h3>Filters & Search</h3></div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:16px">
         <div class="form-group" style="margin:0;min-width:180px"><label>Status</label><select id="orderStatusFilter" class="input"><option value="all">All</option><option value="completed">Completed</option><option value="failed">Failed</option><option value="pending">Pending</option><option value="building">Building</option></select></div>
-        <div class="form-group" style="margin:0;min-width:240px;flex:1"><label>Search Orders</label><input type="search" id="orderSearch" class="input" placeholder="Order ID, user ID, username, name, app, Telegram ID…" autocomplete="off" oninput="queueOrderSearch()" onkeydown="if(event.key==='Enter'){event.preventDefault();loadOrders()}"></div>
+        <div class="form-group" style="margin:0;min-width:200px;flex:1"><label>Search</label><input type="text" id="orderSearch" class="input" placeholder="Order ID, Username, User ID, Design name..."></div>
         <div class="form-group" style="margin:0;min-width:160px"><label>Sort</label><select id="orderSort" class="input"><option value="desc">Newest First</option><option value="asc">Oldest First</option></select></div>
         <div class="form-group" style="margin:0;min-width:120px"><label>Per Page</label><select id="orderLimit" class="input"><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></div>
         <button class="btn btn-primary" onclick="loadOrders()">Apply Filters</button>
-        <button class="btn btn-outline" onclick="clearOrderSearch()">Clear Search</button>
         <button class="btn btn-danger" id="bulkDeleteBtn" style="display:none" onclick="bulkDeleteOrders()"><svg><use href="#i-x"/></svg> Delete Selected (<span id="selectedCount">0</span>)</button>
       </div>
       <div id="ordersList" style="color:var(--dim)">Loading…</div>
@@ -713,13 +688,8 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
 
         <div class="card" style="margin-bottom:14px">
           <div class="card-hd"><span class="accent"></span><h3>Account</h3></div>
-          <div class="form-group" style="margin:0">
-            <label>Find User * (ID, username, name, email or Telegram)</label>
-            <input type="search" id="coUserSearch" class="input" placeholder="Type to search users…" autocomplete="off" oninput="queueCreateOrderUserSearch()" onkeydown="if(event.key==='Enter'){event.preventDefault();loadCreateOrderUsers(document.getElementById('coUserSearch').value)}">
-            <div class="hint" id="coUserSearchHint">Search above, then select the matching user below.</div>
-            <label style="margin-top:10px">Select User</label>
-            <select id="coUser" class="input"><option value="">Loading users…</option></select>
-          </div>
+          <div class="form-group" style="margin:0"><label>User * (jiske naam order banega)</label>
+            <select id="coUser" class="input"><option value="">Loading users…</option></select></div>
         </div>
 
         <div class="card" style="margin-bottom:14px">
@@ -797,15 +767,7 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
   <div id="sec-users" class="section">
     <div class="topbar"><h1>Users<small>Registered accounts and balances</small></h1></div>
     <div class="card">
-      <div class="card-hd"><span class="accent"></span><h3>All Users</h3><span class="hint" id="userSearchSummary">Search by ID, username, name, email or Telegram ID</span></div>
-      <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:16px">
-        <div class="form-group" style="margin:0;flex:1;min-width:220px">
-          <label>Search User</label>
-          <input type="search" id="userSearch" placeholder="ID, username, name, email, Telegram ID…" autocomplete="off" oninput="queueUserSearch()" onkeydown="if(event.key==='Enter'){event.preventDefault();loadUsers()}">
-        </div>
-        <button type="button" class="btn btn-primary" onclick="loadUsers()">⌕ Search</button>
-        <button type="button" class="btn btn-outline" onclick="clearUserSearch()">Clear</button>
-      </div>
+      <div class="card-hd"><span class="accent"></span><h3>All Users</h3><span class="hint">Click a user to view their orders</span></div>
       <div id="usersList" style="color:var(--dim)">Loading…</div>
     </div>
     <!-- User Orders Modal -->
@@ -1195,27 +1157,8 @@ async function api(url, method='GET', body=null, isForm=false) {
     if (isForm) { opts.body = body; }
     else { opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
   }
-  try {
-    const r = await fetch(url, opts);
-    const text = await r.text();
-    let data = null;
-    try { data = text ? JSON.parse(text) : {}; }
-    catch (_) { data = {}; }
-    if (!r.ok) {
-      return {
-        ...(data && typeof data === 'object' ? data : {}),
-        error: (data && typeof data.error === 'string' && data.error)
-          || `Request failed (HTTP ${r.status})`
-      };
-    }
-    return data;
-  } catch (error) {
-    return {
-      error: error && error.name === 'AbortError'
-        ? 'Request timed out — please retry.'
-        : 'Network error — please retry.'
-    };
-  }
+  const r = await fetch(url, opts);
+  return r.json();
 }
 
 function toggleSidebar(){
@@ -1280,194 +1223,39 @@ function copyText(t) {
 }
 
 // ── Dashboard ──
-function dashboardNumber(value) {
-  return Number(value || 0).toLocaleString('en-IN');
-}
-
-function renderDashboardRecent(rows) {
-  const box = document.getElementById('dashRecentOrders');
-  if (!box) return;
-  if (!Array.isArray(rows) || !rows.length) {
-    box.innerHTML = '<div style="color:var(--dim);padding:16px 4px">No order activity yet.</div>';
-    return;
-  }
-  box.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Order</th><th>App / User</th><th>Design</th><th>Status</th><th>APKs</th><th>Date</th></tr></thead><tbody>${rows.map(row => {
-    const statusClass = row.status === 'done' ? 'badge-ok' : row.status === 'failed' ? 'badge-danger' : row.status === 'building' ? 'badge-blue' : 'badge-pending';
-    const date = row.created_at ? new Date(row.created_at).toLocaleString('en-IN') : '—';
-    const apkCount = Number(row.apk_count || 0);
-    return `<tr>
-      <td><b>#${adminEsc(row.id)}</b></td>
-      <td><b>${adminEsc(row.app_name || '—')}</b><br><small>${adminEsc(row.user_name || row.username || 'Unknown')}</small></td>
-      <td>${adminEsc(row.design_name || '—')}</td>
-      <td><span class="badge ${statusClass}">${adminEsc(row.status || 'pending')}</span></td>
-      <td><span class="badge ${apkCount ? 'badge-ok' : 'badge-pending'}">${apkCount}</span></td>
-      <td><small>${adminEsc(date)}</small></td>
-    </tr>`;
-  }).join('')}</tbody></table></div>`;
-}
-
-function renderDashboardError(message) {
-  const stats = document.getElementById('statsCards');
-  if (stats) stats.innerHTML = `<div class="card" style="grid-column:1/-1;color:var(--danger)">${adminEsc(message || 'Dashboard summary unavailable')}</div>`;
-  const recent = document.getElementById('dashRecentOrders');
-  if (recent) recent.innerHTML = `<div style="color:var(--danger);padding:16px">${adminEsc(message || 'Dashboard summary unavailable')}</div>`;
-  const updated = document.getElementById('dashUpdatedAt');
-  if (updated) updated.textContent = 'Unavailable';
-}
-
-let _dashboardDetailRequest = 0;
-
-function closeDashboardDetail() {
-  const modal = document.getElementById('dashboardDetailModal');
-  if (!modal) return;
-  modal.classList.remove('show');
-  modal.style.display = 'none';
-  document.body.style.overflow = '';
-}
-
-function dashboardDetailDate(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('en-IN');
-}
-
-function dashboardDetailStatusClass(status) {
-  return status === 'done' ? 'badge-ok'
-    : status === 'failed' ? 'badge-danger'
-      : status === 'building' ? 'badge-blue' : 'badge-pending';
-}
-
-function renderDashboardUserDetails(rows, todayOnly) {
-  const title = document.getElementById('dashboardDetailTitle');
-  const summary = document.getElementById('dashboardDetailSummary');
-  const body = document.getElementById('dashboardDetailBody');
-  if (title) title.textContent = todayOnly ? 'New Users Today' : 'All Users';
-  if (summary) summary.textContent = `${rows.length.toLocaleString('en-IN')} user${rows.length === 1 ? '' : 's'} found${todayOnly ? ' today' : ''}.`;
-  if (!rows.length) {
-    body.innerHTML = '<div style="padding:18px;color:var(--dim)">No matching users.</div>';
-    return;
-  }
-  body.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>User</th><th>Email</th><th>Telegram</th><th>Coins</th><th>Joined</th></tr></thead><tbody>${rows.map(user => {
-    const displayName = user.first_name || user.username || 'Unknown';
-    const telegram = [user.tg_username ? '@' + adminEsc(user.tg_username) : '', user.telegram_id ? 'ID: ' + adminEsc(user.telegram_id) : ''].filter(Boolean).join('<br>') || '—';
-    return `<tr>
-      <td>${adminEsc(user.id)}</td>
-      <td><b>${adminEsc(displayName)}</b><br><small>@${adminEsc(user.username || '—')}</small></td>
-      <td><small>${adminEsc(user.email || '—')}</small></td>
-      <td><small>${telegram}</small></td>
-      <td><span class="coin-chip">${adminEsc(user.coins || 0)}</span></td>
-      <td><small>${adminEsc(dashboardDetailDate(user.created_at))}</small></td>
-    </tr>`;
-  }).join('')}</tbody></table></div>`;
-}
-
-function renderDashboardApkDetails(rows, todayOnly) {
-  const title = document.getElementById('dashboardDetailTitle');
-  const summary = document.getElementById('dashboardDetailSummary');
-  const body = document.getElementById('dashboardDetailBody');
-  if (title) title.textContent = todayOnly ? 'APKs Built Today' : 'All Built APKs';
-  if (summary) summary.textContent = `${rows.length.toLocaleString('en-IN')} generated APK artifact${rows.length === 1 ? '' : 's'}${todayOnly ? ' built today' : ''}. Each row includes the account owner and coupon used.`;
-  if (!rows.length) {
-    body.innerHTML = '<div style="padding:18px;color:var(--dim)">No generated APKs found.</div>';
-    return;
-  }
-  body.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Order</th><th>APK / App</th><th>Built For</th><th>Design</th><th>Coupon</th><th>Date</th><th>Status</th></tr></thead><tbody>${rows.map((row, index) => {
-    const owner = row.user_name || row.username || 'Unknown';
-    const ownerExtra = [row.username ? '@' + row.username : '', row.email || '', row.telegram_id ? 'TG: ' + row.telegram_id : ''].filter(Boolean).join(' · ');
-    const coupon = row.coupon_code ? `${adminEsc(row.coupon_code)}${Number(row.discount_coins || 0) > 0 ? ` <small>(-${adminEsc(row.discount_coins)}c)</small>` : ''}` : '—';
-    return `<tr>
-      <td>${index + 1}</td>
-      <td><b>#${adminEsc(row.order_id)}</b><br><small>User ID: ${adminEsc(row.user_id)}</small></td>
-      <td><b>${adminEsc(row.app_name || '—')}</b><br><small>${adminEsc(row.package_name || '')}</small><br><small>${adminEsc(row.artifact_type || 'APK')} · ${adminEsc(row.artifact_file || '')}</small></td>
-      <td><b>${adminEsc(owner)}</b><br><small>${adminEsc(ownerExtra)}</small></td>
-      <td>${adminEsc(row.design_name || '—')}</td>
-      <td>${coupon}</td>
-      <td><small>${adminEsc(dashboardDetailDate(row.created_at))}</small></td>
-      <td><span class="badge ${dashboardDetailStatusClass(row.status)}">${adminEsc(row.status || 'pending')}</span></td>
-    </tr>`;
-  }).join('')}</tbody></table></div>`;
-}
-
-async function openDashboardDetail(kind) {
-  const modal = document.getElementById('dashboardDetailModal');
-  const title = document.getElementById('dashboardDetailTitle');
-  const summary = document.getElementById('dashboardDetailSummary');
-  const body = document.getElementById('dashboardDetailBody');
-  if (!modal || !body) return;
-  const requestId = ++_dashboardDetailRequest;
-  const isUsers = kind === 'users_all' || kind === 'users_today';
-  const todayOnly = kind === 'users_today' || kind === 'apks_today';
-  if (title) title.textContent = 'Loading details…';
-  if (summary) summary.textContent = 'Fetching the complete server-side list…';
-  body.innerHTML = '<div style="padding:18px;color:var(--dim)"><span class="spinner"></span> Loading…</div>';
-  modal.classList.add('show');
-  modal.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-
-  try {
-    const data = isUsers
-      ? await api('/api/admin/users' + (todayOnly ? '?today=1' : ''))
-      : await api('/api/admin/dashboard/apks?period=' + (todayOnly ? 'today' : 'all'));
-    if (requestId !== _dashboardDetailRequest) return;
-    if (!data || data.error) throw new Error(data?.error || 'Dashboard detail unavailable');
-    if (isUsers) renderDashboardUserDetails(Array.isArray(data) ? data : [], todayOnly);
-    else renderDashboardApkDetails(Array.isArray(data.apks) ? data.apks : [], todayOnly);
-  } catch (error) {
-    if (requestId !== _dashboardDetailRequest) return;
-    if (title) title.textContent = 'Dashboard Details';
-    if (summary) summary.textContent = 'Could not load the requested list.';
-    body.innerHTML = `<div style="padding:18px;color:var(--danger)">${adminEsc(error?.message || 'Request failed')}</div>`;
-  }
-}
-
 async function loadDashboard() {
   try {
-    const [dashboardRes, coinsRes] = await Promise.all([
-      api('/api/admin/dashboard'),
+    const [usersRes, ordersRes, coinsRes] = await Promise.all([
+      api('/api/admin/users'),
+      api('/api/admin/orders'),
       api('/api/admin/coin-requests')
     ]);
-    if (!dashboardRes || dashboardRes.error) throw new Error(dashboardRes?.error || 'Dashboard summary unavailable');
-
-    const s = dashboardRes.stats || {};
-    const card = (iconName, value, label, tone='', action='') => {
-      const actionAttrs = action
-        ? ` role="button" tabindex="0" title="Open details" onclick="${action}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${action}}"`
-        : '';
-      return `<div class="stat-card ${tone}${action ? ' is-clickable' : ''}"${actionAttrs}><div class="icn"><svg><use href="#${iconName}"/></svg></div><div class="val">${dashboardNumber(value)}</div><div class="lbl">${label}</div></div>`;
-    };
-    document.getElementById('statsCards').innerHTML = [
-      card('i-users', s.total_users, 'Total Users', '', "openDashboardDetail('users_all')"),
-      card('i-users', s.users_today, 'New Users Today', 'ok', "openDashboardDetail('users_today')"),
-      card('i-orders', s.total_orders, 'Total Orders', 'ok'),
-      card('i-clock', s.orders_today, 'Orders Today'),
-      card('i-package', s.total_apks_built, 'Total APKs Built', 'ok', "openDashboardDetail('apks_all')"),
-      card('i-package', s.apks_built_today, 'APKs Built Today', 'ok', "openDashboardDetail('apks_today')"),
-      card('i-clock', s.pending_orders, 'Pending Orders'),
-      card('i-clock', s.building_orders, 'Building Now'),
-      card('i-x', s.failed_orders, 'Failed Orders'),
-      card('i-palette', s.active_designs, 'Active Designs'),
-      card('i-palette', s.hidden_designs, 'Hidden Designs', 'gold'),
-      card('i-coin', s.total_user_coins, 'Coins Held', 'gold'),
-      card('i-coin', s.coins_spent_total, 'Coins Spent Total', 'gold'),
-      card('i-coin', s.coins_spent_today, 'Coins Spent Today', 'gold'),
-      card('i-coin', s.pending_coin_requests, 'Pending Coin Requests', 'gold'),
-      card('i-coin', s.pending_coins_requested, 'Coins Requested', 'gold')
-    ].join('');
-
+    
+    // Handle new paginated response format for orders
+    const users = Array.isArray(usersRes) ? usersRes : [];
+    const orders = Array.isArray(ordersRes) ? ordersRes : (ordersRes?.orders || []);
     const coins = Array.isArray(coinsRes) ? coinsRes : [];
-    const pending = coins.filter(c => c.status === 'pending');
+    
+    const pending = coins.filter(c => c.status==='pending');
+    const done = orders.filter(o => o.status==='done').length;
+    document.getElementById('statsCards').innerHTML = `
+      <div class="stat-card"><div class="icn"><svg><use href="#i-users"/></svg></div><div class="val">${users.length}</div><div class="lbl">Total Users</div></div>
+      <div class="stat-card ok"><div class="icn"><svg><use href="#i-orders"/></svg></div><div class="val">${orders.length}</div><div class="lbl">Total Orders</div></div>
+      <div class="stat-card ok"><div class="icn"><svg><use href="#i-package"/></svg></div><div class="val">${done}</div><div class="lbl">APKs Built</div></div>
+      <div class="stat-card gold"><div class="icn"><svg><use href="#i-coin"/></svg></div><div class="val">${pending.length}</div><div class="lbl">Pending Coins</div></div>
+    `;
     const nb = document.getElementById('navPendingBadge');
-    if (nb) {
-      if (pending.length) { nb.style.display = 'inline-block'; nb.textContent = pending.length; }
-      else nb.style.display = 'none';
-    }
+    if (pending.length){ nb.style.display='inline-block'; nb.textContent = pending.length; } else nb.style.display='none';
     renderCoinReqs(pending, 'dashPendingCoins', true);
-    renderDashboardRecent(dashboardRes.recent_orders);
-    const updated = document.getElementById('dashUpdatedAt');
-    if (updated) updated.textContent = `Updated ${new Date().toLocaleTimeString('en-IN')}`;
   } catch (err) {
     console.error('Dashboard load error:', err);
-    renderDashboardError(err?.message || 'Failed to load dashboard data');
+    document.getElementById('statsCards').innerHTML = `
+      <div class="stat-card"><div class="icn"><svg><use href="#i-users"/></svg></div><div class="val" style="color:var(--danger)">Error</div><div class="lbl">Total Users</div></div>
+      <div class="stat-card ok"><div class="icn"><svg><use href="#i-orders"/></svg></div><div class="val" style="color:var(--danger)">Error</div><div class="lbl">Total Orders</div></div>
+      <div class="stat-card ok"><div class="icn"><svg><use href="#i-package"/></svg></div><div class="val" style="color:var(--danger)">Error</div><div class="lbl">APKs Built</div></div>
+      <div class="stat-card gold"><div class="icn"><svg><use href="#i-coin"/></svg></div><div class="val" style="color:var(--danger)">Error</div><div class="lbl">Pending Coins</div></div>
+    `;
+    document.getElementById('dashPendingCoins').innerHTML = '<div style="color:var(--danger);padding:16px">Failed to load dashboard data</div>';
   }
 }
 
@@ -1652,23 +1440,10 @@ async function deleteDesign(id, name) {
 let _ordersPage = 1;
 let _ordersTotalPages = 1;
 let _selectedOrderIds = new Set();
-let _orderSearchTimer = null;
-
-function queueOrderSearch() {
-  clearTimeout(_orderSearchTimer);
-  _orderSearchTimer = setTimeout(() => loadOrders(), 320);
-}
-
-function clearOrderSearch() {
-  clearTimeout(_orderSearchTimer);
-  const input = document.getElementById('orderSearch');
-  if (input) input.value = '';
-  loadOrders();
-}
 
 async function loadOrders() {
   const status = document.getElementById('orderStatusFilter').value;
-  const search = document.getElementById('orderSearch').value.trim();
+  const search = document.getElementById('orderSearch').value;
   const sort = document.getElementById('orderSort').value;
   const limit = document.getElementById('orderLimit').value;
   _ordersPage = 1;
@@ -1766,7 +1541,7 @@ function changeOrdersPage(page) {
   if (page < 1 || page > _ordersTotalPages) return;
   _ordersPage = page;
   const status = document.getElementById('orderStatusFilter').value;
-  const search = document.getElementById('orderSearch').value.trim();
+  const search = document.getElementById('orderSearch').value;
   const sort = document.getElementById('orderSort').value;
   const limit = document.getElementById('orderLimit').value;
   fetchOrders(status, search, sort, page, limit);
@@ -1878,81 +1653,45 @@ async function rejectCoin(id) {
 let _selectedUserOrdersIds = new Set();
 let _currentUserOrdersUserId = null;
 
-let _userSearchTimer = null;
-
-function queueUserSearch() {
-  clearTimeout(_userSearchTimer);
-  _userSearchTimer = setTimeout(() => loadUsers(), 320);
-}
-
 async function loadUsers() {
-  const search = document.getElementById('userSearch')?.value.trim() || '';
-  const url = '/api/admin/users' + (search ? '?search=' + encodeURIComponent(search) : '');
-  const users = await api(url);
+  const users = await api('/api/admin/users');
   const c = document.getElementById('usersList');
-  if (users?.error) {
-    c.innerHTML = `<div style="color:var(--danger);padding:16px 4px">${adminEsc(users.error)}</div>`;
-    return;
-  }
-  const rows = Array.isArray(users) ? users : [];
-  const summary = document.getElementById('userSearchSummary');
-  if (summary) summary.textContent = search
-    ? `${rows.length} result${rows.length === 1 ? '' : 's'} for “${search}”`
-    : `${rows.length} users — click a user to view their orders`;
-  if (!rows.length) {
-    c.innerHTML = `<div style="color:var(--dim);padding:16px 4px">${search ? 'No matching users found.' : 'No users yet.'}</div>`;
-    return;
-  }
+  if (!users.length) { c.innerHTML = '<div style="color:var(--dim);padding:16px 4px">No users yet.</div>'; return; }
   c.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>User / Telegram</th><th>Type</th><th>Coins</th><th>Telegram ID</th><th>Joined</th><th>Manage Coins</th><th>Actions</th></tr></thead><tbody>` +
-    rows.map(u => {
+    users.map(u => {
       const name = u.first_name || (u.tg_username ? ('@' + u.tg_username) : u.username);
       const isTg = !!u.telegram_id || !!u.is_telegram;
       return `<tr>
-      <td>${adminEsc(u.id)}</td>
+      <td>${u.id}</td>
       <td>
-        <button class="btn btn-sm btn-outline" data-user-id="${adminEsc(u.id)}" data-username="${adminEsc(u.username)}" onclick="openUserOrdersFromButton(this)" style="display:inline-flex;align-items:center;gap:6px">
+        <button class="btn btn-sm btn-outline" onclick="openUserOrders(${u.id},'${(u.username||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" style="display:inline-flex;align-items:center;gap:6px">
           <svg><use href="#i-users"/></svg> <b>${adminEsc(name)}</b>
           ${u.tg_username ? `<span style="color:var(--cyan);font-size:11px">@${adminEsc(u.tg_username)}</span>` : ''}
         </button>
         <div style="font-size:10.5px;color:var(--dim);margin-top:2px">${adminEsc(u.email || u.username)}</div>
       </td>
-      <td><span class="badge ${isTg ? 'badge-ok' : 'badge-pending'}">${isTg ? '⚡ Telegram' : 'Web'}</span></td>
-      <td><span class="coin-chip">${adminEsc(u.coins || 0)}</span></td>
+      <td>
+        <span class="badge ${isTg ? 'badge-ok' : 'badge-pending'}">${isTg ? '⚡ Telegram' : 'Web'}</span>
+      </td>
+      <td><span class="coin-chip">${u.coins}</span></td>
       <td><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
-        ${u.telegram_id ? `<code style="background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:11px;color:#8bdcff">${adminEsc(u.telegram_id)}</code>` : `<span style="color:var(--dim);font-size:11px">—</span>`}
-        <button class="btn btn-sm" style="background:rgba(42,123,255,.18);color:var(--cyan);border:1px solid rgba(94,200,255,.3)" data-user-id="${adminEsc(u.id)}" data-username="${adminEsc(u.username)}" data-telegram-id="${adminEsc(u.telegram_id)}" onclick="openTgTransferFromButton(this)" title="Telegram ID transfer">⇄</button>
+        ${u.telegram_id ? `<code style="background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:11px;color:#8bdcff">${u.telegram_id}</code>` : `<span style="color:var(--dim);font-size:11px">—</span>`}
+        <button class="btn btn-sm" style="background:rgba(42,123,255,.18);color:var(--cyan);border:1px solid rgba(94,200,255,.3)" onclick="openTgTransfer(${u.id},'${(u.username||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}','${(u.telegram_id || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" title="Telegram ID transfer">⇄</button>
       </div></td>
-      <td><small>${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</small></td>
-      <td><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
-        <input type="number" id="addCoins_${adminEsc(u.id)}" style="width:70px;padding:6px 8px;background:var(--bg-2);border:1.5px solid var(--border);color:#fff;border-radius:8px;font-size:12px" value="10" min="1">
-        <button class="btn btn-sm btn-ok" onclick="addUserCoins(${adminEsc(u.id)})" title="Add coins"><svg><use href="#i-plus"/></svg></button>
-        <button class="btn btn-sm btn-danger" onclick="subUserCoins(${adminEsc(u.id)})" title="Subtract coins" style="font-size:16px;line-height:1;padding:6px 10px">−</button>
-      </div></td>
+      <td><small>${new Date(u.created_at).toLocaleDateString()}</small></td>
+      <td>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+          <input type="number" id="addCoins_${u.id}" style="width:70px;padding:6px 8px;background:var(--bg-2);border:1.5px solid var(--border);color:#fff;border-radius:8px;font-size:12px" value="10" min="1">
+          <button class="btn btn-sm btn-ok" onclick="addUserCoins(${u.id})" title="Add coins"><svg><use href="#i-plus"/></svg></button>
+          <button class="btn btn-sm btn-danger" onclick="subUserCoins(${u.id})" title="Subtract coins" style="font-size:16px;line-height:1;padding:6px 10px">−</button>
+        </div>
+      </td>
       <td><div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-sm btn-primary" data-user-id="${adminEsc(u.id)}" data-username="${adminEsc(u.username)}" onclick="openUserOrdersFromButton(this)"><svg><use href="#i-package"/></svg> Manage APKs</button>
-        <button class="btn btn-sm btn-danger" data-user-id="${adminEsc(u.id)}" data-username="${adminEsc(u.username)}" onclick="deleteUserFromButton(this)"><svg><use href="#i-x"/></svg> Delete</button>
+        <button class="btn btn-sm btn-primary" onclick="openUserOrders(${u.id},'${(u.username||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-package"/></svg> Manage APKs</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id},'${(u.username||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"><svg><use href="#i-x"/></svg> Delete</button>
       </div></td>
     </tr>`;
     }).join('') + `</tbody></table></div>`;
-}
-
-function clearUserSearch() {
-  clearTimeout(_userSearchTimer);
-  const input = document.getElementById('userSearch');
-  if (input) input.value = '';
-  loadUsers();
-}
-
-function openUserOrdersFromButton(button) {
-  openUserOrders(Number(button.dataset.userId), button.dataset.username || '');
-}
-
-function deleteUserFromButton(button) {
-  deleteUser(Number(button.dataset.userId), button.dataset.username || '');
-}
-
-function openTgTransferFromButton(button) {
-  openTgTransfer(Number(button.dataset.userId), button.dataset.username || '', button.dataset.telegramId || '');
 }
 
 async function addUserCoins(userId) {
@@ -2068,73 +1807,28 @@ document.getElementById('coAppName').addEventListener('input', () => {
 });
 refreshCoFontPicker();
 
-let _createOrderUserSearchTimer = null;
-let _createOrderUserRequestId = 0;
-
-function renderCreateOrderUsers(users, search='') {
-  const select = document.getElementById('coUser');
-  const hint = document.getElementById('coUserSearchHint');
-  if (!select) return;
-  const rows = Array.isArray(users) ? users : [];
-  const current = select.value;
-  select.innerHTML = '<option value="">Select matching user…</option>' + rows.map(user => {
-    const label = [
-      user.first_name || user.username || 'Unknown',
-      user.username ? '@' + user.username : '',
-      `ID: ${user.id}`,
-      user.email || '',
-      user.telegram_id ? `TG: ${user.telegram_id}` : (user.tg_username ? `TG: @${user.tg_username}` : '')
-    ].filter(Boolean).join(' · ');
-    return `<option value="${adminEsc(user.id)}">${adminEsc(label)}</option>`;
-  }).join('');
-  if (current && rows.some(user => String(user.id) === String(current))) select.value = current;
-  if (hint) hint.textContent = search
-    ? `${rows.length.toLocaleString('en-IN')} matching user${rows.length === 1 ? '' : 's'} — select one below.`
-    : `${rows.length.toLocaleString('en-IN')} users loaded — search above to narrow the list.`;
-}
-
-async function loadCreateOrderUsers(search='') {
-  const requestId = ++_createOrderUserRequestId;
-  const query = String(search || '').trim();
-  const response = await api('/api/admin/users' + (query ? '?search=' + encodeURIComponent(query) : ''));
-  if (requestId !== _createOrderUserRequestId) return;
-  const select = document.getElementById('coUser');
-  if (response?.error) {
-    if (select) select.innerHTML = '<option value="">Error loading users</option>';
-    const hint = document.getElementById('coUserSearchHint');
-    if (hint) hint.textContent = response.error;
-    return;
-  }
-  renderCreateOrderUsers(response, query);
-}
-
-function queueCreateOrderUserSearch() {
-  clearTimeout(_createOrderUserSearchTimer);
-  const query = document.getElementById('coUserSearch')?.value || '';
-  _createOrderUserSearchTimer = setTimeout(() => loadCreateOrderUsers(query), 280);
-}
-
 async function openCreateOrderModal() {
   const modal = document.getElementById('createOrderModal');
   modal.classList.add('show');
   document.body.style.overflow = 'hidden';
 
-  // Users dropdown — load once, then search server-side as the admin types.
-  const userSearch = document.getElementById('coUserSearch');
-  if (userSearch) userSearch.value = '';
-  await loadCreateOrderUsers('');
+  // Users dropdown
+  const users = await api('/api/admin/users');
+  const uSel = document.getElementById('coUser');
+  if (users.error) { uSel.innerHTML = '<option value="">Error loading users</option>'; }
+  else {
+    uSel.innerHTML = '<option value="">Select user…</option>' +
+      users.map(u => `<option value="${u.id}">${u.username} (ID: ${u.id}) — ${u.coins} coins</option>`).join('');
+  }
 
   // Designs dropdown
   const designs = await api('/api/admin/designs');
   const dSel = document.getElementById('coDesign');
   if (designs.error) { dSel.innerHTML = '<option value="">Error loading designs</option>'; }
   else {
-    const allDesigns = Array.isArray(designs) ? designs : [];
+    const active = designs.filter(d => d.active === 1 || d.active === true);
     dSel.innerHTML = '<option value="">Select design…</option>' +
-      allDesigns.map(d => {
-        const visibility = (Number(d.active) === 1 || d.active === true) ? 'Active' : 'Hidden — admin only';
-        return `<option value="${adminEsc(d.id)}">${adminEsc(d.name)} (${visibility})</option>`;
-      }).join('');
+      active.map(d => `<option value="${d.id}">${d.name} (ID: ${d.id})</option>`).join('');
   }
 
   // Reset rest
@@ -2394,30 +2088,17 @@ async function loadFirebaseManager() {
   if (totalBadge) totalBadge.style.display = 'none';
   document.getElementById('fbVariantWrap').style.display = 'block';
   usersBox.innerHTML = '<div style="padding:16px;color:var(--dim)"><span class="spinner"></span> Loading Firebase…</div>';
-
-  // Keep the modal responsive even if the proxy, Firebase, or the browser
-  // request fails. api() converts HTTP/network failures into a safe error
-  // object; the catch also covers unexpected browser fetch failures.
-  let data;
-  try {
-    data = await Promise.race([
-      api(`/api/admin/orders/${orderId}/firebase?variant=${encodeURIComponent(variant)}`),
-      new Promise(res => setTimeout(() => res({ error: 'Firebase load timeout (20s) — dobara try karein' }), 20000))
-    ]);
-  } catch (error) {
-    data = { error: error && error.message ? error.message : 'Firebase load failed — dobara try karein' };
+  // 20 sec timeout — kabhi atke nahi (pehle token-exchange slow ho jata tha,
+  // ab server side GET bina token ke turant chalta hai)
+  const data = await Promise.race([
+    api(`/api/admin/orders/${orderId}/firebase?variant=${encodeURIComponent(variant)}`),
+    new Promise(res => setTimeout(() => res({ error: 'Firebase load timeout (20s) — dobara try karein' }), 20000))
+  ]);
+  if (data.error) {
+    usersBox.innerHTML = `<div style="padding:16px;color:var(--danger)">${adminEsc(data.error)}</div>`;
+    return toast(data.error, true);
   }
-
-  if (!data || data.error) {
-    const message = data?.error || 'Firebase load failed — dobara try karein';
-    usersBox.innerHTML = `<div style="padding:16px;color:var(--danger)">${adminEsc(message)}</div>`;
-    return toast(message, true);
-  }
-
   try {
-    if (!data.order || !data.config || !data.firebase_path) {
-      throw new Error('Incomplete Firebase response from server');
-    }
     // Variant options DYNAMIC banate hain — Fake 1, Fake 2, Fake 3...
     // har fake APK ka apna link alag se manage hota hai.
     const sel = document.getElementById('fbVariant');
@@ -2431,10 +2112,8 @@ async function loadFirebaseManager() {
     _firebaseManagerState = data;
     document.getElementById('fbManagerTitle').textContent = `${data.order.app_name} (#${data.order.id})${data.fake_number ? ' — Fake ' + data.fake_number : ''}`;
     document.getElementById('fbPathBadge').textContent = `Path: ${data.firebase_path}/config`;
-    const liveText = data.order.live_link_enabled ? 'Firebase Live' : 'Legacy APK — upgrade required';
-    const usersLocked = !!data.users_error;
-    document.getElementById('fbLiveBadge').textContent = usersLocked ? `${liveText} · Users locked` : liveText;
-    document.getElementById('fbLiveBadge').className = `badge ${usersLocked ? 'badge-pending' : (data.order.live_link_enabled ? 'badge-ok' : 'badge-pending')}`;
+    document.getElementById('fbLiveBadge').textContent = data.order.live_link_enabled ? 'Firebase Live' : 'Legacy APK — upgrade required';
+    document.getElementById('fbLiveBadge').className = `badge ${data.order.live_link_enabled ? 'badge-ok' : 'badge-pending'}`;
     // wrap + fake option upar dynamic ho chuke hain
     document.getElementById('fbMinDeposit').value = data.config.minDeposit ?? 0;
     document.getElementById('fbDepositCondition').value = String(data.config.depositCondition !== false);
@@ -2442,7 +2121,7 @@ async function loadFirebaseManager() {
     document.getElementById('fbLinkType').value = 'domain';
     document.getElementById('fbNewUrl').value = '';
     syncAdminFirebaseLinkMode();
-    renderFirebaseUsers(Array.isArray(data.users) ? data.users : [], data.users_error);
+    renderFirebaseUsers(Array.isArray(data.users) ? data.users : []);
   } catch (e) {
     usersBox.innerHTML = `<div style="padding:16px;color:var(--danger)">Render error: ${adminEsc(String(e && e.message || e))}</div>`;
   }
@@ -2480,24 +2159,19 @@ function formatFirebaseUserValue(value) {
   return parts.join(' ');
 }
 
-function renderFirebaseUsers(users, usersError='') {
+function renderFirebaseUsers(users) {
   const box = document.getElementById('fbUsersList');
   const totalBadge = document.getElementById('fbUsersTotal');
   const total = users.length;
-  const warning = usersError ? `
-    <div style="padding:13px 14px;margin-bottom:10px;border:1px solid rgba(255,207,77,.35);border-radius:10px;background:rgba(255,207,77,.07);color:var(--gold);line-height:1.45">
-      <b>Users access unavailable.</b> ${adminEsc(usersError)}<br>
-      <small style="color:var(--dim)">Firebase config loaded, but the server needs its Firebase service-account access to read or change this protected users node.</small>
-    </div>` : '';
   if (totalBadge) {
-    totalBadge.style.display = usersError ? 'none' : 'inline-flex';
+    totalBadge.style.display = 'inline-flex';
     totalBadge.textContent = `${total} user${total === 1 ? '' : 's'}`;
   }
   if (!total) {
-    box.innerHTML = warning + (usersError ? '' : '<div style="padding:18px;text-align:center;color:var(--dim)">No users stored under this APK Firebase path.</div>');
+    box.innerHTML = '<div style="padding:18px;text-align:center;color:var(--dim)">No users stored under this APK Firebase path.</div>';
     return;
   }
-  box.innerHTML = warning + `<table><thead><tr><th>#</th><th>Phone / User Key</th><th>Status</th><th>Action</th></tr></thead><tbody>${users.map((user,index)=>{
+  box.innerHTML = `<table><thead><tr><th>#</th><th>Phone / User Key</th><th>Status</th><th>Action</th></tr></thead><tbody>${users.map((user,index)=>{
     return `<tr><td>${index+1}</td><td><code>${adminEsc(user.key)}</code></td><td>${formatFirebaseUserValue(user.value)}</td><td><button class="btn btn-sm btn-danger" onclick="removeAdminFirebaseUser('${encodeURIComponent(user.key)}')"><svg><use href="#i-x"/></svg> Remove</button></td></tr>`;
   }).join('')}</tbody></table>`;
 }

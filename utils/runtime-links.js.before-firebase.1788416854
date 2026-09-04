@@ -71,32 +71,9 @@ function b64url(buf) {
   return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-// Keep one short-lived server-only OAuth token and share an in-flight
-// exchange. The previous version checked undeclared cache variables, so every
-// authenticated Firebase operation silently fell back to an unauthenticated
-// request and was rejected by the database rules.
-let _tokenCache = null;
-let _tokenExp = 0;
-let _tokenPromise = null;
-
-function clearFirebaseToken() {
-  _tokenCache = null;
-  _tokenExp = 0;
-}
-
 async function getFirebaseAccessToken() {
-  if (_tokenCache && Date.now() < _tokenExp - 60_000) return _tokenCache;
-  if (_tokenPromise) return _tokenPromise;
-
-  _tokenPromise = _doTokenExchange();
-  try {
-    return await _tokenPromise;
-  } finally {
-    _tokenPromise = null;
-  }
-}
-
-async function _doTokenExchange() {
+  // DIAG-VERIFIED SIMPLE VERSION: koi token cache nahi — har baar naya
+  // token. Wahi scope jo diag script me tha (200 prove ho chuka).
   try {
     const sa = loadServiceAccount();
     if (!sa || !sa.client_email || !sa.private_key) return null;
@@ -126,10 +103,7 @@ async function _doTokenExchange() {
     if (j && j.access_token) {
       // Access tokens are server-only; never log even a prefix or provider
       // response containing credential material.
-      const lifetime = Math.max(60_000, Number(j.expires_in || 3600) * 1000);
-      _tokenCache = j.access_token;
-      _tokenExp = Date.now() + lifetime;
-      return _tokenCache;
+      return j.access_token;
     }
     console.error('[fb-token] exchange failed with status', res.status);
     return null;
@@ -183,10 +157,13 @@ function firebaseEndpoint(parts) {
 }
 
 async function firebaseRequest(parts, method = 'GET', body) {
-  // Public reads stay fast. If a protected node rejects the unauthenticated
-  // read, retry once with the server-only service-account token. Writes use
-  // the token from the start. This supports both the legacy public config
-  // node and the locked users node without weakening Firebase rules.
+  // Token PATCH/PUT/DELETE ke liye — GET (admin users list / watchdog
+  // reads) public panel rules se bina token ke turant chalti hai. Isse
+  // pehle har read token exchange ka wait karta tha (slow "Loading
+  // Firebase...").
+  // NOTE: DELETE bhi token ke saath jata hai — naye rules me panel-level
+  // delete root write (auth != null) maangta hai (watchdog banned-path
+  // auto-delete isi se chalta hai).
   const needsAuth = method === 'PATCH' || method === 'PUT' || method === 'DELETE';
   let token = null;
   if (needsAuth) {
@@ -211,12 +188,11 @@ async function firebaseRequest(parts, method = 'GET', body) {
 
   let response = await doFetch(token);
 
-  // A public config can return 200 while /users is protected. Retry any 401
-  // once with a fresh OAuth token so the manager works when the service
-  // account is configured, without adding auth parameters to public links.
-  if (response.status === 401) {
-    console.error(`[fb-request] ${method} ${parts.join('/')} → HTTP 401; retrying with service-account token`);
-    clearFirebaseToken();
+  // ── 401 RETRY: token kharab/expired nikla to cache clear karke naya
+  // token le kar EK baar retry — admin link change kabhi silently fail
+  // na ho.
+  if (needsAuth && response.status === 401) {
+    console.error('[fb-request] 401 — naya token leke retry...');
     try { token = await getFirebaseAccessToken(); } catch (e) { token = null; }
     if (token) response = await doFetch(token);
   }
@@ -243,24 +219,13 @@ async function updateFirebaseLinks(firebasePath, links) {
 
 async function getFirebaseControl(firebasePath) {
   const safePath = normalizeFirebasePath(firebasePath);
-  const results = await Promise.allSettled([
+  const [config, users] = await Promise.all([
     firebaseRequest([safePath, 'config']),
     firebaseRequest([safePath, 'users'])
   ]);
-
-  // Config is required to manage an APK. Keep the existing hard failure for
-  // that node, but do not discard a valid config just because a deployment's
-  // rules protect /users. The admin UI can then show the real path/config and
-  // an actionable users-permission warning instead of spinning forever.
-  if (results[0].status === 'rejected') throw results[0].reason;
-  const usersFailure = results[1].status === 'rejected' ? results[1].reason : null;
-
   return {
-    config: results[0].value && typeof results[0].value === 'object' ? results[0].value : {},
-    users: results[1].status === 'fulfilled' && results[1].value && typeof results[1].value === 'object'
-      ? results[1].value
-      : {},
-    usersError: usersFailure ? String(usersFailure.message || 'Firebase users could not be read') : null
+    config: config && typeof config === 'object' ? config : {},
+    users: users && typeof users === 'object' ? users : {}
   };
 }
 
