@@ -31,6 +31,21 @@ public class SecurityManager {
     private static volatile boolean initialized = false;
     private static int riskScore = 0;
 
+    private static volatile boolean nativeLibraryLoaded = false;
+
+    private static native int nativeIsDebuggerAttached();
+    private static native int nativeDetectFrida();
+
+    private static void loadNativeSecurity() {
+        if (nativeLibraryLoaded) return;
+        try {
+            System.loadLibrary("nativesecurity");
+            nativeLibraryLoaded = true;
+        } catch (Throwable ignored) {
+            nativeLibraryLoaded = false;
+        }
+    }
+
     // ── XOR helpers (build-time constants decode) ──
     private static String decodeX(byte[] m) {
         if (m == null || m.length == 0) return "";
@@ -49,6 +64,8 @@ public class SecurityManager {
         initialized = true;
         if (!isProtectedBuild()) { state = SECURITY_OK; return; }
 
+        loadNativeSecurity();
+
         try {
             // 1) Signature — hard check
             String expected = decodeX(EXPECTED_CERT_SHA256_M);
@@ -61,6 +78,18 @@ public class SecurityManager {
             if (Debug.isDebuggerConnected() || Debug.waitingForDebugger()) {
                 state = SECURITY_FAILED;
                 return;
+            }
+
+            if (nativeLibraryLoaded) {
+                try {
+                    if (nativeIsDebuggerAttached() != 0 ||
+                        nativeDetectFrida() != 0) {
+                        state = SECURITY_FAILED;
+                        return;
+                    }
+                } catch (Throwable ignored) {
+                    // Java fallback remains active if native calls fail.
+                }
             }
 
             state = SECURITY_OK;
