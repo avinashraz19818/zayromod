@@ -3213,6 +3213,38 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// ── GLOBAL ERROR HANDLER (diagnostic + clean JSON errors) ──
+// Iske bina multer/session/route errors Express default HTML-500 ban jate the
+// (log me kuch nahi, panel par sirf "Request failed (500)"). Ab har error:
+//   1) PM2 error log me stack ke saath record hota hai ([route-error])
+//   2) /api/* calls ko JSON { error } milta hai (frontend wahi dikhata hai)
+// Multer file errors (bada icon waghaira) 400 me badal jate hain.
+// NOTE: ye middleware sab routes ke BAAD hona chahiye (4-arg = error handler).
+app.use((err, req, res, next) => {
+  try {
+    const code = err && err.code ? String(err.code) : '';
+    const msg = (err && err.message) ? String(err.message) : 'Unknown error';
+    console.error(`[route-error] ${req.method} ${req.path} code=${code} msg=${msg}`);
+    if (err && err.stack) console.error(String(err.stack).split('\n').slice(0, 6).join('\n'));
+    if (res.headersSent) return next(err);
+    // Multer (file upload) errors → user-friendly 400
+    if (err && (err.name === 'MulterError' || code.startsWith('LIMIT_'))) {
+      let friendly = 'File upload failed. Please try a smaller file.';
+      if (code === 'LIMIT_FILE_SIZE') friendly = 'Icon zyada bada hai — 5MB se chhota icon lagao.';
+      if (code === 'LIMIT_UNEXPECTED_FILE') friendly = 'Unexpected file field. Please retry.';
+      return res.status(400).json({ error: friendly });
+    }
+    if (code === 'ENOSPC') return res.status(500).json({ error: 'Server disk full. Please contact admin.' });
+    if (req.path.startsWith('/api/')) {
+      return res.status(500).json({ error: 'Request failed. Please retry. (' + (code || 'ERR') + ')' });
+    }
+    return res.status(500).send('error');
+  } catch (e) {
+    try { return res.status(500).json({ error: 'Request failed.' }); } catch (_) {}
+    return next(err);
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`APK Builder running on port ${PORT}`);
 });
