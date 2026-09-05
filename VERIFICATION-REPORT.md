@@ -71,6 +71,28 @@ G. apkbuilder patch simulation (1)
 - `git diff --stat` me Java diff sirf `MainActivity.java` (+~45 additive lines),
   `NativePayload.java` (new), `proguard-rules.pro` (+3), baaki sab naye files.
 
+## Leak audit (static, 2026-09-05) — koi plaintext secret APK me nahi
+
+| Check | Result |
+|---|---|
+| Template Java/C++/XML me hardcoded secret/URL | ✅ PASS — sirf `{0,0}` placeholders, koi URL nahi |
+| Generated `.so` header me HTML plaintext | ✅ PASS — ciphertext + masked pepper only (suite test E) |
+| Build logs (`build_log`, panel-visible) me password/pepper | ✅ PASS — sirf sizes/paths log hote hain |
+| Java `Log.*` (5 lines, generic tags) | ✅ PASS — koi secret nahi; R8 release me sab strip |
+| Native logging | ✅ PASS — zero log calls |
+| WebView remote-debugging | ✅ PASS — absent |
+| `allowBackup=false`, release `debuggable=false` | ✅ PASS |
+| `integrity.json` / `security-report.txt` | ✅ PASS — hashes only |
+| JS bridge path traversal (`playSound`) | ✅ PASS — `basename()` sanitized |
+| Per-build kid flow trigger | ✅ PASS — placeholder intact, naye builds unique password |
+
+**Pre-existing findings (mere change se nahi, par note karo):**
+1. **Firebase Web key + RTDB URL popup HTML me** (shared project) — decrypt par milegi. Firebase web keys public-by-design hain; asli raksha = rules. Recommendation: Firebase console me key par Android-app restriction lagao.
+2. **`database.rules.json`: `users` read+write open, `$other.write` open** — app ka bina-auth flow is par chalta hai, isliye change nahi kiya (behavior tootega). `config`/`push` writes auth-locked hain ✅. Recommendation: `$other.write` review karo jab time mile.
+3. **`FIXED_PASSWORD` repo me hai** (`utils/encrypt.js`, fallback key) — naye builds ise use nahi karte (per-build kid), par repo **private rakho**. Purane APKs dheere-dheere rebuild karwao.
+4. **`usesCleartextTraffic` + WebView mixed-content/SSL-proceed** — game iframes ke liye functional requirement; accepted risk (unchanged).
+5. **Key recoverable (by design)** — DEX password + `.so` pepper dono APK me; extraction mehnga hai, impossible nahi. Doc me declared hai.
+
 ## Kya is sandbox me NAHI ho saka (Android SDK absent)
 
 - Real `./gradlew assembleProtectedRelease` + device/emulator run. Iski jagah:
