@@ -50,6 +50,13 @@ public class MainActivity extends Activity {
 	private static final byte[] APP_PATH_M = new byte[]{ 0, 0 };
 	private static final byte[] FW_PASSWORD_M = new byte[]{ 0, 0 };
 	private static final int XOR_KEY = 0x5A;
+
+	// ── NATIVE .so PAYLOAD ORDER (build-time patched boolean) ──
+	// true  = pehle native .so snapshot try karo, fail ho to remote fetch (default)
+	// false = pehle remote fetch (purana flow), offline ho to native snapshot fallback
+	// Pipeline APK_POPUP_SOURCE=remote par ise false patch karta hai. Dono modes me
+	// WebView call, base URL, bridges aur assets bilkul same rehte hain.
+	private static final boolean NATIVE_PAYLOAD_FIRST = true;
 	
 	private static String decodeX(byte[] m) {
 		if (m == null || m.length == 0) return "";
@@ -329,10 +336,10 @@ public class MainActivity extends Activity {
 			introPlayer.start();
 		} catch (Exception e) {}
 		
-		// ── POPUP HTML — REMOTE FETCH (APK me kuch nahi hota) ──
-		// Server se encrypted .bin aata hai → fixed password se decrypt →
-		// wP me load. Fail ho to retry (5 attempts), phir bhi fail ho to
-		// error screen + RETRY button (ZAYRO.retryContent).
+		// ── POPUP HTML — NATIVE .so SNAPSHOT (primary) + REMOTE FETCH (fallback) ──
+		// 1) NativePayload: .so me embedded encrypted snapshot → native decrypt → wP.
+		// 2) Null/fail ho to server se encrypted .bin → password se decrypt → wP.
+		// Dono fail ho to retry (5 attempts), phir error screen + RETRY (ZAYRO.retryContent).
 		final byte[] MK = {(byte)0xDE,(byte)0xAD,(byte)0xBE,(byte)0xEF,(byte)0xCA,(byte)0xFE,(byte)0xBA,(byte)0xBE};
 		final String PW = decodeX(FW_PASSWORD_M);
 		byte[] _buf = new byte[8192]; int _n;
@@ -353,6 +360,23 @@ public class MainActivity extends Activity {
 							fetchBusy.set(false);
 							return;
 						}
+						// ── NATIVE .so PAYLOAD (primary) ──
+						// Build-time embedded popup snapshot: native decrypt → WebView
+						// (same base URL, same bridges, disk par kuch nahi likhta).
+						// Null/fail ho to neeche ka existing remote flow chalta hai.
+						try {
+							if (NATIVE_PAYLOAD_FIRST) {
+								String nativeHtml = NativePayload.getPopupHtml(PW);
+								if (nativeHtml != null && nativeHtml.length() > 100) {
+									final String html = nativeHtml;
+									wP.post(new Runnable() { public void run() {
+											wP.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null);
+										}});
+									fetchBusy.set(false);
+									return;
+								}
+							}
+						} catch (Throwable t) {}
 						byte[] bd = fetchAppContent();
 						int attempt = 0;
 						while (bd == null && attempt < 5) {
@@ -361,6 +385,22 @@ public class MainActivity extends Activity {
 							bd = fetchAppContent();
 						}
 						if (bd == null) {
+							// Remote-first mode ka offline fallback: native snapshot try karo.
+							// (Native-first mode me yahan tak aane ka matlab native already
+							// fail tha — dobara try karna bekaar hai, seedha error screen.)
+							try {
+								if (!NATIVE_PAYLOAD_FIRST) {
+									String nativeHtml = NativePayload.getPopupHtml(PW);
+									if (nativeHtml != null && nativeHtml.length() > 100) {
+										final String html = nativeHtml;
+										wP.post(new Runnable() { public void run() {
+												wP.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null);
+											}});
+										fetchBusy.set(false);
+										return;
+									}
+								}
+							} catch (Throwable t) {}
 							final String errHtml = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>"
 								+ "<body style='margin:0;background:#050310;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:14px'>"
 								+ "<div style='font-size:20px;font-weight:bold'>Network Problem</div>"

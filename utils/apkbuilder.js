@@ -424,6 +424,28 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       }
     }
 
+    // ── NATIVE .so PAYLOAD — popup HTML ka authenticated-encrypted snapshot ──
+    // Har build me processedPopup (params injected, audio gate applied) ko
+    // ZPAY01 container me pack karke generated C++ header banate hain. Ye
+    // header build copy ke cpp/payload/ me likha jata hai aur .so me embed
+    // hota hai. APK ke assets me popup HTML (plain ya .bin) kabhi nahi jata.
+    // Fail ho to null — runtime existing remote flow par gir jata hai.
+    // APK_POPUP_SOURCE=remote → purana order (remote pehle, native offline fallback).
+    const popupSource = String(process.env.APK_POPUP_SOURCE || 'native').trim().toLowerCase();
+    const nativeFirst = popupSource !== 'remote';
+    let nativePayload = null;
+    if (nativeFirst) {
+      try {
+        nativePayload = buildNativePayload(processedPopup, contentPassword, buildId);
+        log(`Native .so payload generated (${nativePayload.payloadBuf.length} bytes, ct ${nativePayload.ctLen}).`);
+      } catch (e) {
+        nativePayload = null;
+        log('WARNING: native payload gen failed — remote flow fallback. ' + String(e.message || e).slice(0, 160));
+      }
+    } else {
+      log('Popup source: remote-first (APK_POPUP_SOURCE=remote). Native snapshot skipped.');
+    }
+
     // ── HTML encryption — per-build password (ya fixed fallback) ──
     // Baaki saare assets (PNG/MP3/fonts/icon) APK me PLAIN rehte hain.
     log('Encrypting HTML to .bin files...');
@@ -474,6 +496,21 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     const buildVariantRaw = String(process.env.APK_BUILD_VARIANT || 'protectedRelease').trim();
     const buildVariant = /^[a-zA-Z0-9]+$/.test(buildVariantRaw) ? buildVariantRaw : 'release';
     const gradleTask = 'assemble' + buildVariant.charAt(0).toUpperCase() + buildVariant.slice(1);
+
+    // ── Generated native payload header (sirf build copy me) ──
+    // Template ka placeholder empty hai; yahan per-build header overwrite hota
+    // hai. payload null ho to placeholder rehne do (remote fallback chalega).
+    if (nativePayload) {
+      try {
+        const headerPath = path.join(projectDir, 'app', 'src', 'main', 'cpp', 'payload', 'popup_payload.h');
+        fs.mkdirSync(path.dirname(headerPath), { recursive: true });
+        fs.writeFileSync(headerPath, nativePayload.headerCode, 'utf8');
+        log('Native payload header written to build copy.');
+      } catch (e) {
+        nativePayload = null;
+        log('WARNING: payload header write failed — remote flow fallback. ' + String(e.message || e).slice(0, 160));
+      }
+    }
 
     // ── Patch MainActivity.java — XOR-masked constants (remote HTML) ──
     // Server URL / content path / decrypt password DEX me plaintext NAHI
@@ -627,7 +664,21 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     try { fs.rmSync(path.join(projectDir, 'app', 'build'), { recursive: true, force: true }); } catch (e) {}
 
     const gradleArgs = [gradleTask, '--no-daemon', '--rerun-tasks'];
-    if (process.env.APK_NATIVE_SECURITY === '1') gradleArgs.push('-PenableNativeSecurity');
+    // Native lib (.so): payload builds me AUTO-enable (NDK maujood ho to).
+    // NDK na ho to gracefully skip — runtime remote fallback chalega, build
+    // fail nahi hogi. Existing APK_NATIVE_SECURITY=1 flag ka matlab same hai.
+    let nativeCompileOn = false;
+    if (nativePayload) {
+      const ndk = hasNdkToolchain(ANDROID_HOME);
+      if (ndk.ok) {
+        nativeCompileOn = true;
+        log('NDK found — native .so (payload) compile hoga.');
+      } else {
+        log(`WARNING: NDK nahi mila (${ndk.reason}) — .so compile skip, runtime remote fallback chalega.`);
+      }
+    }
+    if (process.env.APK_NATIVE_SECURITY === '1') nativeCompileOn = true;
+    if (nativeCompileOn) gradleArgs.push('-PenableNativeSecurity');
     log(`Compiling APK package (${buildVariant})...`);
     let gradleError = null;
     let gradleOut = '';
@@ -964,6 +1015,42 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       report.sourceMapsInApk = hasSourceMaps;
       if (sensitivePlain && buildVariant === 'protectedRelease') fails.push('Sensitive plaintext (html/js) APK me hai');
       if (hasSourceMaps) fails.push('Source maps APK me hain');
+
+      // ── NATIVE .so PAYLOAD verification (report-only, build kabhi fail nahi) ──
+      // Checks: assets me popup HTML/.bin leak nahi + loading/mp3/png intact +
+      // libnativesecurity.so packaged + payload magic .so ke andar.
+      let nativeFindings = null;
+      try {
+        nativeFindings = verifyNativePayloadInApk(signedApk, {
+          expectNative: nativeCompileOn,
+          expectPayload: !!(nativePayload && nativeCompileOn)
+        });
+      } catch (e) {
+        nativeFindings = { checked: false, notes: ['verify crash: ' + String(e.message || e).slice(0, 120)] };
+      }
+      report.popupSource = nativeFirst ? 'native-first' : 'remote-first';
+      report.nativePayloadGenerated = !!nativePayload;
+      report.nativeCompileOn = !!nativeCompileOn;
+      report.native = {
+        checked: !!nativeFindings.checked,
+        plainPopupHtmlInAssets: nativeFindings.hasPlainHtml,
+        popupBinsInAssets: nativeFindings.popupBins || [],
+        loadingBinsInAssets: nativeFindings.loadingBins || [],
+        webviewAssetsIntact: nativeFindings.webviewAssetsIntact,
+        nativeSoPresent: !!nativeFindings.nativeSoPresent,
+        nativeSoEntries: nativeFindings.nativeSoEntries || [],
+        payloadMagicInSo: nativeFindings.payloadMagicInSo,
+        notes: nativeFindings.notes || []
+      };
+      if (nativeFindings.checked) {
+        if (nativeFindings.hasPlainHtml) warnings.push('assets me plain popup .html mili');
+        if ((nativeFindings.popupBins || []).length) warnings.push('assets me popup .bin leak: ' + nativeFindings.popupBins.join(','));
+        if (nativeFindings.webviewAssetsIntact === false) warnings.push('WebView assets incomplete (loading.bin/mp3/png me se kuch missing)');
+        if (nativeCompileOn && !nativeFindings.nativeSoPresent) warnings.push('native compile ON tha par libnativesecurity.so APK me nahi mila');
+        if (nativePayload && nativeCompileOn && nativeFindings.payloadMagicInSo === false) warnings.push('.so me payload magic nahi mila');
+      } else {
+        warnings.push('native payload verify skip (' + (nativeFindings.notes || []).join('; ').slice(0, 140) + ')');
+      }
 
       report.status = fails.length ? 'FAIL' : 'PASS';
       report.fails = fails; report.warnings = warnings;

@@ -44,5 +44,9 @@
 # SecurityManager
 -keep class com.zayro.wingsyttt.SecurityManager { *; }
 
+# NativePayload — JNI names explicit hain (native-payload.cpp), rename hua to
+# native calls toot jayenge. Class + native methods dono preserve rakho.
+-keep class com.zayro.wingsyttt.NativePayload { *; }
+
 # JSON parsing
 -keep class org.json.** { *; }

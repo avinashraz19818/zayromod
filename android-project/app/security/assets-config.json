@@ -1,7 +1,8 @@
 {
-  "_comment": "Asset protection classification (build-time processor isi ko use karta hai). Yahan KOI real secret mat rakho.",
+  "_comment": "Asset protection classification (doc-only; build pipeline code me hai). Yahan KOI real secret mat rakho.",
   "protectedExtensions": [".html", ".js", ".json", ".xml", ".txt", ".dat", ".bin"],
   "sensitivePaths": ["assets/config/", "assets/internal/"],
   "publicAlwaysPlain": [".mp3", ".png", ".jpg", ".jpeg", ".ttf", ".otf", ".webp", ".gif", ".ogg"],
-  "_whyPublicAlwaysPlain": "WebView + MediaPlayer inhe seedha assets se load karte hain (file:// base URL) — encrypt karne par sounds/images toot jate hain. Popup HTML waise bhi APK me hota hi nahi (remote content)."
+  "_whyPublicAlwaysPlain": "WebView + MediaPlayer inhe seedha assets se load karte hain (file:// base URL) — encrypt karne par sounds/images toot jate hain.",
+  "_popupHtml": "Popup HTML assets me NAHI hota: native .so me ZPAY01 snapshot (primary) + server remote content (fallback). Loading splash loading.bin (encrypted) assets me rehta hai — existing behavior."
 }
