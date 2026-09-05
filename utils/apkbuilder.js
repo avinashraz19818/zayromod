@@ -3,6 +3,7 @@ const path = require('path');
 const { execFileSync, fork } = require('child_process');
 const sharp = require('sharp');
 const { encryptHtmlToBin, FIXED_PASSWORD, generateBuildPassword } = require('./encrypt');
+const { buildNativePayload, hasNdkToolchain, verifyNativePayloadInApk } = require('./native-payload');
 const crypto = require('crypto');
 const { extractDomain, buildUrls, injectParams, isDhaniUrl } = require('./htmlprocessor');
 const { applyFontStyle } = require('./fontstyles');

@@ -52,6 +52,25 @@ try {
 } catch (e) { bad('node --check', String(e.message).slice(0, 200)); }
 
 try {
+  // Regression: apkbuilder.js me native-payload ka require + har used fn import hona chahiye
+  const ab = fs.readFileSync(path.join(REPO, 'utils', 'apkbuilder.js'), 'utf8');
+  const imp = ab.match(/const\s*\{([^}]*)\}\s*=\s*require\(['"]\.\/native-payload['"]\)/);
+  if (!imp) { bad('apkbuilder imports native-payload', 'require line MISSING — payload kabhi nahi banega!'); }
+  else {
+    const imported = imp[1].split(',').map(s => s.trim()).filter(Boolean);
+    const candidates = ['buildNativePayload', 'hasNdkToolchain', 'verifyNativePayloadInApk',
+      'encryptPopupPayload', 'generatePepperHex', 'parsePayloadHeader', 'buildPayloadHeader',
+      'checkApkEntriesForHtmlLeak', 'soContainsPayloadMagic'];
+    const used = [...new Set(candidates.filter(n =>
+      new RegExp('[^\\w$]' + n + '\\s*\\(').test(ab.replace(imp[0], ''))))];
+    const missing = used.filter(n => !imported.includes(n));
+    if (missing.length) bad('apkbuilder native-payload imports', 'used but NOT imported: ' + missing.join(','));
+    else if (!used.length) bad('apkbuilder native-payload imports', 'koi usage hi nahi mila?!');
+    else ok('apkbuilder imports all used native-payload fns (' + used.join(', ') + ')');
+  }
+} catch (e) { bad('apkbuilder import check', String(e.message).slice(0, 160)); }
+
+try {
   const main = fs.readFileSync(path.join(JAVA_DIR, 'MainActivity.java'), 'utf8');
   const anchors = [
     'private static final byte[] APP_SERVER_URL_M = new byte[]{ 0, 0 };',
