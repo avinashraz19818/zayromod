@@ -8,6 +8,7 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const https = require('https');
+const sharp = require('sharp');
 
 const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
@@ -271,9 +272,17 @@ app.get('/api/files/:name', (req, res) => {
 });
 
 // ── Multer configs ──
-const iconUpload    = multer({ dest: path.join(__dirname, 'uploads'), limits: { fileSize: 5   * 1024 * 1024 } });
+const iconUpload    = multer({ dest: path.join(__dirname, 'uploads'), limits: { fileSize: 25  * 1024 * 1024 } });
 const adminUpload   = multer({ dest: path.join(__dirname, 'uploads'), limits: { fileSize: 50  * 1024 * 1024 } });
 const projectUpload = multer({ dest: path.join(__dirname, 'uploads'), limits: { fileSize: 200 * 1024 * 1024 } });
+
+// Bada order icon ho to khud compress karo (reject mat karo). Max 1024px PNG;
+// build pipeline aage ise 72-192px karta hi hai, to visible quality loss zero.
+async function compressOrderIcon(filePath) {
+  const tmp = filePath + '.small.png';
+  await sharp(filePath).rotate().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).png({ compressionLevel: 9 }).toFile(tmp);
+  fs.renameSync(tmp, filePath);
+}
 
 // ── Init Telegram ──
 const tgSettings = db.prepare('SELECT value FROM settings WHERE key=?');
@@ -1042,6 +1051,15 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   _pkgCounter++;
   const packageName = makePackageName(app_name, _pkgCounter);
   const iconFile = req.file ? path.basename(req.file.path) : null;
+
+  if (req.file) {
+    try {
+      await compressOrderIcon(req.file.path);
+    } catch (e) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+      return res.status(400).json({ error: 'Icon image valid nahi hai — PNG/JPG icon lagao.' });
+    }
+  }
 
   const tempPath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
   const orderResult = db.prepare(`
@@ -2715,6 +2733,15 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
   const packageName = makePackageName(app_name, _pkgCounter);
   const iconFile = req.file ? path.basename(req.file.path) : null;
 
+  if (req.file) {
+    try {
+      await compressOrderIcon(req.file.path);
+    } catch (e) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+      return res.status(400).json({ error: 'Icon image valid nahi hai — PNG/JPG icon lagao.' });
+    }
+  }
+
   // FREE order — coins_spent = 0, koi deduction nahi. Temp path ke saath
   // INSERT, phir orderId wala UNIQUE path set hota hai.
   const tempPath = `zayro${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
@@ -3230,7 +3257,7 @@ app.use((err, req, res, next) => {
     // Multer (file upload) errors → user-friendly 400
     if (err && (err.name === 'MulterError' || code.startsWith('LIMIT_'))) {
       let friendly = 'File upload failed. Please try a smaller file.';
-      if (code === 'LIMIT_FILE_SIZE') friendly = 'Icon zyada bada hai — 5MB se chhota icon lagao.';
+      if (code === 'LIMIT_FILE_SIZE') friendly = 'Icon bahut bada hai — 25MB se chhota icon lagao.';
       if (code === 'LIMIT_UNEXPECTED_FILE') friendly = 'Unexpected file field. Please retry.';
       return res.status(400).json({ error: friendly });
     }
