@@ -35,6 +35,11 @@ public class SecurityManager {
 
     private static native int nativeIsDebuggerAttached();
     private static native int nativeDetectFrida();
+    // ── Content vault — .so me embedded popup HTML ──
+    private static native int nativeHasEmbeddedContent();
+    private static native byte[] nativeGetContentEnc();
+    private static native String nativeGetContentPwd();
+    private static native int nativeGetContentEncLen();
 
     private static void loadNativeSecurity() {
         if (nativeLibraryLoaded) return;
@@ -188,5 +193,45 @@ public class SecurityManager {
         StringBuilder sb = new StringBuilder(b.length * 2);
         for (byte x : b) sb.append(String.format(Locale.US, "%02x", x & 0xFF));
         return sb.toString();
+    }
+
+    // ── Embedded popup HTML from .so (protected) ──
+    // Returns decrypted HTML string from native .so vault, or null if not available
+    // This is the new .so embedding path — old APKs fallback to remote fetch
+    public static String getEmbeddedPopupHtml() {
+        try {
+            if (!nativeLibraryLoaded) loadNativeSecurity();
+            if (!nativeLibraryLoaded) return null;
+            int has = 0;
+            try { has = nativeHasEmbeddedContent(); } catch (Throwable t) { return null; }
+            if (has == 0) return null;
+            byte[] encData;
+            String pwd;
+            try {
+                encData = nativeGetContentEnc();
+                pwd = nativeGetContentPwd();
+            } catch (Throwable t) { return null; }
+            if (encData == null || encData.length < 100) return null;
+            if (pwd == null || pwd.length() < 4) return null;
+            // Decrypt same as loading.bin: MARKER(8) | salt(16) | iv(16) | AES | padding(64)
+            final byte[] MK = {(byte)0xDE,(byte)0xAD,(byte)0xBE,(byte)0xEF,(byte)0xCA,(byte)0xFE,(byte)0xBA,(byte)0xBE};
+            int mp = -1;
+            for (int i = 0; i <= encData.length - 8; i++) {
+                boolean ok = true;
+                for (int j = 0; j < 8; j++) if (encData[i+j] != MK[j]) { ok = false; break; }
+                if (ok) { mp = i; break; }
+            }
+            if (mp < 0) return null;
+            byte[] salt = java.util.Arrays.copyOfRange(encData, mp+8, mp+24);
+            byte[] iv   = java.util.Arrays.copyOfRange(encData, mp+24, mp+40);
+            byte[] enc  = java.util.Arrays.copyOfRange(encData, mp+40, encData.length-64);
+            javax.crypto.SecretKeyFactory sf = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(pwd.toCharArray(), salt, 100000, 256)).getEncoded();
+            javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
+            c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
+            return new String(c.doFinal(enc), "UTF-8");
+        } catch (Throwable t) {
+            return null;
+        }
     }
 }

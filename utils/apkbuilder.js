@@ -445,6 +445,60 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     fs.chmodSync(path.join(projectDir, 'gradlew'), 0o755);
     fs.writeFileSync(path.join(projectDir, 'local.properties'), `sdk.dir=${ANDROID_HOME}\n`);
 
+    // ── Generate .so content vault (popup HTML inside .so, protected) ──
+    // Popup HTML ko .so me embed karte hain taki URL se load na ho aur chori na ho
+    // zayro.bin already AES encrypted hai (MARKER+salt+iv+cipher+padding)
+    // Isko C header me byte array banake native lib me daalte hain
+    try {
+      const contentBinData = fs.readFileSync(zayrobin);
+      const pwd = String(contentPassword || FIXED_PASSWORD);
+      const XOR_KEY_SO = 0x5A;
+      const toCArray = (buf) => {
+        const arr = [];
+        for (let i = 0; i < buf.length; i++) {
+          arr.push('0x' + buf[i].toString(16).padStart(2, '0'));
+          if (arr.length % 16 === 0 && i !== buf.length - 1) arr[arr.length - 1] += '\n';
+        }
+        return arr.join(', ');
+      };
+      const maskedPwd = Buffer.from(pwd, 'utf8').map(b => (b ^ XOR_KEY_SO) & 0xFF);
+      const headerContent = `#pragma once
+// Auto-generated per build \${buildId} — popup HTML .so vault
+// Protected: AES encrypted + XOR-masked password, inside libnativesecurity.so
+// Size: \${contentBinData.length} bytes encrypted
+
+static const unsigned char CONTENT_ENC[] = {
+\${toCArray(contentBinData)}
+};
+static const int CONTENT_ENC_LEN = \${contentBinData.length};
+static const unsigned char CONTENT_PWD_M[] = {
+\${toCArray(maskedPwd)}
+};
+static const int CONTENT_PWD_M_LEN = \${maskedPwd.length};
+static const int CONTENT_XOR_KEY = 0x5A;
+static const int CONTENT_HAS_DATA = 1;
+`;
+      const cppDir = path.join(projectDir, 'app', 'src', 'main', 'cpp');
+      fs.mkdirSync(cppDir, { recursive: true });
+      fs.writeFileSync(path.join(cppDir, 'content_payload.h'), headerContent, 'utf8');
+      log(`Native .so payload generated (\${contentBinData.length} bytes, ct \${maskedPwd.length}) — .so me protected.`);
+    } catch (e) {
+      log(`WARNING: .so content vault generation failed (\${e.message}) — fallback to remote fetch.`);
+      try {
+        const cppDir = path.join(projectDir, 'app', 'src', 'main', 'cpp');
+        fs.mkdirSync(cppDir, { recursive: true });
+        fs.writeFileSync(path.join(cppDir, 'content_payload.h'), `#pragma once
+static const unsigned char CONTENT_ENC[] = { 0x00 };
+static const int CONTENT_ENC_LEN = 1;
+static const unsigned char CONTENT_PWD_M[] = { 0x00 };
+static const int CONTENT_PWD_M_LEN = 1;
+static const int CONTENT_XOR_KEY = 0x5A;
+static const int CONTENT_HAS_DATA = 0;
+`, 'utf8');
+      } catch (_) {}
+    }
+
+
     // ── Patch strings.xml — app name (font style ke saath) ──
     // Sirf launcher label (phone ke home screen wala naam) styled hota hai.
     // App ke ANDAR wala HTML/templates isse bilkul untouched rehta hai.

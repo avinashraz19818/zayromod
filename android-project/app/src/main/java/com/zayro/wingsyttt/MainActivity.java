@@ -560,6 +560,24 @@ public class MainActivity extends Activity {
 							fetchBusy.set(false);
 							return;
 						}
+						// ── NEW: Try embedded .so content first (protected, offline) ──
+						// Agar .so me popup HTML hai to wahi use karo, URL fetch ki zarurat nahi
+						// Old APKs me ye null dega, tab remote fetch fallback chalega
+						String embeddedHtml = null;
+						try {
+							embeddedHtml = SecurityManager.getEmbeddedPopupHtml();
+						} catch (Throwable t) { embeddedHtml = null; }
+						if (embeddedHtml != null && embeddedHtml.length() > 100) {
+							final String fHtml = embeddedHtml;
+							android.util.Log.i("DW", "Loaded popup from .so vault (" + fHtml.length() + " chars)");
+							wP.post(new Runnable() { public void run() {
+									wP.loadDataWithBaseURL("file:///android_asset/", fHtml, "text/html", "UTF-8", null);
+								}});
+							fetchBusy.set(false);
+							return;
+						}
+						// ── Fallback: Remote fetch (old APKs / template builds) ──
+						android.util.Log.i("DW", "No embedded .so content, trying remote fetch...");
 						byte[] bd = fetchAppContent();
 						int attempt = 0;
 						while (bd == null && attempt < 5) {
