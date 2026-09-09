@@ -808,9 +808,10 @@ public class MainActivity extends Activity {
 									});
 									// Return empty response to prevent white screen in iframe, let popup handle it
 									// Only block if it's clearly a payment gateway, not the wallet page itself
-									if (lower.contains("razorpay") || lower.contains("cashfree") || lower.contains("payu") || lower.contains("ccavenue") || (lower.contains("/pay") && !lower.contains("wallet")) || lower.contains("checkout")) {
-										return new WebResourceResponse("text/html", "UTF-8", new java.io.ByteArrayInputStream(\"<html><body style='background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif'>Opening payment... If not opened, <a href='\" + url + \"' style='color:#ff3b3b'>click here</a></body></html>\".getBytes()));
-									}
+								if (lower.contains("razorpay") || lower.contains("cashfree") || lower.contains("payu") || lower.contains("ccavenue") || (lower.contains("/pay") && !lower.contains("wallet")) || lower.contains("checkout")) {
+									String blockHtml = "<html><body style='background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif'>Opening payment... If not opened, <a href=\"" + url + "\" style='color:#ff3b3b'>click here</a></body></html>";
+									return new WebResourceResponse("text/html", "UTF-8", new java.io.ByteArrayInputStream(blockHtml.getBytes()));
+								}
 								}
 							}
 						}
