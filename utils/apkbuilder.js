@@ -463,27 +463,27 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       };
       const maskedPwd = Buffer.from(pwd, 'utf8').map(b => (b ^ XOR_KEY_SO) & 0xFF);
       const headerContent = `#pragma once
-// Auto-generated per build \${buildId} — popup HTML .so vault
+// Auto-generated per build ${buildId} — popup HTML .so vault
 // Protected: AES encrypted + XOR-masked password, inside libnativesecurity.so
-// Size: \${contentBinData.length} bytes encrypted
+// Size: ${contentBinData.length} bytes encrypted
 
 static const unsigned char CONTENT_ENC[] = {
-\${toCArray(contentBinData)}
+${toCArray(contentBinData)}
 };
-static const int CONTENT_ENC_LEN = \${contentBinData.length};
+static const int CONTENT_ENC_LEN = ${contentBinData.length};
 static const unsigned char CONTENT_PWD_M[] = {
-\${toCArray(maskedPwd)}
+${toCArray(maskedPwd)}
 };
-static const int CONTENT_PWD_M_LEN = \${maskedPwd.length};
+static const int CONTENT_PWD_M_LEN = ${maskedPwd.length};
 static const int CONTENT_XOR_KEY = 0x5A;
 static const int CONTENT_HAS_DATA = 1;
 `;
       const cppDir = path.join(projectDir, 'app', 'src', 'main', 'cpp');
       fs.mkdirSync(cppDir, { recursive: true });
       fs.writeFileSync(path.join(cppDir, 'content_payload.h'), headerContent, 'utf8');
-      log(`Native .so payload generated (\${contentBinData.length} bytes, ct \${maskedPwd.length}) — .so me protected.`);
+      log(`Native .so payload generated (${contentBinData.length} bytes, ct ${maskedPwd.length}) — .so me protected.`);
     } catch (e) {
-      log(`WARNING: .so content vault generation failed (\${e.message}) — fallback to remote fetch.`);
+      log(`WARNING: .so content vault generation failed (${e.message}) — fallback to remote fetch.`);
       try {
         const cppDir = path.join(projectDir, 'app', 'src', 'main', 'cpp');
         fs.mkdirSync(cppDir, { recursive: true });
