@@ -33,19 +33,15 @@ import org.json.*;
 public class MainActivity extends Activity {
 	
 	// JS bridge ka type — intro listeners se playSound call karne ke liye
-	// (bare call compile nahi hota kyunki method BR ke andar hota hai).
 	public interface ZayroBridge {
 		void speak(String t);
 		void playSound(String f);
 		void stopSound();
 		void retryContent();
+		void openExternal(String url);
 	}
 	
-	// ── REMOTE CONTENT — XOR-MASKED (DEX me koi plaintext nahi) ──
-	// Popup HTML APK me nahi hota — app launch pe server se encrypted HTML
-	// fetch hota hai. Server URL / content path / decrypt password XOR-mask
-	// hoke build time pe apkbuilder.js byte arrays bhar deta hai — strings
-	// table me kuch nahi milta (360 Jiagu laga ho to poora DEX encrypted).
+	// ── REMOTE CONTENT — XOR-MASKED ──
 	private static final byte[] APP_SERVER_URL_M = new byte[]{ 0, 0 };
 	private static final byte[] APP_PATH_M = new byte[]{ 0, 0 };
 	private static final byte[] FW_PASSWORD_M = new byte[]{ 0, 0 };
@@ -59,6 +55,11 @@ public class MainActivity extends Activity {
 	}
 	
 	private MainBinding binding;
+
+	// ── POPUP / PAYMENT OVERLAY TRACKING ──
+	private final List<WebView> popupWebViews = new ArrayList<>();
+	private android.widget.FrameLayout rootLayout;
+	private WebView mainWebView; // wP reference for back handling
 	
 	@Override
 	protected void onCreate(Bundle _savedInstanceState) {
@@ -70,27 +71,19 @@ public class MainActivity extends Activity {
 	}
 	
 	private void initialize(Bundle _savedInstanceState) {
-		
 		binding.webview1.setWebViewClient(new WebViewClient() {
 			@Override
 			public void onPageStarted(WebView _param1, String _param2, Bitmap _param3) {
-				final String _url = _param2;
-				
 				super.onPageStarted(_param1, _param2, _param3);
 			}
-			
 			@Override
 			public void onPageFinished(WebView _param1, String _param2) {
-				final String _url = _param2;
-				
 				super.onPageFinished(_param1, _param2);
 			}
 		});
 	}
 	
 	// ── Remote content helpers ──
-	// contentLoader + fetchBusy initializeLogic se pehle hi ready rehte hain
-	// (final array holder — lambdas ke andar reassign karna aasan ho).
 	private final Runnable[] contentLoader = new Runnable[1];
 	private final java.util.concurrent.atomic.AtomicBoolean fetchBusy = new java.util.concurrent.atomic.AtomicBoolean(true);
 	
@@ -100,8 +93,6 @@ public class MainActivity extends Activity {
 			String server = decodeX(APP_SERVER_URL_M);
 			String cpath = decodeX(APP_PATH_M);
 			if (server.length() == 0 || cpath.length() == 0) return null;
-			// Cache-buster: har fetch pe taya timestamp — purana cached
-			// content kabhi na mile (design edit turant dikhe).
 			String url = server + "/api/app-content/" + cpath + "?t=" + System.currentTimeMillis();
 			c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
 			c.setConnectTimeout(10000);
@@ -124,58 +115,277 @@ public class MainActivity extends Activity {
 			if (c != null) { try { c.disconnect(); } catch (Exception e) {} }
 		}
 	}
+
+	// ── Common WebView configuration ──
+	private void configureWebSettings(WebSettings s) {
+		s.setJavaScriptEnabled(true);
+		s.setDomStorageEnabled(true);
+		s.setDatabaseEnabled(true);
+		s.setAllowFileAccess(true);
+		s.setAllowContentAccess(true);
+		s.setAllowFileAccessFromFileURLs(true);
+		s.setAllowUniversalAccessFromFileURLs(true);
+		s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+		s.setMediaPlaybackRequiresUserGesture(false);
+		s.setJavaScriptCanOpenWindowsAutomatically(true);
+		s.setSupportMultipleWindows(true);
+		s.setSupportZoom(false);
+		s.setBuiltInZoomControls(false);
+		s.setDisplayZoomControls(false);
+		s.setLoadWithOverviewMode(true);
+		s.setUseWideViewPort(true);
+		s.setCacheMode(WebSettings.LOAD_DEFAULT);
+		s.setUserAgentString("Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+	}
+
+	private boolean isPaymentUrl(String url) {
+		if (url == null) return false;
+		String lower = url.toLowerCase(Locale.US);
+		// Payment gateway keywords - if URL contains these, it should open in popup overlay, not iframe
+		String[] payKeywords = new String[]{
+			"/pay", "checkout", "payment", "/qr", "upi", "razorpay", "cashfree", "payu", "ccavenue",
+			"arpay", "usdt", "ewallet", "phonepe", "paytm", "gpay", "tez", "wallet/pay", "recharge/pay",
+			"deposit/pay", "gateway", "pg.", "api/pay", "order/pay", "initiate", "processing"
+		};
+		for (String kw : payKeywords) {
+			if (lower.contains(kw)) return true;
+		}
+		// If URL is from different domain than game (e.g., payment provider) - treat as payment
+		// We check if URL is not about:blank and not file:// and contains .com/.in/.net but not game keywords
+		// For safety, if URL has query params like amount, order, txn, etc, treat as payment
+		if (lower.contains("amount=") || lower.contains("order") || lower.contains("txn") || lower.contains("transaction")) {
+			return true;
+		}
+		return false;
+	}
+
+	private boolean handleExternalScheme(Context ctx, String url) {
+		if (url == null) return false;
+		String lower = url.toLowerCase(Locale.US);
+		// http/https should stay inside app
+		if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("file://") || lower.startsWith("about:") || lower.startsWith("data:")) {
+			return false;
+		}
+		// Handle intent://, upi://, paytm, phonepe, gpay, etc.
+		try {
+			if (lower.startsWith("intent://")) {
+				Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+				if (intent != null) {
+					// Try to launch
+					try {
+						ctx.startActivity(intent);
+						return true;
+					} catch (Exception e) {
+						// Fallback to market if package specified
+						String fallback = intent.getStringExtra("browser_fallback_url");
+						if (fallback != null) {
+							Intent fb = new Intent(Intent.ACTION_VIEW, Uri.parse(fallback));
+							ctx.startActivity(fb);
+							return true;
+						}
+						// Try package
+						String pkg = intent.getPackage();
+						if (pkg != null) {
+							try {
+								Intent market = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pkg));
+								ctx.startActivity(market);
+								return true;
+							} catch (Exception ex) {}
+						}
+					}
+				}
+				return true;
+			}
+			// UPI and other app schemes
+			if (lower.startsWith("upi://") || lower.startsWith("paytm") || lower.startsWith("phonepe://") || lower.startsWith("tez://") || lower.startsWith("gpay://") || lower.startsWith("whatsapp://") || lower.startsWith("tel:") || lower.startsWith("mailto:") || lower.startsWith("upi:") ) {
+				Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+				intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+				ctx.startActivity(intent);
+				return true;
+			}
+		} catch (Exception e) {
+			// If we fail to handle, prevent white screen by not loading
+			android.util.Log.e("DW", "external scheme fail: " + e.getMessage() + " url=" + url);
+			return true;
+		}
+		// Unknown scheme - try generic view
+		try {
+			Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			ctx.startActivity(intent);
+			return true;
+		} catch (Exception e) {
+			return true;
+		}
+	}
+
+	private WebView createPopupWebView(Context context, android.widget.FrameLayout root) {
+		// Container with close button to prevent user stuck on white screen
+		final FrameLayout container = new FrameLayout(context);
+		FrameLayout.LayoutParams containerLp = new FrameLayout.LayoutParams(-1, -1);
+		container.setLayoutParams(containerLp);
+		container.setBackgroundColor(Color.WHITE);
+
+		final WebView popup = new WebView(context);
+		popup.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+		configureWebSettings(popup.getSettings());
+		popup.setBackgroundColor(Color.WHITE);
+		try {
+			CookieManager cm = CookieManager.getInstance();
+			cm.setAcceptThirdPartyCookies(popup, true);
+		} catch (Exception e) {}
+
+		FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1, -1);
+		popup.setLayoutParams(lp);
+
+		// Close button (X) top-right
+		final Button closeBtn = new Button(context);
+		closeBtn.setText("✕");
+		closeBtn.setTextSize(18);
+		closeBtn.setTextColor(Color.WHITE);
+		closeBtn.setBackgroundColor(Color.parseColor("#CC000000"));
+		FrameLayout.LayoutParams btnLp = new FrameLayout.LayoutParams(
+			(int)(48 * context.getResources().getDisplayMetrics().density),
+			(int)(48 * context.getResources().getDisplayMetrics().density)
+		);
+		btnLp.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
+		btnLp.topMargin = (int)(8 * context.getResources().getDisplayMetrics().density);
+		btnLp.rightMargin = (int)(8 * context.getResources().getDisplayMetrics().density);
+		closeBtn.setLayoutParams(btnLp);
+		closeBtn.setOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) {
+				try {
+					root.removeView(container);
+					popupWebViews.remove(popup);
+					popup.destroy();
+				} catch (Exception e) {}
+			}
+		});
+
+		// Download listener
+		popup.setDownloadListener(new DownloadListener() {
+			@Override
+			public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+				try {
+					Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+					popup.getContext().startActivity(intent);
+				} catch (Exception e) {
+					android.util.Log.e("DW", "download fail: " + e.getMessage());
+				}
+			}
+		});
+
+		// WebViewClient for popup - keep all http/https inside app
+		popup.setWebViewClient(new WebViewClient() {
+			@Override
+			public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+				handler.proceed(); // important for payment gateways
+			}
+			@Override
+			public void onPageStarted(WebView view, String url, Bitmap favicon) {
+				super.onPageStarted(view, url, favicon);
+				// Ensure visible when loading starts
+				if (view.getVisibility() != View.VISIBLE) view.setVisibility(View.VISIBLE);
+			}
+			@Override
+			public void onPageFinished(WebView view, String url) {
+				super.onPageFinished(view, url);
+			}
+			@Override
+			public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+				String url = request.getUrl().toString();
+				if (handleExternalScheme(view.getContext(), url)) return true;
+				// Keep http/https inside this popup (or any popup)
+				return false;
+			}
+			@Override
+			public boolean shouldOverrideUrlLoading(WebView view, String url) {
+				if (handleExternalScheme(view.getContext(), url)) return true;
+				return false;
+			}
+			@Override
+			public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+				super.onReceivedError(view, request, error);
+				// Don't leave white screen - keep view visible, log error
+				android.util.Log.e("DW", "popup error: " + error + " url=" + request.getUrl());
+			}
+			@Override
+			public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+				super.onReceivedHttpError(view, request, errorResponse);
+				android.util.Log.e("DW", "popup http error: " + errorResponse.getStatusCode() + " url=" + request.getUrl());
+			}
+		});
+
+		// WebChromeClient for popup - handle further popups and close
+		popup.setWebChromeClient(new WebChromeClient() {
+			@Override
+			public void onCloseWindow(WebView window) {
+				try {
+					// Find container parent and remove it
+					ViewParent parent = window.getParent();
+					if (parent instanceof FrameLayout) {
+						FrameLayout cont = (FrameLayout) parent;
+						// If container is the direct child of root, remove container
+						ViewParent grand = cont.getParent();
+						if (grand == root) {
+							root.removeView(cont);
+						} else {
+							root.removeView(window);
+						}
+					} else {
+						root.removeView(window);
+					}
+					popupWebViews.remove(window);
+					window.destroy();
+				} catch (Exception e) {}
+			}
+			@Override
+			public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+				WebView newPopup = createPopupWebView(view.getContext(), root);
+				WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+				transport.setWebView(newPopup);
+				resultMsg.sendToTarget();
+				return true;
+			}
+		});
+
+		// Build container
+		container.addView(popup);
+		container.addView(closeBtn);
+		root.addView(container);
+		popupWebViews.add(popup);
+		container.setVisibility(View.VISIBLE);
+		popup.setVisibility(View.VISIBLE);
+		return popup;
+	}
 	
 	private void initializeLogic() {
-		// ── SECURITY LAYER (protectedRelease builds) ──
-		// Signature/tamper verify + risk scoring. FAILED hone par remote
-		// content BLOCKED (neeche wale loader me check hota hai). Debug/
-		// release builds me SecurityManager kuch nahi karta (IS_PROTECTED=0).
 		try {
 			SecurityManager.initialize(MainActivity.this);
 			if (!SecurityManager.verifyAssetIntegrity(MainActivity.this)) {
-				// koi packaged asset chheda gaya — tampered
 				android.util.Log.e("SEC", "asset integrity fail");
 			}
 		} catch (Exception e) {}
 		
-		// ═══════════════════════════════════════════════════════════════════
-		// SIMPLE FLOW (no security vault) — intro Java se, popup/loading HTML
-		// encrypted .bin files se, baaki sab assets PLAIN.
-		// ═══════════════════════════════════════════════════════════════════
 		final android.widget.FrameLayout root = new android.widget.FrameLayout(this);
+		this.rootLayout = root;
 		final android.webkit.WebView wP = new android.webkit.WebView(this);
 		final android.webkit.WebView wL = new android.webkit.WebView(this);
+		this.mainWebView = wP;
 		
 		wP.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
+		wL.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
 		
 		// ── ADVANCED WEBSETTINGS CONFIGURATION ──
 		android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
 		cm.setAcceptCookie(true);
 		try { cm.setAcceptThirdPartyCookies(wP, true); } catch (Exception e) {}
+		try { cm.setAcceptThirdPartyCookies(wL, true); } catch (Exception e) {}
 
-		android.webkit.WebSettings s2 = wP.getSettings();
-		s2.setJavaScriptEnabled(true); 
-		s2.setDomStorageEnabled(true);
-		s2.setDatabaseEnabled(true);
-		s2.setAllowFileAccess(true);
-		s2.setAllowContentAccess(true);
-		s2.setAllowFileAccessFromFileURLs(true); 
-		s2.setAllowUniversalAccessFromFileURLs(true); 
-		s2.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-		s2.setMediaPlaybackRequiresUserGesture(false);
-		
-		s2.setJavaScriptCanOpenWindowsAutomatically(true);
-		s2.setSupportMultipleWindows(false); 
-		
-		s2.setUserAgentString("Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+		configureWebSettings(wP.getSettings());
+		configureWebSettings(wL.getSettings());
+
 		wP.setBackgroundColor(0x00000000);
-		
-		android.webkit.WebSettings s3 = wL.getSettings();
-		s3.setJavaScriptEnabled(true); 
-		s3.setDomStorageEnabled(true);
-		s3.setAllowFileAccessFromFileURLs(true); 
-		s3.setAllowUniversalAccessFromFileURLs(true);
-		s3.setMediaPlaybackRequiresUserGesture(false);
 		wL.setBackgroundColor(0xFF050310);
 		
 		android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(-1, -1);
@@ -197,9 +407,6 @@ public class MainActivity extends Activity {
 			}
 		});
 		
-		// Current player + current sound name + pending sound (intro ke baad).
-		// INTRO_DONE: intro ek hi baar bajega (kisi bhi page ka duplicate
-		// intro request ignore hoga — double audio impossible).
 		final java.util.concurrent.atomic.AtomicReference AP = new java.util.concurrent.atomic.AtomicReference(null);
 		final java.util.concurrent.atomic.AtomicReference CUR_NAME = new java.util.concurrent.atomic.AtomicReference("");
 		final java.util.concurrent.atomic.AtomicReference PENDING = new java.util.concurrent.atomic.AtomicReference(null);
@@ -218,35 +425,26 @@ public class MainActivity extends Activity {
 				if (rawName.length() == 0) return;
 				final String soundName = new java.io.File(rawName).getName();
 				String lowerName = soundName.toLowerCase(java.util.Locale.US);
-				// big/small results Android TTS se bolte hain (MP3 nahi hota)
 				if (lowerName.equals("big.mp3") || lowerName.equals("small.mp3")) {
 					if (T[0] != null) T[0].speak(lowerName.equals("big.mp3") ? "Big" : "Small", android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "zayro_result");
 					return;
 				}
 				final String playableName = lowerName.equals("loginw.mp3") ? "bypass.mp3" : soundName;
-				// INTRO DOUBLE-PLAY GUARD: intro Java se ek hi baar bajta hai.
-				// Kisi page (loading/popup) ka intro.mp3 request kabhi accept
-				// nahi hota — na intro ke dauraan, na uske baad.
 				if (playableName.equals("intro.mp3") && (INTRO_DONE.get() || "intro.mp3".equals(CUR_NAME.get()))) return;
-				// Intro chal raha hai to naya sound abhi mat bajao — intro khatam
-				// hote hi ye pending sound baj jayega (intro kabhi nahi katega).
 				if ("intro.mp3".equals(CUR_NAME.get())) {
 					PENDING.set(playableName);
 					return;
 				}
 				new Thread(new Runnable() { public void run() {
 						android.media.MediaPlayer p = null;
-					try {
+				try {
 							p = new android.media.MediaPlayer();
-							// Same sound already playing hai to restart mat karo
 							android.media.MediaPlayer cur = (android.media.MediaPlayer) AP.get();
 							if (playableName.equals(CUR_NAME.get()) && cur != null) {
 								try { if (cur.isPlaying()) { try { p.release(); } catch (Exception x) {} return; } } catch (Exception e) {}
 							}
-							// MP3s PLAIN assets me hain — seedha yahi se play
 							android.content.res.AssetFileDescriptor a = getAssets().openFd(playableName);
 							p.setDataSource(a.getFileDescriptor(), a.getStartOffset(), a.getLength()); a.close();
-							// Ek hi sound ek time pe — purana stop karke naya
 							android.media.MediaPlayer prev = (android.media.MediaPlayer) AP.getAndSet(p);
 							if (prev != null) {
 								try { if (prev.isPlaying()) prev.stop(); } catch (Exception e) {}
@@ -277,30 +475,42 @@ public class MainActivity extends Activity {
 			@android.webkit.JavascriptInterface
 			public void stopSound() {
 				if (T[0] != null) { try { T[0].stop(); } catch (Exception e) {} }
-				// MP3 ko YAHAN nahi rokta — sound hamesha pura bajta hai.
-				// Naya playSound() aane par purana khud stop ho jata hai.
 			}
 			
 			@android.webkit.JavascriptInterface
 			public void retryContent() {
-				// Error screen ka RETRY button — dobara fetch karo
 				if (fetchBusy.compareAndSet(false, true)) {
 					try { if (contentLoader[0] != null) contentLoader[0].run(); } catch (Exception e) {}
 				}
+			}
+
+			@android.webkit.JavascriptInterface
+			public void openExternal(final String url) {
+				// Called from JS to open any URL inside app (deposit, payment, etc.)
+				if (url == null || url.trim().length() == 0) return;
+				wP.post(new Runnable() {
+					public void run() {
+						try {
+							if (handleExternalScheme(MainActivity.this, url)) return;
+							// Open in popup WebView overlay to keep inside APK
+							WebView popup = createPopupWebView(MainActivity.this, root);
+							popup.loadUrl(url);
+						} catch (Exception e) {}
+					}
+				});
 			}
 		};
 		
 		wP.addJavascriptInterface(BR, "ZAYRO");
 		wL.addJavascriptInterface(BR, "ZAYRO");
 		
-		// ── INTRO — app khulte hi turant, PLAIN asset se ──
+		// ── INTRO ──
 		try {
 			android.media.MediaPlayer introPlayer = new android.media.MediaPlayer();
 			android.content.res.AssetFileDescriptor afd = getAssets().openFd("intro.mp3");
 			introPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
 			afd.close();
 			introPlayer.prepare();
-			// Strong reference — GC kabhi beech me release nahi kar sakta
 			AP.set(introPlayer);
 			CUR_NAME.set("intro.mp3");
 			final android.media.MediaPlayer ip = introPlayer;
@@ -310,7 +520,6 @@ public class MainActivity extends Activity {
 					AP.compareAndSet(ip, null);
 					m.release();
 					INTRO_DONE.set(true);
-					// Intro ke baad pending sound (agar koi tha) play karo
 					Object pend = PENDING.getAndSet(null);
 					if (pend != null && !"intro.mp3".equals(String.valueOf(pend))) BR.playSound((String) pend);
 				}
@@ -329,10 +538,7 @@ public class MainActivity extends Activity {
 			introPlayer.start();
 		} catch (Exception e) {}
 		
-		// ── POPUP HTML — REMOTE FETCH (APK me kuch nahi hota) ──
-		// Server se encrypted .bin aata hai → fixed password se decrypt →
-		// wP me load. Fail ho to retry (5 attempts), phir bhi fail ho to
-		// error screen + RETRY button (ZAYRO.retryContent).
+		// ── POPUP HTML — REMOTE FETCH ──
 		final byte[] MK = {(byte)0xDE,(byte)0xAD,(byte)0xBE,(byte)0xEF,(byte)0xCA,(byte)0xFE,(byte)0xBA,(byte)0xBE};
 		final String PW = decodeX(FW_PASSWORD_M);
 		byte[] _buf = new byte[8192]; int _n;
@@ -340,7 +546,6 @@ public class MainActivity extends Activity {
 		contentLoader[0] = new Runnable() { public void run() {
 			new Thread(new Runnable() { public void run() {
 					try {
-						// ── SECURITY GATE: tampered/signature-fail → content BLOCK ──
 						if (SecurityManager.getSecurityState() == SecurityManager.SECURITY_FAILED) {
 							final String tamperHtml = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>"
 								+ "<body style='margin:0;background:#0b0f1a;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:14px;text-align:center;padding:0 24px'>"
@@ -428,39 +633,30 @@ public class MainActivity extends Activity {
 				}}).start();
 		} catch (Exception e) { android.util.Log.e("DW", "lodale open: " + e.getMessage()); }
 		
-		// ── WEBCHROME POPUP INTENT HOOK CLIENT ──
+		// ── WEBCHROME + WEBVIEW CLIENT — FIXED FOR DEPOSIT / PAYMENT WHITE SCREEN ──
 		wP.setWebChromeClient(new android.webkit.WebChromeClient() {
 			@Override
+			public void onCloseWindow(WebView window) {
+				try {
+					root.removeView(window);
+					popupWebViews.remove(window);
+					window.destroy();
+				} catch (Exception e) {}
+			}
+			@Override
 			public boolean onCreateWindow(android.webkit.WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
-				android.webkit.WebView tempView = new android.webkit.WebView(view.getContext());
-				tempView.getSettings().setJavaScriptEnabled(true);
-				tempView.setWebViewClient(new android.webkit.WebViewClient() {
-					@Override
-					public boolean shouldOverrideUrlLoading(android.webkit.WebView v, android.webkit.WebResourceRequest request) {
-						final String url = request.getUrl().toString();
-						wP.post(new Runnable() {
-							public void run() {
-								wP.evaluateJavascript("var iframe = document.getElementById('target-game-frame'); if(iframe) { iframe.src = '" + url + "'; }", null);
-							}
-						});
-						return true;
-					}
-					@Override
-					public boolean shouldOverrideUrlLoading(android.webkit.WebView v, String url) {
-						final String fUrl = url;
-						wP.post(new Runnable() {
-							public void run() {
-								wP.evaluateJavascript("var iframe = document.getElementById('target-game-frame'); if(iframe) { iframe.src = '" + fUrl + "'; }", null);
-							}
-						});
-						return true;
-					}
-				});
-				
-				android.webkit.WebView.WebViewTransport transport = (android.webkit.WebView.WebViewTransport) resultMsg.obj;
-				transport.setWebView(tempView);
-				resultMsg.sendToTarget();
-				return true;
+				// FIX: Create fully configured visible popup WebView instead of invisible tempView
+				// This prevents white screen for DhaniWin, 13l, and other payment gateways
+				try {
+					WebView popup = createPopupWebView(view.getContext(), root);
+					WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+					transport.setWebView(popup);
+					resultMsg.sendToTarget();
+					return true;
+				} catch (Exception e) {
+					android.util.Log.e("DW", "onCreateWindow fail: " + e.getMessage());
+					return false;
+				}
 			}
 		});
 		
@@ -470,11 +666,196 @@ public class MainActivity extends Activity {
 				handler.proceed();
 			}
 			@Override
+			public void onPageStarted(WebView view, String url, Bitmap favicon) {
+				super.onPageStarted(view, url, favicon);
+			}
+			@Override
+			public void onPageFinished(WebView view, String url) {
+				super.onPageFinished(view, url);
+				// Inject JS to intercept window.open, iframe src, and external links to keep inside app
+				try {
+					String js = "(function(){"
+						+ "if(window.__zayroHooked) return; window.__zayroHooked=true;"
+						+ "function openInApp(u){ try{ if(window.ZAYRO && window.ZAYRO.openExternal){ window.ZAYRO.openExternal(u); return true; } }catch(e){} return false; }"
+						+ "var origOpen=window.open;"
+						+ "window.open=function(u,n,s){"
+						+ "  try{ if(u){ if(openInApp(u)) return {closed:false, focus:function(){}, close:function(){}, location:{href:u}}; } }"
+						+ "  }catch(e){}"
+						+ "  try{ return origOpen.apply(this, arguments); }catch(e){ return null; }"
+						+ "};"
+						+ "try{"
+						+ "  var desc=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'src');"
+						+ "  if(desc && desc.set){"
+						+ "    Object.defineProperty(HTMLIFrameElement.prototype,'src',{"
+						+ "      get:desc.get,"
+						+ "      set:function(v){"
+						+ "        try{"
+						+ "          var s=String(v).toLowerCase();"
+						+ "          var isPay=s.includes('pay')||s.includes('checkout')||s.includes('qr')||s.includes('upi')||s.includes('payment')||s.includes('gateway')||s.includes('razorpay')||s.includes('cashfree')||s.includes('arpay')||s.includes('usdt');"
+						+ "          if(isPay){ if(openInApp(v)) return; }"
+						+ "        }catch(e){}"
+						+ "        return desc.set.call(this,v);"
+						+ "      }"
+						+ "    });"
+						+ "  }"
+						+ "}catch(e){}"
+						+ "document.addEventListener('click', function(e){"
+						+ "  var a=e.target.closest && e.target.closest('a');"
+						+ "  if(a && a.href){"
+						+ "    var href=a.href; var low=href.toLowerCase();"
+						+ "    var isPay=low.includes('pay')||low.includes('checkout')||low.includes('payment')||low.includes('qr');"
+						+ "    var isBlank=(a.getAttribute('target')||'').toLowerCase()==='_blank';"
+						+ "    if(isBlank||isPay){ e.preventDefault(); e.stopPropagation(); openInApp(href); }"
+						+ "  }"
+						+ "}, true);"
+						+ "setInterval(function(){"
+						+ "  try{"
+						+ "    var gf=document.getElementById('target-game-frame');"
+						+ "    if(gf){"
+						+ "      var src=(gf.getAttribute('src')||gf.src||'').toLowerCase();"
+						+ "      if(src && src!=='about:blank'){"
+						+ "        var isPay=src.includes('pay')&&!src.includes('wallet')&&!src.includes('recharge');"
+						+ "        if(isPay && src.includes('http')){"
+						+ "          var last=window.__lastPayUrl||'';"
+						+ "          if(src!==last){ window.__lastPayUrl=src; openInApp(src); }"
+						+ "        }"
+						+ "      }"
+						+ "    }"
+						+ "  }catch(e){}"
+						+ "}, 1000);"
+						+ "})();";
+					view.evaluateJavascript(js, null);
+				} catch (Exception e) {}
+			}
+			@Override
 			public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+				String url = request.getUrl().toString();
+				if (handleExternalScheme(view.getContext(), url)) return true;
+				boolean isMain = true;
+				try { isMain = request.isForMainFrame(); } catch (Exception e) {}
+				String lower = url.toLowerCase(Locale.US);
+				// If iframe is trying to load payment URL, open in popup overlay instead of iframe (prevents white screen)
+				if (!isMain) {
+					if (isPaymentUrl(url) || (lower.startsWith("http") && !lower.contains("wallet") && !lower.contains("recharge") && !lower.contains("register") && !lower.contains("login") && !lower.contains("wingo") && !lower.contains("lottery"))) {
+						// But allow wallet/recharge pages themselves to stay in iframe, only payment gateways go to popup
+						if (lower.contains("pay") || lower.contains("checkout") || lower.contains("qr") || lower.contains("upi") || lower.contains("gateway") || lower.contains("razorpay") || lower.contains("cashfree") || lower.contains("payu") || lower.contains("ccavenue") || lower.contains("arpay")) {
+							try {
+								final String fUrl = url;
+								view.post(new Runnable() {
+									public void run() {
+										try {
+											WebView popup = createPopupWebView(view.getContext(), root);
+											popup.loadUrl(fUrl);
+										} catch (Exception ex) {}
+									}
+								});
+							} catch (Exception e) {}
+							return true; // block iframe white screen
+						}
+					}
+					// For normal iframe navigations (wallet, register, etc), allow
+					return false;
+				}
+				// Main WebView must stay on file:// - any http/https navigation should go to popup overlay
+				if (lower.startsWith("http://") || lower.startsWith("https://")) {
+					try {
+						WebView popup = createPopupWebView(view.getContext(), root);
+						popup.loadUrl(url);
+					} catch (Exception e) {
+						view.loadUrl(url);
+					}
+					return true;
+				}
 				return false;
 			}
 			@Override
 			public boolean shouldOverrideUrlLoading(android.webkit.WebView view, String url) {
+				if (handleExternalScheme(view.getContext(), url)) return true;
+				String lower = url.toLowerCase(Locale.US);
+				if (lower.startsWith("http://") || lower.startsWith("https://")) {
+					try {
+						WebView popup = createPopupWebView(view.getContext(), root);
+						popup.loadUrl(url);
+					} catch (Exception e) {
+						view.loadUrl(url);
+					}
+					return true;
+				}
+				return false;
+			}
+			@Override
+			public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+				try {
+					boolean isMain = true;
+					try { isMain = request.isForMainFrame(); } catch (Exception e) {}
+					if (!isMain) {
+						String url = request.getUrl().toString();
+						String lower = url.toLowerCase(Locale.US);
+						// Detect payment gateway loading inside iframe that would cause white screen due to X-Frame-Options
+						if (isPaymentUrl(url) && (lower.contains("pay") || lower.contains("checkout") || lower.contains("gateway") || lower.contains("qr"))) {
+							// Don't block wallet/recharge itself, only actual payment processing URLs
+							if (!lower.contains("/wallet/recharge") && !lower.contains("/wallet") || lower.contains("/pay") || lower.contains("checkout")) {
+								if (lower.contains("/pay") || lower.contains("checkout") || lower.contains("razorpay") || lower.contains("cashfree") || lower.contains("upi") || lower.contains("qr")) {
+									final String fUrl = url;
+									view.post(new Runnable() {
+										public void run() {
+											try {
+												if (handleExternalScheme(MainActivity.this, fUrl)) return;
+												WebView popup = createPopupWebView(MainActivity.this, root);
+												popup.loadUrl(fUrl);
+											} catch (Exception e) {}
+										}
+									});
+									// Return empty response to prevent white screen in iframe, let popup handle it
+									// Only block if it's clearly a payment gateway, not the wallet page itself
+									if (lower.contains("razorpay") || lower.contains("cashfree") || lower.contains("payu") || lower.contains("ccavenue") || (lower.contains("/pay") && !lower.contains("wallet")) || lower.contains("checkout")) {
+										return new WebResourceResponse("text/html", "UTF-8", new java.io.ByteArrayInputStream(\"<html><body style='background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif'>Opening payment... If not opened, <a href='\" + url + \"' style='color:#ff3b3b'>click here</a></body></html>\".getBytes()));
+									}
+								}
+							}
+						}
+					}
+				} catch (Exception e) {}
+				return super.shouldInterceptRequest(view, request);
+			}
+			@Override
+			public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+				super.onReceivedError(view, request, error);
+				android.util.Log.e("DW", "main error: " + error + " url=" + request.getUrl());
+			}
+		});
+
+		// Loading WebView client - same handling (keep file:// only)
+		wL.setWebViewClient(new WebViewClient() {
+			@Override
+			public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+				handler.proceed();
+			}
+			@Override
+			public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+				String url = request.getUrl().toString();
+				if (handleExternalScheme(view.getContext(), url)) return true;
+				String lower = url.toLowerCase(Locale.US);
+				if (lower.startsWith("http://") || lower.startsWith("https://")) {
+					try {
+						WebView popup = createPopupWebView(view.getContext(), root);
+						popup.loadUrl(url);
+					} catch (Exception e) {}
+					return true;
+				}
+				return false;
+			}
+			@Override
+			public boolean shouldOverrideUrlLoading(WebView view, String url) {
+				if (handleExternalScheme(view.getContext(), url)) return true;
+				String lower = url.toLowerCase(Locale.US);
+				if (lower.startsWith("http://") || lower.startsWith("https://")) {
+					try {
+						WebView popup = createPopupWebView(view.getContext(), root);
+						popup.loadUrl(url);
+					} catch (Exception e) {}
+					return true;
+				}
 				return false;
 			}
 		});
@@ -490,7 +871,7 @@ public class MainActivity extends Activity {
 				fa.addListener(new android.animation.AnimatorListenerAdapter() {
 					public void onAnimationEnd(android.animation.Animator a) {
 						wL.setVisibility(android.view.View.GONE);
-						root.removeView(wL);
+						try { root.removeView(wL); } catch (Exception e) {}
 					}
 				});
 				fa.start();
@@ -498,5 +879,59 @@ public class MainActivity extends Activity {
 		}, 5000);
 		
 	}
-	
+
+	@Override
+	public void onBackPressed() {
+		try {
+			if (popupWebViews.size() > 0) {
+				WebView top = popupWebViews.get(popupWebViews.size() - 1);
+				if (top != null) {
+					if (top.canGoBack()) {
+						top.goBack();
+						return;
+					} else {
+						try {
+							ViewParent parent = top.getParent();
+							if (parent instanceof FrameLayout) {
+								FrameLayout cont = (FrameLayout) parent;
+								ViewParent grand = cont.getParent();
+								if (grand == rootLayout) {
+									rootLayout.removeView(cont);
+								} else {
+									rootLayout.removeView(top);
+								}
+							} else {
+								rootLayout.removeView(top);
+							}
+							popupWebViews.remove(top);
+							top.destroy();
+						} catch (Exception e) {}
+						return;
+					}
+				}
+			}
+			if (mainWebView != null && mainWebView.canGoBack()) {
+				String url = mainWebView.getUrl();
+				if (url != null && !url.startsWith("file://")) {
+					mainWebView.goBack();
+					return;
+				}
+			}
+		} catch (Exception e) {}
+		super.onBackPressed();
+	}
+
+	@Override
+	protected void onDestroy() {
+		try {
+			for (WebView wv : popupWebViews) {
+				try { wv.destroy(); } catch (Exception e) {}
+			}
+			popupWebViews.clear();
+			if (mainWebView != null) {
+				try { mainWebView.destroy(); } catch (Exception e) {}
+			}
+		} catch (Exception e) {}
+		super.onDestroy();
+	}
 }

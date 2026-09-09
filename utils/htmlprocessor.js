@@ -284,9 +284,6 @@ function injectParams(htmlContent, params) {
     if(typeof gameFrame!=='undefined'&&gameFrame){
       try{
         var current=gameFrame.src||'';
-        // Assigning an empty src in a file:// WebView resolves to
-        // file:///android_asset/, not about:blank. Always navigate once when
-        // Firebase supplies the first valid link so LOCKED need not be tapped.
         if(firstFirebaseLinkLoad||!current||current==='about:blank'||current===previousRegister){
           gameFrame.src=REGISTER_URL;
         }
@@ -297,8 +294,6 @@ function injectParams(htmlContent, params) {
     }
     firstFirebaseLinkLoad=false;
   }
-  // Designs without their own iframe used native openUrl/navigate methods.
-  // Normalize navTo so their buttons also navigate the injected game frame.
   if(autoFrameInjected&&gameFrame){
     window.navTo=function(url){
       if(!valid(url))return;
@@ -307,9 +302,6 @@ function injectParams(htmlContent, params) {
       if(typeof window.reportArea==='function')try{window.reportArea();}catch(e){}
     };
   }
-  // Track auth routes outside the cross-origin iframe. Balance callbacks can
-  // arrive while Register/Login is open; they must not switch the panel to
-  // LOW/RECHARGE until the user actually leaves the auth page.
   window.__zayroAuthRoute=false;
   if(typeof window.setUrl==='function'&&!window.setUrl.__zayroWrapped){
     var originalSetUrl=window.setUrl;
@@ -366,8 +358,6 @@ function injectParams(htmlContent, params) {
     if(++attempts<120)setTimeout(connect,250);
   }
   connect();
-
-  // Instant Cold-Start Navigation
   if(gameFrame && REGISTER_URL && valid(REGISTER_URL)){
     var current=gameFrame.src||'';
     if(!current || current==='about:blank' || current.endsWith('about:blank') || current.startsWith('file:///')){
@@ -384,6 +374,166 @@ function injectParams(htmlContent, params) {
       }
     }
   }, 150);
+})();
+</script><script>
+// ── ZAYRO UNIVERSAL IN-APP URL HANDLER - FIX FOR DHANIWIN / 13L DEPOSIT WHITE SCREEN ──
+// Ensures all external URLs (deposit, payment gateways, etc.) open inside APK, never white screen
+(function(){
+  if(window.__zayroUrlFixApplied) return;
+  window.__zayroUrlFixApplied = true;
+  function isPaymentGatewayUrl(u){
+    if(!u) return false;
+    var s = String(u).toLowerCase();
+    if(s==='about:blank' || s.startsWith('file://')) return false;
+    // Wallet/recharge pages themselves are OK in iframe, but their child pay pages are NOT
+    var isWalletPage = (s.includes('/wallet') || s.includes('recharge')) && !s.includes('/pay') && !s.includes('checkout') && !s.includes('qr') && !s.includes('upi');
+    if(isWalletPage) return false;
+    var payKeys = ['/pay','checkout','/qr','upi','razorpay','cashfree','payu','ccavenue','arpay','usdt','ewallet','phonepe','paytm','gpay','gateway','/payment','/order','/initiate','/processing','/cashier','/deposit/pay','/recharge/pay'];
+    for(var i=0;i<payKeys.length;i++){ if(s.indexOf(payKeys[i])>=0) return true; }
+    return false;
+  }
+  function openInApp(url){
+    if(!url) return false;
+    var u = String(url).trim();
+    if(!u) return false;
+    try{
+      if(window.ZAYRO && typeof window.ZAYRO.openExternal === 'function'){
+        window.ZAYRO.openExternal(u);
+        return true;
+      }
+    }catch(e){}
+    try{
+      if(window.ZAYRO && typeof window.ZAYRO.openUrl === 'function' && !isPaymentGatewayUrl(u)){
+        window.ZAYRO.openUrl(u);
+        return true;
+      }
+    }catch(e){}
+    try{
+      var gf = window.gameFrame || document.getElementById('target-game-frame') || document.getElementById('gameIframe');
+      if(gf && !isPaymentGatewayUrl(u)){
+        gf.src = u;
+        if(typeof window.setUrl === 'function'){ try{ window.setUrl(u); }catch(e){} }
+        return true;
+      } else if(gf && isPaymentGatewayUrl(u)){
+        // Payment gateway must open in popup overlay, not iframe (prevents white screen due to X-Frame-Options)
+        if(window.ZAYRO && window.ZAYRO.openExternal){ window.ZAYRO.openExternal(u); return true; }
+      }
+    }catch(e){}
+    return false;
+  }
+  // Override window.open to keep everything inside app
+  try{
+    var _origOpen = window.open;
+    window.open = function(url, name, specs){
+      if(url){
+        if(openInApp(url)){
+          return { closed:false, focus:function(){}, close:function(){}, location:{href:url} };
+        }
+      }
+      try{ return _origOpen.apply(this, arguments); }catch(e){ return null; }
+    };
+  }catch(e){}
+  // Intercept clicks on _blank and external links (deposit, payment, etc.)
+  document.addEventListener('click', function(e){
+    var el = e.target;
+    var depth = 0;
+    while(el && depth < 6){
+      if(el.tagName === 'A' && el.href){
+        var href = el.href;
+        var target = (el.getAttribute('target')||'').toLowerCase();
+        var lowerHref = href.toLowerCase();
+        var isExternal = lowerHref.indexOf('http://')===0 || lowerHref.indexOf('https://')===0;
+        var isDepositRelated = lowerHref.indexOf('wallet')>=0 || lowerHref.indexOf('recharge')>=0 || lowerHref.indexOf('deposit')>=0 || lowerHref.indexOf('pay')>=0 || lowerHref.indexOf('checkout')>=0 || lowerHref.indexOf('payment')>=0;
+        if(isExternal && (target==='_blank' || isDepositRelated)){
+          e.preventDefault();
+          e.stopPropagation();
+          openInApp(href);
+          return;
+        }
+      }
+      el = el.parentElement;
+      depth++;
+    }
+  }, true);
+  // Aggressively monitor iframe src - if it becomes payment gateway, open in popup and revert
+  try{
+    var gf = document.getElementById('target-game-frame');
+    if(gf){
+      var needed = ['allow-forms','allow-modals','allow-orientation-lock','allow-pointer-lock','allow-popups','allow-popups-to-escape-sandbox','allow-presentation','allow-same-origin','allow-scripts','allow-top-navigation','allow-top-navigation-by-user-activation','allow-downloads'];
+      var current = (gf.getAttribute('sandbox')||'').split(/\\s+/);
+      needed.forEach(function(p){ if(current.indexOf(p)===-1) current.push(p); });
+      gf.setAttribute('sandbox', current.join(' ').trim());
+      gf.setAttribute('allow', 'autoplay; camera; microphone; clipboard-read; clipboard-write; geolocation; payment; fullscreen; screen-wake-lock; clipboard-write');
+      // Proxy iframe src setter
+      try{
+        var origDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'src');
+        if(origDesc && origDesc.set){
+          Object.defineProperty(gf,'src',{
+            get: origDesc.get,
+            set: function(v){
+              try{
+                if(isPaymentGatewayUrl(v)){
+                  if(openInApp(v)) return;
+                }
+              }catch(e){}
+              return origDesc.set.call(this,v);
+            },
+            configurable:true
+          });
+        }
+      }catch(e){}
+      // MutationObserver for src attribute
+      try{
+        var mo = new MutationObserver(function(muts){
+          muts.forEach(function(m){
+            if(m.attributeName==='src'){
+              var newSrc = gf.getAttribute('src')||gf.src||'';
+              if(isPaymentGatewayUrl(newSrc)){
+                var last = window.__lastPayUrl||'';
+                if(newSrc!==last){
+                  window.__lastPayUrl=newSrc;
+                  openInApp(newSrc);
+                  // Revert iframe to deposit page to avoid white screen
+                  setTimeout(function(){
+                    try{
+                      if(typeof DEPOSIT_URL!=='undefined' && DEPOSIT_URL) gf.src = DEPOSIT_URL;
+                    }catch(e){}
+                  }, 500);
+                }
+              }
+            }
+          });
+        });
+        mo.observe(gf,{attributes:true, attributeFilter:['src']});
+      }catch(e){}
+      // Polling fallback every 800ms
+      setInterval(function(){
+        try{
+          var src = (gf.getAttribute('src')||gf.src||'').toString();
+          if(isPaymentGatewayUrl(src)){
+            var last = window.__lastPayUrl||'';
+            if(src!==last){
+              window.__lastPayUrl=src;
+              openInApp(src);
+            }
+          }
+        }catch(e){}
+      }, 800);
+    }
+  }catch(e){}
+  // Also override global navigate function if exists (used by panel buttons)
+  try{
+    if(typeof window.navigate === 'function' && !window.navigate.__zayroWrapped){
+      var origNav = window.navigate;
+      window.navigate = function(url){
+        if(isPaymentGatewayUrl(url)){
+          if(openInApp(url)) return;
+        }
+        return origNav.apply(this, arguments);
+      };
+      window.navigate.__zayroWrapped=true;
+    }
+  }catch(e){}
 })();
 </script>`;
   if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, `${liveLinksScript}</body>`);
