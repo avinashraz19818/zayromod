@@ -791,7 +791,7 @@ static const int CONTENT_HAS_DATA = 0;
     let apkToSign = builtApk;
     let jiaguUsed = false;
     let frezrikUsed = false;
-    if (process.env.FREZRIK_ENABLED !== 'false') {
+    if (process.env.FREZRIK_ENABLED === 'true') { // Jiagu disabled by default — .so vault already protected, Jiagu causes Play Protect harmful flag
       const frezrikJar = process.env.FREZRIK_JAR || '/opt/frezrik/pack.jar';
       if (fs.existsSync(frezrikJar) && fs.existsSync(keystorePath)) {
         let fzOut = '';
