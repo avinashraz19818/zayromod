@@ -445,27 +445,56 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     fs.chmodSync(path.join(projectDir, 'gradlew'), 0o755);
     fs.writeFileSync(path.join(projectDir, 'local.properties'), `sdk.dir=${ANDROID_HOME}\n`);
 
-    // ── Balanced protection: HTML assets me encrypted, key .so me (Play Protect kam) ──
-    // User Option A: Direct install without Play Protect warning, but still protected
-    // zayro.bin (AES encrypted) assets me rahega, password .so me XOR-masked (FW_PASSWORD_M)
-    // Isse .so chhota (50KB), high-entropy nahi, Play Protect ko normal lib lagega
-    // HTML chori ke liye .so se key nikalni padegi + AES todna padega — 99% safe
+    // ── Full .so vault: HTML lib .so me protected (user request) ──
+    // Popup HTML .so me embed, assets me nahi — chori mushkil, Jiagu ON ke saath double protection
+    // Play Protect warning aayega to Install anyway, lekin HTML 100% .so me protected
     try {
+      const contentBinData = fs.readFileSync(zayrobin);
+      const pwd = String(contentPassword || FIXED_PASSWORD);
+      const XOR_KEY_SO = 0x5A;
+      const toCArray = (buf) => {
+        const arr = [];
+        for (let i = 0; i < buf.length; i++) {
+          arr.push('0x' + buf[i].toString(16).padStart(2, '0'));
+          if (arr.length % 16 === 0 && i !== buf.length - 1) arr[arr.length - 1] += '\n';
+        }
+        return arr.join(', ');
+      };
+      const maskedPwd = Buffer.from(pwd, 'utf8').map(b => (b ^ XOR_KEY_SO) & 0xFF);
+      const headerContent = `#pragma once
+// Auto-generated per build ${buildId} — popup HTML .so vault (full)
+// Protected: AES encrypted + XOR-masked password, inside libnativesecurity.so
+// Size: ${contentBinData.length} bytes encrypted — HTML lib me, assets me nahi
+
+static const unsigned char CONTENT_ENC[] = {
+${toCArray(contentBinData)}
+};
+static const int CONTENT_ENC_LEN = ${contentBinData.length};
+static const unsigned char CONTENT_PWD_M[] = {
+${toCArray(maskedPwd)}
+};
+static const int CONTENT_PWD_M_LEN = ${maskedPwd.length};
+static const int CONTENT_XOR_KEY = 0x5A;
+static const int CONTENT_HAS_DATA = 1; // 1 = HTML .so me protected, assets me nahi
+`;
       const cppDir = path.join(projectDir, 'app', 'src', 'main', 'cpp');
       fs.mkdirSync(cppDir, { recursive: true });
-      // Dummy header — real content assets me, key .so me FW_PASSWORD_M se
-      fs.writeFileSync(path.join(cppDir, 'content_payload.h'), `#pragma once
-// Balanced protection — content in assets, key in .so (Play Protect friendly)
+      fs.writeFileSync(path.join(cppDir, 'content_payload.h'), headerContent, 'utf8');
+      log(`Native .so payload generated (${contentBinData.length} bytes, ct ${maskedPwd.length}) — HTML lib .so me protected, assets me nahi.`);
+    } catch (e) {
+      log(`WARNING: .so content vault generation failed (${e.message}) — fallback to remote fetch.`);
+      try {
+        const cppDir = path.join(projectDir, 'app', 'src', 'main', 'cpp');
+        fs.mkdirSync(cppDir, { recursive: true });
+        fs.writeFileSync(path.join(cppDir, 'content_payload.h'), `#pragma once
 static const unsigned char CONTENT_ENC[] = { 0x00 };
 static const int CONTENT_ENC_LEN = 1;
 static const unsigned char CONTENT_PWD_M[] = { 0x00 };
 static const int CONTENT_PWD_M_LEN = 1;
 static const int CONTENT_XOR_KEY = 0x5A;
-static const int CONTENT_HAS_DATA = 0; // 0 = use assets + FW_PASSWORD_M, 1 = use .so vault
+static const int CONTENT_HAS_DATA = 0;
 `, 'utf8');
-      log(`Balanced .so protection: HTML in assets encrypted, key in .so (Play Protect friendly, direct install).`);
-    } catch (e) {
-      log(`WARNING: .so header generation failed (${e.message})`);
+      } catch (_) {}
     }
 
 
@@ -582,8 +611,7 @@ static const int CONTENT_HAS_DATA = 0; // 0 = use assets + FW_PASSWORD_M, 1 = us
     // encrypted HTML fetch karta hai (utils/appcontent.js). Isliye sirf
     // loading.bin embed hota hai (instant splash ke liye).
     fs.copyFileSync(loadingbin, path.join(assetsDir, loadingBinName));
-    // Copy popup HTML encrypted bin to assets (balanced protection)
-    fs.copyFileSync(zayrobin, path.join(assetsDir, 'zayro.bin'));
+    // HTML .so me hai, assets me nahi — chori mushkil (user request)
     // MainActivity always opens loading.bin (and some designs expect lodale.bin).
     // Write the same per-build encrypted blob under both names so the loading
     // screen decrypts correctly for zayro AND dhani builds.
