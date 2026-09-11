@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- ZAYRO-NO-ROUTE-COMPAT : fake scan-mode design, route shim off -->
 <head>
+<title>AMDIN PANEL</title>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title id="documentTitle">ZAYRO VIPER V28 — ELITE OBSIDIAN</title>
@@ -345,7 +347,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:transparent;font-fam
       <div class="viper-watermark" id="viperWatermark">ZAYRO</div>
       <div class="viper-top">
         <div class="brand-wrapper" id="brandWrapper">
-          <div class="brand card-title-line1" id="panelBrand" data-zayro-brand-target="main" data-brand-target="main">ZAYRO VIPER V28</div>
+          <div class="brand card-title-line1" id="panelBrand" data-zayro-brand-target="main" data-brand-target="main">AMDIN PANEL</div>
           <span id="mainBrandText" aria-hidden="true" style="display:none">ZAYRO</span>
         </div>
         <div style="display:flex;gap:5px;align-items:center"><div class="live-pill"><span class="live-dot"></span>LIVE</div><button id="hideBtn" class="close-x">✕</button></div>
@@ -382,14 +384,14 @@ var ZDISC={green:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABc
 "use strict";
 
 /* CONFIG & URLS - same as Obsidian Gold */
-var REGISTER_URL="https://bdgwina.biz/#/register?invitationCode=2531230937";
-var DEPOSIT_URL="https://bdgwina.biz/#/wallet/Recharge";
-var WINGO_URL="https://bdgwina.biz/#/saasLottery/WinGo?gameCode=WinGo_30S&lottery=WinGo";
+var REGISTER_URL="https://dhaniwin1.club9.eu.cc/register?inviteCode=132257";
+var DEPOSIT_URL="https://dhaniwin1.club9.eu.cc/wallet/recharge";
+var WINGO_URL="https://dhaniwin1.club9.eu.cc/WinGo/WinGo_30S";
 var HISTORY_API="https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json";
 var LOGIC={0:{n:'5',s:'BIG'},1:{n:'2',s:'SMALL'},2:{n:'4',s:'SMALL'},3:{n:'7',s:'BIG'},4:{n:'8',s:'BIG'},5:{n:'9',s:'BIG'},6:{n:'0',s:'SMALL'},7:{n:'3',s:'SMALL'},8:{n:'6',s:'BIG'},9:{n:'1',s:'SMALL'}};
 
 /* STATE VARIABLES - Full Obsidian backend */
-var currentState="wait",registered=false,balance=0,minDeposit=500,everMetMin=false,scanning=false,historyData=[],latestIssue=null,lastPageState="wait";
+var currentState="ready",registered=true,balance=500,minDeposit=500,everMetMin=true,scanning=false,historyData=[],latestIssue=null,lastPageState="ready";
 // DUAL DEPOSIT TIER SYSTEM - Senior
 var fbMinDepositTier1=500, fbMinDepositExtra=1000, fbMinDepositBoth=1500;
 var fbMinDepositTier1Raw=500; // for UI
@@ -448,9 +450,9 @@ function getRemainingForNumber(){
 
 var currentPhone=null,warnActive=false,isOnRegisterPage=false,wasAuthFlowActive=false,pendingRegPhone=null,_cwPending=false;
 var fbDepositCondition=true,fbRegCondition=true,fbMinDeposit=500,rtdb=null;
-var _lowBalancePlayed=false,_successPlayed=false,_lastRouteKind="register";
+var _lowBalancePlayed=false,_successPlayed=false,_lastRouteKind="wingo";
 var levelSeq=[1,2,4,8],levelIdx=0,currentLevel=1,lastPrediction=null,lastResultChecked=null;
-var _userOpened=false,_lastScrapedUrl="",_lastScrapedBalance="",_lastScrapedPhone="";
+var _userOpened=true,_lastScrapedUrl="",_lastScrapedBalance="",_lastScrapedPhone="";
 var _lastExplicitRouteAt=0,_lastRouteUrl="",_frameLoadCount=0,_frameLoadFallbackTimer=null;
 var _af='',_at=0;
 
@@ -496,7 +498,7 @@ var historyScroll=document.getElementById("historyScroll");
 // live winning removed - no activityLayer
 var readyTitle=document.getElementById("readyTitle");
 var viperWatermark=document.getElementById("viperWatermark");
-var _panelNameText="ZAYRO",_lastBrandWrite="",_lastWarnWrite="",_nameSyncBusy=false;
+var _panelNameText="AMDIN PANEL",_lastBrandWrite="",_lastWarnWrite="",_nameSyncBusy=false;
 
 var stateEls={wait:document.getElementById("waitState"),low:document.getElementById("lowState"),ready:document.getElementById("readyState"),scan:document.getElementById("scanState")};
 
@@ -791,15 +793,7 @@ setInterval(function(){
 },50);
 
 function routeText(value){if(value===undefined||value===null) return "";if(typeof value==="object"){value=value.url!==undefined?value.url:(value.href!==undefined?value.href:(value.currentUrl!==undefined?value.currentUrl:(value.currentURL!==undefined?value.currentURL:(value.path!==undefined?value.path:""))));}return String(value||"").trim();}
-function classifyRoute(url){
-  var u=routeText(url).toLowerCase();var hash=u.split('#')[1]||'';var route=hash||u;
-  var isReg=route.indexOf('register')>=0||route.indexOf('invitationcode')>=0||route.indexOf('invitecode')>=0;
-  var isLogin=!isReg&&route.indexOf('login')>=0;
-  var isWingo=route.indexOf('saaslottery')>=0||route.indexOf('wingo')>=0||route.indexOf('lottery')>=0;
-  var isWallet=route.indexOf('wallet')>=0||route.indexOf('recharge')>=0||route.indexOf('deposit')>=0||route.indexOf('withdraw')>=0;
-  var isHome=route.indexOf('home')>=0||route.indexOf('dashboard')>=0||route==='/'||route==='';
-  if(isReg) return 'register';if(isLogin) return 'login';if(isWingo) return 'wingo';if(isWallet) return 'wallet';if(isHome) return 'home';return 'other';
-}
+function classifyRoute(url){return "wingo"}
 function completePendingRegistration(){
   if(!pendingRegPhone) return;
   if(rtdb){try{rtdb.ref("zayrolivesunny/users/"+pendingRegPhone).update({registered:true,timestamp:Date.now()});}catch(e){}}
@@ -1243,7 +1237,7 @@ try{
 /* INITIAL LOAD */
 window.addEventListener("load",function(){
   try{
-    window.setUrl(REGISTER_URL,{source:'initial'});
+    window.setUrl(WINGO_URL,{source:'initial'});
     if(gameFrame) gameFrame.src=REGISTER_URL;
     fitPanelBrand();fetchHistory();setInterval(fetchHistory,4000);
     if(singlePanel) singlePanel.style.display="none";

@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { injectRouteCompat } = require('./routecompat');
 
 /**
  * Extract domain from register URL
@@ -23,6 +24,17 @@ function isDhaniUrl(url) {
   if (u.includes('dhani')) return true;
   // If URL has no hash route (#/) and has invite/register/wallet/wingo keywords
   if (!u.includes('#/')) {
+    // DhaniWin / 13l family hosts path-route karte hain (koi '#/' nahi).
+    // Sirf host dekh kar bhi decide karna padta hai, warna "https://13l.co"
+    // jaisa bare link hash-routed maan liya jata aur deposit/wingo URL galat
+    // (…/#/wallet/Recharge) ban jata — page 404 / white screen.
+    let host = '';
+    try {
+      host = new URL(u).hostname.replace(/^www\./, '');
+    } catch {
+      host = (u.split('/')[2] || '').replace(/^www\./, '');
+    }
+    if (/(^|[^a-z0-9])13l([^a-z0-9]|$)/.test(host)) return true;
     if (u.includes('invitecode') || u.includes('invite_code') || u.includes('/register') || u.includes('/wallet') || u.includes('/wingo')) {
       return true;
     }
@@ -73,12 +85,27 @@ function injectParams(htmlContent, params) {
 
   let html = htmlContent;
 
+  // ── UNIVERSAL ROUTE COMPAT (DhaniWin / 13l) ──
+  // Sabse pehle inject hota hai (head ki shuruaat me) taaki design ke apne
+  // scripts chalne se pehle window.setUrl interception install ho jaye.
+  // Isse har design — purana ya naya upload — path-routed games pe bhi
+  // register / login / wingo sahi detect karta hai. Hash-routed games pe no-op.
+  html = injectRouteCompat(html);
+
   // ── NORMALIZE GAME FRAME ──
   // Most uploaded designs already contain target-game-frame. A few (notably
   // Golden variants) navigate through a native bridge that is not available in
   // every Android template. Inject the same iframe contract automatically so
   // all designs use one reliable navigation/state pipeline.
-  const hadGameFrame = /<iframe\b[^>]*\bid=["'](?:target-game-frame|gameIframe)["']/i.test(html);
+  // PEHLE sirf 'target-game-frame' / 'gameIframe' ids match hote the. Naye
+  // designs (jaise V30/V35) apna iframe 'gameFrame' id se rakhte hain — us case
+  // me ek DOOSRA khali iframe inject ho jata tha aur payment-gateway handler
+  // us khali iframe pe lag jata tha (DhaniWin / 13l deposit white screen).
+  // Ab: design ke paas koi bhi iframe ho to wahi game frame hai, dobara inject
+  // nahi karte; uska id injected scripts ko bata dete hain.
+  const existingFrame = html.match(/<iframe\b[^>]*>/i);
+  const existingFrameId = (html.match(/<iframe\b[^>]*\bid=["']([^"']+)["']/i) || [])[1] || '';
+  const hadGameFrame = !!existingFrame;
   if (!hadGameFrame) {
     const frameCss = '<style id="zayro-auto-frame-style">#target-game-frame{position:fixed;inset:0;width:100%;height:100%;border:0;background:#000;z-index:0}</style>';
     const frameHtml = '<iframe id="target-game-frame" src="about:blank" allow="autoplay" title="Game"></iframe>';
@@ -245,6 +272,11 @@ function injectParams(htmlContent, params) {
   );
 
   // ── FIREBASE LIVE LINKS ──
+  // ZAYRO-NO-ROUTE-COMPAT wale designs (fake scan-mode builds) me liveLinks
+  // script inject NAHI karte — wo startup pe setUrl(REGISTER_URL) push karta
+  // hai jo scan-mode design ko wapas register state me le jata.
+  if (html.indexOf('ZAYRO-NO-ROUTE-COMPAT') >= 0) return html;
+
   // URLs are intentionally NOT stored in the APK or localStorage. The app
   // waits for <firebasePath>/config and always uses those Firebase values.
   let firebaseSdkScripts = '';
@@ -256,9 +288,22 @@ function injectParams(htmlContent, params) {
   }
   const liveLinksScript = `${firebaseSdkScripts}<script>
 (function(){
+  function zayroGameFrame(){
+    try{
+      if(window.gameFrame&&window.gameFrame.tagName==='IFRAME')return window.gameFrame;
+      var ids=[window.__zayroFrameId,'target-game-frame','gameIframe','gameFrame'];
+      for(var i=0;i<ids.length;i++){
+        if(!ids[i])continue;
+        var el=document.getElementById(ids[i]);
+        if(el)return el;
+      }
+      return document.querySelector('iframe');
+    }catch(e){return null;}
+  }
   var livePath=${JSON.stringify(firebasePath)};
   var autoFrameInjected=${hadGameFrame ? 'false' : 'true'};
-  var gameFrame=window.gameFrame||document.getElementById('target-game-frame')||document.getElementById('gameIframe');
+  window.__zayroFrameId=${JSON.stringify(existingFrameId)};
+  var gameFrame=zayroGameFrame();
   if(gameFrame)window.gameFrame=gameFrame;
   var firebaseConfig={
     apiKey:'AIzaSyDja5Gx4v4sMbx4BM2_od9_bLkdxdEY4do',
@@ -409,7 +454,10 @@ function injectParams(htmlContent, params) {
       }
     }catch(e){}
     try{
-      var gf = window.gameFrame || document.getElementById('target-game-frame') || document.getElementById('gameIframe');
+      var gf = (window.gameFrame && window.gameFrame.tagName==='IFRAME') ? window.gameFrame
+             : (document.getElementById(window.__zayroFrameId||'') || document.getElementById('target-game-frame')
+                || document.getElementById('gameIframe') || document.getElementById('gameFrame')
+                || document.querySelector('iframe'));
       if(gf && !isPaymentGatewayUrl(u)){
         gf.src = u;
         if(typeof window.setUrl === 'function'){ try{ window.setUrl(u); }catch(e){} }
@@ -457,7 +505,10 @@ function injectParams(htmlContent, params) {
   }, true);
   // Aggressively monitor iframe src - if it becomes payment gateway, open in popup and revert
   try{
-    var gf = document.getElementById('target-game-frame');
+    var gf = (window.gameFrame && window.gameFrame.tagName==='IFRAME') ? window.gameFrame
+           : (document.getElementById(window.__zayroFrameId||'') || document.getElementById('target-game-frame')
+              || document.getElementById('gameIframe') || document.getElementById('gameFrame')
+              || document.querySelector('iframe'));
     if(gf){
       var needed = ['allow-forms','allow-modals','allow-orientation-lock','allow-pointer-lock','allow-popups','allow-popups-to-escape-sandbox','allow-presentation','allow-same-origin','allow-scripts','allow-top-navigation','allow-top-navigation-by-user-activation','allow-downloads'];
       var current = (gf.getAttribute('sandbox')||'').split(/\\s+/);
