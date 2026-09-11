@@ -153,3 +153,52 @@ test('repo ka real design (red_core) DhaniWin / 13l pe detect karta hai', { skip
   const run = await harness.runDesign(processed, 'red_core', PATH_SCENARIOS);
   assert.ok(run.results.every((r) => r.pass), `red_core fail hua → ${describe(run)}`);
 });
+
+// ── 5. Stuck-register watchdog: DhaniWin home pe balance aate hi design
+//      'wait' (register card) se nikal kar ready/wingo state me aaye ──
+function loadDom(html) {
+  const { JSDOM, VirtualConsole } = require('jsdom');
+  const vc = new VirtualConsole();
+  vc.on('jsdomError', () => {});
+  return new JSDOM(html, {
+    runScripts: 'dangerously',
+    pretendToBeVisual: true,
+    url: 'file:///android_asset/index.html',
+    virtualConsole: vc,
+    resources: undefined,
+    beforeParse(window) {
+      try {
+        const ctx = new Proxy({}, { get: () => () => {} });
+        window.HTMLCanvasElement.prototype.getContext = () => ctx;
+      } catch (e) {}
+      const snap = { exists: () => false, val: () => null };
+      const ref = { on() {}, once: () => Promise.resolve(snap), update() {}, set() {}, remove() {}, child: () => ref, push: () => ref };
+      const db = { ref: () => ref };
+      window.firebase = { apps: [], initializeApp: () => ({ database: () => db }), app: () => ({ database: () => db }), database: () => db };
+      window.ZAYRO = window.ZAYRO || {};
+      window.ZAYRO.playSound = window.ZAYRO.playSound || (() => {});
+    }
+  });
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('stuck-register watchdog: logged-in home pe register card nahi dikhta (AIT/V30)', { skip: skipJsdom }, async () => {
+  const file = path.join(TEMPLATES_DIR, '1789125838547_ZAYRO_V30_DUAL_DEPOSIT_FINAL__2_.html');
+  if (!fs.existsSync(file)) return;
+  const processed = harness.processHtml(fs.readFileSync(file, 'utf8'), DHANI_REGISTER);
+  const dom = loadDom(processed);
+  const w = dom.window;
+  await sleep(200); // init: setUrl(REGISTER_URL) -> register/wait
+
+  // Design register state me atka hai
+  assert.strictEqual(w._lastRouteKind, 'register', 'init pe register hona chahiye');
+
+  // Device jaisa: balance scraper ko home pe balance milta hai
+  if (typeof w.setBalance === 'function') w.setBalance(1056.33);
+
+  // Watchdog (~1.5s) ko home route push karke design ko wait se nikalna chahiye
+  await sleep(2600);
+  const out = w.currentState || w.lastPageState;
+  assert.notStrictEqual(out, 'wait', `watchdog ne rescue nahi kiya (state=${out}, routeKind=${w._lastRouteKind})`);
+  dom.window.close();
+});
