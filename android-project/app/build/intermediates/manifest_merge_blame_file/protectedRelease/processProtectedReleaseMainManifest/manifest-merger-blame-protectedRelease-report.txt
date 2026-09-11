@@ -1,0 +1,71 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.zayro.wingsyttt"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="21"
+9        android:targetSdkVersion="34" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:4:2-64
+11-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:4:19-61
+12    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+12-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:5:2-76
+12-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:5:19-73
+13
+14    <application
+14-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:6:2-30:16
+15        android:name="com.zayro.wingsyttt.SketchApplication"
+15-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:11:3-36
+16        android:allowBackup="false"
+16-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:7:3-30
+17        android:extractNativeLibs="true"
+18        android:fullBackupContent="false"
+18-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:8:3-36
+19        android:icon="@mipmap/ic_launcher"
+19-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:9:3-37
+20        android:label="@string/app_name"
+20-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:10:3-35
+21        android:theme="@style/AppTheme"
+21-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:13:3-34
+22        android:usesCleartextTraffic="true" >
+22-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:12:3-38
+23        <activity
+23-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:14:3-26:14
+24            android:name="com.zayro.wingsyttt.MainActivity"
+24-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:15:4-32
+25            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+25-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:16:4-97
+26            android:exported="true"
+26-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:21:4-27
+27            android:hardwareAccelerated="true"
+27-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:17:4-38
+28            android:screenOrientation="portrait"
+28-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:20:4-40
+29            android:supportsPictureInPicture="true"
+29-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:18:4-43
+30            android:theme="@style/NoActionBar" >
+30-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:19:4-38
+31            <intent-filter>
+31-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:22:4-25:20
+32                <action android:name="android.intent.action.MAIN" />
+32-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:23:5-57
+32-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:23:13-54
+33
+34                <category android:name="android.intent.category.LAUNCHER" />
+34-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:24:5-65
+34-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:24:15-62
+35            </intent-filter>
+36        </activity>
+37
+38        <uses-library
+38-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:27:3-29:31
+39            android:name="org.apache.http.legacy"
+39-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:28:4-41
+40            android:required="false" />
+40-->/root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:29:4-28
+41    </application>
+42
+43</manifest>

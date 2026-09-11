@@ -1,0 +1,33 @@
+<variant
+    name="protectedRelease"
+    package="com.zayro.wingsyttt"
+    minSdkVersion="21"
+    targetSdkVersion="34"
+    shrinking="true"
+    mergedManifest="build/intermediates/merged_manifest/protectedRelease/processProtectedReleaseMainManifest/AndroidManifest.xml"
+    proguardFiles="build/intermediates/default_proguard_files/global/proguard-android-optimize.txt-8.12.0:proguard-rules.pro:security/protected-rules.pro"
+    partialResultsDir="build/intermediates/lint_vital_partial_results/protectedRelease/lintVitalAnalyzeProtectedRelease/out"
+    desugaredMethodsFiles="/root/.gradle/caches/8.13/transforms/8fbf0221893e7e9cb1893eaf10c383f6/transformed/D8BackportedDesugaredMethods.txt">
+  <buildFeatures
+      viewBinding="true"
+      namespacing="REQUIRED"/>
+  <sourceProviders>
+    <sourceProvider
+        manifests="src/main/AndroidManifest.xml"
+        javaDirectories="src/main/java:src/protectedRelease/java:src/main/kotlin:src/protectedRelease/kotlin"
+        resDirectories="src/main/res:src/protectedRelease/res"
+        assetsDirectories="src/main/assets:src/protectedRelease/assets"/>
+  </sourceProviders>
+  <testSourceProviders>
+  </testSourceProviders>
+  <testFixturesSourceProviders>
+  </testFixturesSourceProviders>
+  <artifact
+      classOutputs="build/intermediates/javac/protectedRelease/compileProtectedReleaseJavaWithJavac/classes:build/intermediates/compile_and_runtime_not_namespaced_r_class_jar/protectedRelease/processProtectedReleaseResources/R.jar"
+      type="MAIN"
+      applicationId="com.zayro.wingsyttt"
+      generatedSourceFolders="build/generated/ap_generated_sources/protectedRelease/out:build/generated/data_binding_base_class_source_out/protectedRelease/out"
+      generatedResourceFolders="build/generated/res/resValues/protectedRelease"
+      desugaredMethodsFiles="/root/.gradle/caches/8.13/transforms/8fbf0221893e7e9cb1893eaf10c383f6/transformed/D8BackportedDesugaredMethods.txt">
+  </artifact>
+</variant>

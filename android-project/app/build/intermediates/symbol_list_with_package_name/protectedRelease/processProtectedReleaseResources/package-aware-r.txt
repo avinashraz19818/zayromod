@@ -1,0 +1,16 @@
+com.zayro.wingsyttt
+color colorAccent
+color colorControlHighlight
+color colorControlNormal
+color colorPrimary
+color colorPrimaryDark
+drawable default_image
+id webview1
+layout main
+mipmap ic_launcher
+string app_name
+style AppTheme
+style AppTheme_DebugActivity
+style FullScreen
+style NoActionBar
+style NoStatusBar

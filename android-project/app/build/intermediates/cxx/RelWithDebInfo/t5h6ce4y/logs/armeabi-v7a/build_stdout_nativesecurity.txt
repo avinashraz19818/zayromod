@@ -1,0 +1,2 @@
+ninja: Entering directory `/root/apkbuilder/android-project/app/.cxx/RelWithDebInfo/t5h6ce4y/armeabi-v7a'
+ninja: no work to do.

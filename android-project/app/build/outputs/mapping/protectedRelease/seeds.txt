@@ -1,0 +1,36 @@
+com.zayro.wingsyttt.SecurityManager
+com.zayro.wingsyttt.SketchApplication
+com.zayro.wingsyttt.MainActivity
+com.zayro.wingsyttt.SecurityManager: byte[] EXPECTED_CERT_SHA256_M
+com.zayro.wingsyttt.SecurityManager: int SECURITY_WARNING
+com.zayro.wingsyttt.SecurityManager: boolean initialized
+com.zayro.wingsyttt.SecurityManager: int state
+com.zayro.wingsyttt.SecurityManager: byte[] IS_PROTECTED_M
+com.zayro.wingsyttt.SecurityManager: int SECURITY_FAILED
+com.zayro.wingsyttt.SecurityManager: int XOR_KEY
+com.zayro.wingsyttt.SecurityManager: boolean nativeLibraryLoaded
+com.zayro.wingsyttt.SecurityManager: int riskScore
+com.zayro.wingsyttt.SecurityManager: int SECURITY_OK
+com.zayro.wingsyttt.SecurityManager: java.lang.String sha256Hex(byte[])
+com.zayro.wingsyttt.SecurityManager: int nativeDetectFrida()
+com.zayro.wingsyttt.MainActivity$2: void setArea(float,float,float,float)
+com.zayro.wingsyttt.MainActivity: MainActivity()
+com.zayro.wingsyttt.SecurityManager: void loadNativeSecurity()
+com.zayro.wingsyttt.MainActivity$4: void playSound(java.lang.String)
+com.zayro.wingsyttt.SecurityManager: java.lang.String hashAsset(android.content.Context,java.lang.String)
+com.zayro.wingsyttt.SecurityManager: boolean verifyAssetIntegrity(android.content.Context)
+com.zayro.wingsyttt.SecurityManager: byte[] readAll(java.io.InputStream)
+com.zayro.wingsyttt.SecurityManager: java.lang.String decodeX(byte[])
+com.zayro.wingsyttt.SecurityManager: void initialize(android.content.Context)
+com.zayro.wingsyttt.SecurityManager: boolean verifySignature(android.content.Context,java.lang.String)
+com.zayro.wingsyttt.SecurityManager: int getRiskScore()
+com.zayro.wingsyttt.SecurityManager: SecurityManager()
+com.zayro.wingsyttt.SecurityManager: int nativeIsDebuggerAttached()
+com.zayro.wingsyttt.MainActivity$4: void speak(java.lang.String)
+com.zayro.wingsyttt.SketchApplication: SketchApplication()
+com.zayro.wingsyttt.SecurityManager: boolean isAuthorized()
+com.zayro.wingsyttt.SecurityManager: int getSecurityState()
+com.zayro.wingsyttt.SecurityManager: boolean isProtectedBuild()
+com.zayro.wingsyttt.MainActivity$4: void retryContent()
+com.zayro.wingsyttt.MainActivity$4: void stopSound()
+com.zayro.wingsyttt.SecurityManager: java.lang.String toHex(byte[])

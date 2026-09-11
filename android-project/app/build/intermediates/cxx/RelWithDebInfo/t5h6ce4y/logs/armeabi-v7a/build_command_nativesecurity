@@ -1,0 +1,4 @@
+/opt/android-sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  /root/apkbuilder/android-project/app/.cxx/RelWithDebInfo/t5h6ce4y/armeabi-v7a \
+  nativesecurity

@@ -1,0 +1,85 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:1:1-31:12
+INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:1:1-31:12
+INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:1:1-31:12
+INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:1:1-31:12
+MERGED from [androidx.databinding:viewbinding:8.12.0] /root/.gradle/caches/8.13/transforms/355be805f1705674dc38ed7f2f773f1c/transformed/jetified-viewbinding-8.12.0/AndroidManifest.xml:2:1-7:12
+	package
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:3:2-31
+		INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml
+	android:versionName
+		INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml
+	android:versionCode
+		INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:2:2-60
+uses-permission#android.permission.INTERNET
+ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:4:2-64
+	android:name
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:4:19-61
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:5:2-76
+	android:name
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:5:19-73
+application
+ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:6:2-30:16
+INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:6:2-30:16
+	android:extractNativeLibs
+		INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml
+	android:label
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:10:3-35
+	android:fullBackupContent
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:8:3-36
+	android:icon
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:9:3-37
+	android:allowBackup
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:7:3-30
+	android:theme
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:13:3-34
+	android:usesCleartextTraffic
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:12:3-38
+	android:name
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:11:3-36
+activity#com.zayro.wingsyttt.MainActivity
+ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:14:3-26:14
+	android:screenOrientation
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:20:4-40
+	android:hardwareAccelerated
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:17:4-38
+	android:exported
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:21:4-27
+	android:supportsPictureInPicture
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:18:4-43
+	android:configChanges
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:16:4-97
+	android:theme
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:19:4-38
+	android:name
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:15:4-32
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:22:4-25:20
+action#android.intent.action.MAIN
+ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:23:5-57
+	android:name
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:23:13-54
+category#android.intent.category.LAUNCHER
+ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:24:5-65
+	android:name
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:24:15-62
+uses-library#org.apache.http.legacy
+ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:27:3-29:31
+	android:required
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:29:4-28
+	android:name
+		ADDED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml:28:4-41
+uses-sdk
+INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml
+INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml
+MERGED from [androidx.databinding:viewbinding:8.12.0] /root/.gradle/caches/8.13/transforms/355be805f1705674dc38ed7f2f773f1c/transformed/jetified-viewbinding-8.12.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.databinding:viewbinding:8.12.0] /root/.gradle/caches/8.13/transforms/355be805f1705674dc38ed7f2f773f1c/transformed/jetified-viewbinding-8.12.0/AndroidManifest.xml:5:5-44
+	android:targetSdkVersion
+		INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /root/apkbuilder/android-project/app/src/main/AndroidManifest.xml

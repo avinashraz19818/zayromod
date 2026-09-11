@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/root/apkbuilder/android-project/app/.cxx/RelWithDebInfo/t5h6ce4y/x86_64",
+  "command": "/opt/android-sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=x86_64-none-linux-android21 --sysroot=/opt/android-sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dnativesecurity_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -O2 -fvisibility=hidden -fno-rtti -O2 -g -DNDEBUG -fPIC -o CMakeFiles/nativesecurity.dir/native-security.cpp.o -c /root/apkbuilder/android-project/app/src/main/cpp/native-security.cpp",
+  "file": "/root/apkbuilder/android-project/app/src/main/cpp/native-security.cpp"
+}
+]

@@ -1,0 +1,75 @@
+Marking layout:main:2130968576 reachable: referenced from in_memory_r8_base_classes0.dex
+Marking id:webview1:2130903040 reachable: referenced from in_memory_r8_base_classes0.dex
+android.content.res.Resources#getIdentifier present: false
+Web content present: true
+Referenced Strings:
+big.mp3
+Small
+1
+text/html
+bypass.mp3
+loginw.mp3
+ZAYROUI
+%02x
+z
+zayro_result
+small.mp3
+AES
+alpha
+ZAYRO
+Big
+nativesecurity
+integrity.json
+ZayroApp/1.0
+loading.bin
+file:///android_asset/
+intro.mp3
+PBKDF2WithHmacSHA256
+assets
+AES/CBC/PKCS5Padding
+Accept
+@com.zayro.wingsyttt:color/colorAccent : reachable=false
+@com.zayro.wingsyttt:color/colorControlHighlight : reachable=false
+@com.zayro.wingsyttt:color/colorControlNormal : reachable=false
+@com.zayro.wingsyttt:color/colorPrimary : reachable=false
+@com.zayro.wingsyttt:color/colorPrimaryDark : reachable=false
+@com.zayro.wingsyttt:drawable/default_image : reachable=false
+@com.zayro.wingsyttt:id/webview1 : reachable=true
+@com.zayro.wingsyttt:layout/main : reachable=true
+@com.zayro.wingsyttt:mipmap/ic_launcher : reachable=true
+@com.zayro.wingsyttt:string/app_name : reachable=true
+@com.zayro.wingsyttt:style/AppTheme : reachable=true
+    @com.zayro.wingsyttt:color/colorPrimary
+    @com.zayro.wingsyttt:color/colorPrimaryDark
+    @com.zayro.wingsyttt:color/colorAccent
+    @com.zayro.wingsyttt:color/colorControlHighlight
+    @com.zayro.wingsyttt:color/colorControlNormal
+@com.zayro.wingsyttt:style/AppTheme_DebugActivity : reachable=false
+    @com.zayro.wingsyttt:style/AppTheme
+@com.zayro.wingsyttt:style/FullScreen : reachable=false
+    @com.zayro.wingsyttt:color/colorPrimary
+    @com.zayro.wingsyttt:color/colorPrimaryDark
+    @com.zayro.wingsyttt:color/colorAccent
+    @com.zayro.wingsyttt:color/colorControlHighlight
+    @com.zayro.wingsyttt:color/colorControlNormal
+@com.zayro.wingsyttt:style/NoActionBar : reachable=true
+    @com.zayro.wingsyttt:color/colorPrimary
+    @com.zayro.wingsyttt:color/colorPrimaryDark
+    @com.zayro.wingsyttt:color/colorAccent
+    @com.zayro.wingsyttt:color/colorControlHighlight
+    @com.zayro.wingsyttt:color/colorControlNormal
+@com.zayro.wingsyttt:style/NoStatusBar : reachable=false
+    @com.zayro.wingsyttt:style/AppTheme
+
+The root reachable resources are:
+ id:webview1:2130903040
+ layout:main:2130968576
+ mipmap:ic_launcher:2131034112
+ string:app_name:2131099648
+ style:AppTheme:2131165184
+ style:NoActionBar:2131165187
+Unused resources are: 
+ drawable:default_image:2130837504
+ style:AppTheme_DebugActivity:2131165185
+ style:FullScreen:2131165186
+ style:NoStatusBar:2131165188
