@@ -210,53 +210,36 @@ Iske baad:
 Service account ke bina bhi sab chalega — sirf admin panel ka link
 change fail hoga (wohi hacker ka darwaza tha, ab band).
 
-## Remote Content + 360 Protection (APK me kuch nahi hota)
+## Remote Content + Popup Protection
 
-### Remote HTML (automatic)
-- Popup HTML ab APK me embed NAHI hota. App launch hote hi server se
-  `GET /api/app-content/:path` (encrypted .bin, fixed key, HTTPS) fetch
-  karta hai — APK me koi design HTML / Firebase detail nahi milti.
-- Loading HTML sirf splash ke liye embedded rehta hai (koi secret nahi).
+### Popup HTML — assets me encrypted (primary, offline)
+- Popup HTML har build me **APK ke assets folder me `zayro.bin`** ke roop
+  me bundled hota hai — AES-256-CBC + PBKDF2 (per-build password) se
+  encrypted (utils/encrypt.js). App ise offline decrypt karke load karta
+  hai.
+- Loading HTML bhi assets me hi aata hai (`loading.bin` / dhani builds me
+  `lodale.bin` bhi) — same encryption, sirf splash ke liye.
+- Encryption format: `MARKER(8) | salt(16) | iv(16) | AES-256-CBC | padding(64)`,
+  key = PBKDF2WithHmacSHA256(password, salt, 100000 iter, 256-bit).
+- Password DEX me XOR-masked byte array (0x5A) ke roop me jaata hai —
+  plaintext nahi milta.
+
+### Remote HTML (fallback, automatic)
+- Asset missing/corrupt ho ya purana APK ho to app server se
+  `GET /api/app-content/:path` (encrypted .bin, HTTPS) fetch karta hai.
+- Server route public hai par response encrypted hai.
 - App me network fail ho to RETRY button dikhta hai.
-- Server route public hai par response encrypted hai — 360 laga ho to
-  decrypt key bhi DEX me locked hoti hai.
 
-### Frezrik Jiagu (DEFAULT — open-source DEX packer, koi account nahi)
-**AUTO SETUP:** VPS pe ye chalao — tool khud download hoga (~15MB):
-```
-bash scripts/setup-frezrik.sh
-```
-Ye har build me app ka DEX AES-encrypt karta hai (shell dex + 4 ABIs ke
-libjiagu). Decompile karne pe sirf shell dikhta hai — asli code kuch nahi.
-Pipeline khud pack.jar dhundti hai (/opt/frezrik/pack.jar); apne
-zipalign+apksigner se sign hoti hai. FREZRIK_ENABLED=false → band.
-
-### 360 Jiagu hardening (optional — account wala, backup option)
-**AUTO SETUP:** VPS pe ye chalao — OFFICIAL tool khud
-download hoga (360 ke apne server se, ~270MB Linux package):
-```
-bash scripts/setup-jiagu.sh
-```
-(Link: down.360safe.com/360Jiagu/360jiagubao_linux_64.zip — official.
-Docker wrapper repo idocking/360jiagu ke Dockerfile se ye link mila.)
-Official site se manual chahiye to neeche wala tareeka bhi hai.
-
-**MANUAL:** jiagu.360.cn pe account banao + `jiagu.jar` download karo
-2. VPS pe rakho: `/opt/jiagu/jiagu.jar`
-3. `.env` me:
-   ```
-   JIAGU_ENABLED=true
-   JIAGU_JAR=/opt/jiagu/jiagu.jar
-   JIAGU_EMAIL=360_wala_email
-   JIAGU_PASS=360_wala_password
-   ```
-4. `pm2 restart apkbuilder`
-
-Ab har build: Gradle → 360 hardening (DEX encrypted + anti-tamper +
-string encryption) → autosign (imported keystore) → final APK.
-Jiagu fail ho to normal signing fallback — build kabhi nahi atakta.
-Note: 360 ke flags version ke hisaab se thode alag ho sakte hain
-(scripts/jiagu-protect.sh me adjust kar lena).
+### 360 / DEX packers — REMOVED
+- **360 Jiagu (official) aur Frezrik Jiagu (open-source DEX packer) dono
+  pipeline se completely remove ho chuke hain** — koi packer step, script,
+  env var ya native module nahi bacha.
+- Build flow ab simple hai: Gradle → zipalign → apksigner → final APK.
+- `libnativesecurity.so` (HTML popup .so vault) bhi hata diya gaya — APK
+  me ab koi .so nahi jata, NDK ki zarurat nahi.
+- VPS pe `/opt/jiagu` ya `/opt/frezrik` pade hon to unhe delete kar
+  (~285MB free) aur `.env` se `JIAGU_*` / `FREZRIK_*` lines hata dena
+  (ab ignore hoti hain).
 
 ## Security
 

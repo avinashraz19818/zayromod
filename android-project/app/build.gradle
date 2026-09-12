@@ -6,10 +6,8 @@ plugins {
 //   debug             : developer friendly, koi minify nahi
 //   release           : R8 + resource shrink (standard production)
 //   protectedRelease  : MAXIMUM — R8 aggressive rules + resource shrink +
-//                       protected-rules.pro + (optional) native security
-// Native security module sirf tab compile hota hai jab:
-//   ./gradlew assembleProtectedRelease -PenableNativeSecurity
-// (NDK chahiye; bina NDK ke bhi saare Java-level checks active rehte hain.)
+//                       protected-rules.pro
+// (Pure Java — koi native/.so module nahi, NDK ki zarurat nahi.)
 
 android {
 	compileSdk 34
@@ -52,11 +50,6 @@ android {
 	buildFeatures {
 		viewBinding true
 	}
-}
-
-// Optional native security module (sirf -PenableNativeSecurity ke saath)
-if (project.hasProperty("enableNativeSecurity")) {
-	apply from: 'native-security.gradle'
 }
 
 dependencies {

@@ -12,9 +12,9 @@
 //   • Per-build UNIQUE password (build_keys table) — FIXED_PASSWORD nahi
 //   • Password 3 fragments me split: Dart (D1) + native C++ (R1) + cert-derived (C3)
 //   • Flutter release: --obfuscate --split-debug-info (Dart AOT symbols strip)
-//   • Frezrik/360 Jiagu SKIP — wo DEX packers hain; Dart logic libapp.so
-//     (native machine code) me hota hai, DEX me nahi. Wrapper R8 + native
-//     checks + obfuscation hi yahan protection hai.
+//   • External DEX packers (360 Jiagu / Frezrik) removed hain — Dart logic
+//     libapp.so (native machine code) me hota hai, DEX me nahi. Wrapper R8 +
+//     native checks + obfuscation hi yahan protection hai.
 // ═════════════════════════════════════════════════════════════════════════════
 
 const fs = require('fs');

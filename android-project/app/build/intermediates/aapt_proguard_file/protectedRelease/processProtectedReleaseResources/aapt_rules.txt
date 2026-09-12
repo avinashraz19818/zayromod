@@ -1,2 +1,0 @@
--keep class com.zayro.wingsyttt.MainActivity { <init>(); }
--keep class com.zayro.wingsyttt.SketchApplication { <init>(); }

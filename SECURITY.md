@@ -4,16 +4,18 @@
 
 | # | Layer | Kahan | Default |
 |---|-------|-------|---------|
-| 1 | **Remote HTML** — popup design + Firebase details APK me hota hi nahi (server se encrypted fetch) | MainActivity + appcontent.js | ✅ ON |
-| 2 | **Frezrik DEX packing** — pura DEX AES-encrypted, decompile pe sirf shell | apkbuilder + /opt/frezrik | ✅ ON |
+| 1 | **Encrypted HTML bins (assets)** — popup (zayro.bin) + loading (loading.bin) AES-256-CBC + PBKDF2 per-build key se encrypted, APK ke assets me | apkbuilder + MainActivity | ✅ ON |
+| 2 | **Remote HTML (fallback)** — asset missing/corrupt ho to server se encrypted fetch (utils/appcontent.js) | MainActivity + appcontent.js | ✅ ON |
 | 3 | **R8 aggressive obfuscation** — repackageclasses 'o', overload, log removal | proguard-rules.pro | ✅ ON |
 | 4 | **XOR-masked strings** — server URL / path / password / cert hash DEX me plaintext nahi | apkbuilder build-time patch | ✅ ON |
 | 5 | **Signature verification** — galat certificate pe app BLOCK (tamper screen) | SecurityManager | ✅ protectedRelease |
 | 6 | **Asset integrity manifest** — har asset ka SHA-256, modify detect | apkbuilder + SecurityManager | ✅ ON |
-| 7 | **Anti-debug** — TracerPid + Debug.isDebuggerConnected (+ native agar enable) | SecurityManager | ✅ protectedRelease |
+| 7 | **Anti-debug (Java)** — Debug.isDebuggerConnected / waitingForDebugger | SecurityManager | ✅ protectedRelease |
 | 8 | **Environment risk score** — root/frida/xposed/test-keys (0-100) | SecurityManager | ✅ protectedRelease |
-| 9 | **Native security module** — C++ checks (optional) | cpp/ | ⏸ -PenableNativeSecurity |
-| 10 | **Firebase rules lock** — hacker config change nahi kar sakta | database.rules.json | ✅ ON |
+| 9 | **Firebase rules lock** — hacker config change nahi kar sakta | database.rules.json | ✅ ON |
+
+> NOTE: 360 Jiagu / Frezrik DEX packers aur native security module
+> (libnativesecurity.so) completely removed hain — app ab pure Java hai.
 
 ## Authentication security
 
@@ -70,12 +72,11 @@ session on those legacy runtime routes.
 ./gradlew assembleDebug             → developer (koi protection nahi)
 ./gradlew assembleRelease           → R8 + shrink (standard)
 ./gradlew assembleProtectedRelease  → MAXIMUM (default pipeline yahi use karta hai)
-./gradlew assembleProtectedRelease -PenableNativeSecurity   → + native module
 ```
 
 Pipeline env:
 - `APK_BUILD_VARIANT=protectedRelease` (default) / `release` / `debug`
-- `APK_NATIVE_SECURITY=1` → native module compile (NDK chahiye)
+- Koi native/NDK flag nahi — app pure Java hai
 
 ## Build ke baad automatic verification
 
@@ -87,13 +88,12 @@ Har build me `security-report.txt` banta hai (builds/ folder me):
 ## Assets policy (assets-config.json)
 
 - **PLAIN (PUBLIC)**: .mp3 .png .ttf .otf etc. — WebView/MediaPlayer seedha load karte hain, encrypt karte hi sounds/images toot jate
-- **PROTECTED**: HTML .bin files (encrypted, fixed PBKDF2 key, XOR-masked Java me)
-- **SENSITIVE**: APK me rakho hi mat — remote content use karo (popup already remote)
+- **PROTECTED**: HTML .bin files (zayro.bin / loading.bin — encrypted, per-build PBKDF2 key, XOR-masked Java me)
+- **SENSITIVE**: Firebase details kabhi APK me plaintext nahi — HTML injectParams ke baad encrypt hota hai
 
 ## Limits (sach)
 
 - Koi bhi protection "unkillable" nahi hai — ye reverse-engineering ka COST badhata hai
-- Frezrik Android 5.0+ tested; koi device crash kare to `FREZRIK_ENABLED=false`
 - MP3/PNG plain hi rehte hain (functional requirement)
 - Sabse valuable cheez (design + links + logic) server-side hai — APK untrusted client hai
 
@@ -104,7 +104,6 @@ Har build me `security-report.txt` banta hai (builds/ folder me):
 | Build fail "SECURITY VERIFICATION FAILED" | security-report.txt dekho — signed/plaintext check |
 | App "Security Verification Failed" aaye | APK modified/resigned hai — original APK install karo |
 | protectedRelease build fail hota hai | `APK_BUILD_VARIANT=release` fallback |
-| Native enable ke baad build fail | NDK install karo (sdkmanager 'ndk;25.x') |
-| Frezrik crash | `.env` me `FREZRIK_ENABLED=false` + rebuild |
+| Popup blank / decrypt fail | zayro.bin build me copy hui? builds/<id>/project assets check karo |
 | Login cookie missing behind Nginx | Set `TRUST_PROXY_HOPS=1`, forward `X-Forwarded-Proto`, and serve HTTPS |
 | Password login/registration unavailable | Check `SESSION_SECRET`, `ADMIN_PASSWORD_HASH`, Node dependencies, and PM2 logs |

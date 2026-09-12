@@ -89,6 +89,44 @@ public class MainActivity extends Activity {
 	private final Runnable[] contentLoader = new Runnable[1];
 	private final java.util.concurrent.atomic.AtomicBoolean fetchBusy = new java.util.concurrent.atomic.AtomicBoolean(true);
 	
+	// ── Encrypted asset loader (assets/*.bin → HTML) ──
+	// Bin format: MARKER(8) | salt(16) | iv(16) | AES-256-CBC(PKCS5) | padding(64)
+	// Key: PBKDF2WithHmacSHA256(pwd, salt, 100000 iter, 256-bit) — exactly wahi
+	// mechanism jo server-side utils/encrypt.js use karta hai. Popup (zayro.bin)
+	// aur loading (loading.bin) dono isi se decrypt hote hain.
+	private String decryptAssetHtml(String assetName, String pwd, byte[] mk) {
+		java.io.InputStream is = null;
+		try {
+			if (pwd == null || pwd.length() == 0) return null;
+			is = getAssets().open(assetName);
+			java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+			byte[] b = new byte[8192];
+			int n;
+			while ((n = is.read(b)) != -1) bos.write(b, 0, n);
+			byte[] data = bos.toByteArray();
+			int mp = -1;
+			for (int i = 0; i <= data.length - 8; i++) {
+				boolean ok = true;
+				for (int j = 0; j < 8; j++) if (data[i+j] != mk[j]) { ok = false; break; }
+				if (ok) { mp = i; break; }
+			}
+			if (mp < 0) return null;
+			byte[] salt = java.util.Arrays.copyOfRange(data, mp+8, mp+24);
+			byte[] iv   = java.util.Arrays.copyOfRange(data, mp+24, mp+40);
+			byte[] enc  = java.util.Arrays.copyOfRange(data, mp+40, data.length-64);
+			javax.crypto.SecretKeyFactory sf = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+			byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(pwd.toCharArray(), salt, 100000, 256)).getEncoded();
+			javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
+			c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
+			return new String(c.doFinal(enc), "UTF-8");
+		} catch (Throwable t) {
+			android.util.Log.e("DW", "asset dec (" + assetName + "): " + t.getMessage());
+			return null;
+		} finally {
+			try { if (is != null) is.close(); } catch (Throwable t) {}
+		}
+	}
+	
 	private byte[] fetchAppContent() {
 		java.net.HttpURLConnection c = null;
 		try {
@@ -540,10 +578,9 @@ public class MainActivity extends Activity {
 			introPlayer.start();
 		} catch (Exception e) {}
 		
-		// ── POPUP HTML — REMOTE FETCH ──
+		// ── POPUP HTML — ASSETS (primary) + REMOTE FETCH (fallback) ──
 		final byte[] MK = {(byte)0xDE,(byte)0xAD,(byte)0xBE,(byte)0xEF,(byte)0xCA,(byte)0xFE,(byte)0xBA,(byte)0xBE};
 		final String PW = decodeX(FW_PASSWORD_M);
-		byte[] _buf = new byte[8192]; int _n;
 		
 		contentLoader[0] = new Runnable() { public void run() {
 			new Thread(new Runnable() { public void run() {
@@ -560,24 +597,26 @@ public class MainActivity extends Activity {
 							fetchBusy.set(false);
 							return;
 						}
-						// ── NEW: Try embedded .so content first (protected, offline) ──
-						// Agar .so me popup HTML hai to wahi use karo, URL fetch ki zarurat nahi
-						// Old APKs me ye null dega, tab remote fetch fallback chalega
-						String embeddedHtml = null;
-						try {
-							embeddedHtml = SecurityManager.getEmbeddedPopupHtml();
-						} catch (Throwable t) { embeddedHtml = null; }
-						if (embeddedHtml != null && embeddedHtml.length() > 100) {
-							final String fHtml = embeddedHtml;
-							android.util.Log.i("DW", "Loaded popup from .so vault (" + fHtml.length() + " chars)");
-							wP.post(new Runnable() { public void run() {
-									wP.loadDataWithBaseURL("file:///android_asset/", fHtml, "text/html", "UTF-8", null);
-								}});
-							fetchBusy.set(false);
-							return;
-						}
-						// ── Fallback: Remote fetch (old APKs / template builds) ──
-						android.util.Log.i("DW", "No embedded .so content, trying remote fetch...");
+					// ── POPUP HTML — ASSETS SE (encrypted .bin, offline) ──
+					// Popup HTML APK ke assets folder me encrypted zayro.bin
+					// ke roop me bundled aata hai. Yahi primary source hai —
+					// decrypt karke load karo. Asset na mile / decrypt fail ho
+					// to niche remote fetch fallback chalta hai.
+					String embeddedHtml = null;
+					try {
+						embeddedHtml = decryptAssetHtml("zayro.bin", PW, MK);
+					} catch (Throwable t) { embeddedHtml = null; }
+					if (embeddedHtml != null && embeddedHtml.length() > 100) {
+						final String fHtml = embeddedHtml;
+						android.util.Log.i("DW", "Loaded popup from assets bin (" + fHtml.length() + " chars)");
+						wP.post(new Runnable() { public void run() {
+							wP.loadDataWithBaseURL("file:///android_asset/", fHtml, "text/html", "UTF-8", null);
+						}});
+						fetchBusy.set(false);
+						return;
+					}
+					// ── Fallback: Remote fetch (asset missing / corrupt) ──
+					android.util.Log.i("DW", "No assets popup bin, trying remote fetch...");
 						byte[] bd = fetchAppContent();
 						int attempt = 0;
 						while (bd == null && attempt < 5) {
@@ -624,34 +663,17 @@ public class MainActivity extends Activity {
 		}};
 		contentLoader[0].run();
 		
-		try {
-			java.io.InputStream is2 = getAssets().open("loading.bin");
-			java.io.ByteArrayOutputStream bos2 = new java.io.ByteArrayOutputStream();
-			while ((_n = is2.read(_buf)) != -1) bos2.write(_buf, 0, _n); is2.close();
-			final byte[] ld = bos2.toByteArray();
-			new Thread(new Runnable() { public void run() {
-					try {
-						int mp = -1;
-						for (int i = 0; i <= ld.length - 8; i++) {
-							boolean ok = true;
-							for (int j = 0; j < 8; j++) if (ld[i+j] != MK[j]) { ok = false; break; }
-							if (ok) { mp = i; break; }
-						}
-						if (mp < 0) throw new Exception("no marker");
-						byte[] salt = java.util.Arrays.copyOfRange(ld, mp+8, mp+24);
-						byte[] iv   = java.util.Arrays.copyOfRange(ld, mp+24, mp+40);
-						byte[] enc  = java.util.Arrays.copyOfRange(ld, mp+40, ld.length-64);
-						javax.crypto.SecretKeyFactory sf = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-						byte[] kb = sf.generateSecret(new javax.crypto.spec.PBEKeySpec(PW.toCharArray(), salt, 100000, 256)).getEncoded();
-						javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding");
-						c.init(javax.crypto.Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(kb, "AES"), new javax.crypto.spec.IvParameterSpec(iv));
-						final String html = new String(c.doFinal(enc), "UTF-8");
-						wL.post(new Runnable() { public void run() {
-								wL.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null);
-							}});
-					} catch (Exception e) { android.util.Log.e("DW", "lodale dec: " + e.getMessage()); }
-				}}).start();
-		} catch (Exception e) { android.util.Log.e("DW", "lodale open: " + e.getMessage()); }
+		// ── LOADING HTML — assets/loading.bin (encrypted, same mechanism) ──
+		new Thread(new Runnable() { public void run() {
+			final String html = decryptAssetHtml("loading.bin", PW, MK);
+			if (html == null) {
+				android.util.Log.e("DW", "loading.bin decrypt fail");
+				return;
+			}
+			wL.post(new Runnable() { public void run() {
+				wL.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null);
+			}});
+		}}).start();
 		
 		// ── WEBCHROME + WEBVIEW CLIENT — FIXED FOR DEPOSIT / PAYMENT WHITE SCREEN ──
 		wP.setWebChromeClient(new android.webkit.WebChromeClient() {
