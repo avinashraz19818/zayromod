@@ -272,11 +272,6 @@ function injectParams(htmlContent, params) {
   );
 
   // ── FIREBASE LIVE LINKS ──
-  // ZAYRO-NO-ROUTE-COMPAT wale designs (fake scan-mode builds) me liveLinks
-  // script inject NAHI karte — wo startup pe setUrl(REGISTER_URL) push karta
-  // hai jo scan-mode design ko wapas register state me le jata.
-  if (html.indexOf('ZAYRO-NO-ROUTE-COMPAT') >= 0) return html;
-
   // URLs are intentionally NOT stored in the APK or localStorage. The app
   // waits for <firebasePath>/config and always uses those Firebase values.
   let firebaseSdkScripts = '';

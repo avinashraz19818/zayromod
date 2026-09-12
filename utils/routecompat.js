@@ -226,8 +226,6 @@ const ROUTE_COMPAT_SOURCE = [
 function injectRouteCompat(html) {
   if (!html) return html;
   if (html.indexOf(SHIM_MARKER) >= 0) return html;
-  // Design khud bol de ki route-compat nahi chahiye (jaise fake scan-mode builds)
-  if (html.indexOf('ZAYRO-NO-ROUTE-COMPAT') >= 0) return html;
 
   const script = `<script>\n/* ${SHIM_MARKER} — build-time auto-inject (DhaniWin / 13l path-routed support) */\n${ROUTE_COMPAT_SOURCE}\n</script>`;
 
