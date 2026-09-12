@@ -61,6 +61,20 @@ function api_emit($payload, int $status = 200): void
     if ($bearer !== '' && !headers_sent()) {
         header('Authorization: Bearer ' . $bearer);
         header('Access-Control-Expose-Headers: Authorization');
+        // Hand the same member identity to the game page even when it is opened
+        // directly (e.g. /Wingo_1M or a bookmarked link) instead of via Play.
+        // Same-origin cookie: no JS/CORS changes needed.
+        if (empty($_COOKIE['ar_g_token']) || (string) $_COOKIE['ar_g_token'] !== $bearer) {
+            $secure = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+                || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+            setcookie('ar_g_token', $bearer, [
+                'expires' => time() + 2592000,
+                'path' => '/',
+                'secure' => $secure,
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]);
+        }
     }
     echo json_encode($payload, api_json_flags());
     exit;
@@ -1616,7 +1630,7 @@ function api_request_token(): string
     ];
     foreach ($candidates as $value) {
         $value = trim((string) $value);
-        if ($value !== '') {
+        if ($value !== '' && !in_array(strtolower($value), ['null', 'undefined', 'false', '[object object]', '0', '""', "\'\'"], true)) {
             return $value;
         }
     }
@@ -1683,6 +1697,104 @@ function api_user_fresh(): array
  * to localStorage as `ar_g_token`). Without it every /Lottery/* call was
  * anonymous -> the game showed the FIRST member's balance, not the real one.
  */
+/**
+ * Portable setting writer (MySQL + SQLite).
+ */
+function api_set_setting(string $key, string $value): bool
+{
+    $pdo = api_pdo();
+    if (!$pdo) {
+        return false;
+    }
+    try {
+        $stmt = $pdo->prepare("UPDATE api_settings SET setting_value = ? WHERE setting_key = ?");
+        $stmt->execute([$value, $key]);
+        if ($stmt->rowCount() > 0) {
+            return true;
+        }
+        $sql = api_db_driver($pdo) === 'mysql'
+            ? "INSERT INTO api_settings (setting_key, setting_value) VALUES (?, ?)"
+            : "INSERT OR IGNORE INTO api_settings (setting_key, setting_value) VALUES (?, ?)";
+        $pdo->prepare($sql)->execute([$key, $value]);
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Optional one-line audit trail so "why is the game anonymous" can be answered
+ * from the admin page instead of guessing. Only writes when
+ * api_settings.balance_debug = 1.
+ */
+function api_balance_debug(string $what): void
+{
+    if ((string) api_setting('balance_debug', '0') !== '1') {
+        return;
+    }
+    $line = sprintf(
+        "%s | %s %s | %s | auth=%s cookie=%s query=%s | ua=%s\n",
+        date('Y-m-d H:i:s'),
+        strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')),
+        (string) ($_SERVER['REQUEST_URI'] ?? '-'),
+        $what,
+        !empty($_SERVER['HTTP_AUTHORIZATION']) || !empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION']) ? 'YES' : 'no',
+        isset($_COOKIE['ar_g_token']) || isset($_COOKIE['ar_token']) ? 'YES' : 'no',
+        $_GET ? implode(',', array_keys($_GET)) : '-',
+        substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 60)
+    );
+    $file = api_storage_dir() . '/balance-debug.log';
+    if (!is_dir(api_storage_dir())) {
+        return;
+    }
+    if (is_file($file) && filesize($file) > 400000) {
+        @file_put_contents($file, substr((string) file_get_contents($file), -120000));
+    }
+    @file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
+}
+
+/**
+ * 'game' (default) = Wingo shows the game wallet only.
+ * 'total'          = Wingo shows game + main wallet.
+ */
+function api_wingo_shown_balance(array $bal): float
+{
+    $mode = strtolower((string) api_setting('wingo_balance_mode', 'game'));
+    return $mode === 'total' ? (float) ($bal['game'] + $bal['wallet']) : (float) $bal['game'];
+}
+
+/**
+ * When the member keeps money only in the main wallet the game legitimately
+ * shows 0. Sites that want "no confusion" switch this on: on game entry the
+ * whole main wallet is moved into the game wallet (same rules as the app's
+ * Transfer button). Off by default.
+ */
+function api_wingo_maybe_auto_transfer(array $member): void
+{
+    if ((string) api_setting('wingo_auto_transfer', '0') !== '1') {
+        return;
+    }
+    if (empty($member['id'])) {
+        return;
+    }
+    $bal = api_user_balances($member);
+    if ($bal['game'] >= 1.0 || $bal['wallet'] <= 0.0) {
+        return;
+    }
+    $pdo = api_pdo();
+    if (!$pdo) {
+        return;
+    }
+    try {
+        $stmt = $pdo->prepare("UPDATE api_users SET wallet_balance = wallet_balance - ?, game_balance = game_balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND wallet_balance >= ?");
+        $stmt->execute([$bal['wallet'], $bal['wallet'], (int) $member['id'], $bal['wallet']]);
+        if ($stmt->rowCount() > 0) {
+            api_audit('wingo_auto_transfer', (string) ($member['user_id'] ?? $member['id']), ['amount' => $bal['wallet']]);
+        }
+    } catch (Throwable $e) {
+    }
+}
+
 function api_issue_bearer(string $token): void
 {
     if ($token !== '') {
@@ -3360,10 +3472,15 @@ function api_lottery_dynamic(string $endpoint, array $input): ?array
         $user = api_user_fresh();
         $bal = api_user_balances($user);
         $currency = (string) (api_config()['site']['currency'] ?? 'INR');
+        $shown = api_wingo_shown_balance($bal);
+        if (empty($user['id'])) {
+            api_balance_debug('Lottery/GetBalance -> no member resolved (showing 0)');
+        }
         return api_lottery_success([
-            'balance' => $bal['game'],
-            'amount' => $bal['game'],
-            'money' => $bal['game'],
+            'balance' => $shown,
+            'amount' => $shown,
+            'money' => $shown,
+            'balanceMode' => strtolower((string) api_setting('wingo_balance_mode', 'game')),
             'gameBalance' => $bal['game'],
             'walletBalance' => $bal['wallet'],
             'totalBalance' => $bal['game'] + $bal['wallet'],
@@ -3375,6 +3492,10 @@ function api_lottery_dynamic(string $endpoint, array $input): ?array
     }
     if ($action === 'getuserinfo') {
         $member = api_user_fresh();
+        api_wingo_maybe_auto_transfer($member);
+        if (empty($member['id'])) {
+            api_balance_debug('Lottery/GetUserInfo -> no member resolved');
+        }
         $info = api_user_info_data();
         $info['userId'] = (int) ($member['user_id'] ?? 0);
         $info['nickName'] = (string) ($member['nickname'] ?? '');

@@ -249,6 +249,18 @@ function bfix_game_entry_report(PDO $pdo, string $username): array
 /* --------------------------------------------------------------------- actions */
 $pdo = api_pdo();
 $repairReport = null;
+if ($authed && $pdo && strtolower((string) ($_POST['action'] ?? '')) === 'set') {
+    $key = (string) ($_POST['key'] ?? '');
+    $val = (string) ($_POST['value'] ?? '');
+    $allowed = ['wingo_balance_mode' => ['game', 'total'], 'wingo_auto_transfer' => ['0', '1'], 'balance_debug' => ['0', '1']];
+    if (isset($allowed[$key]) && in_array($val, $allowed[$key], true)) {
+        $ok = api_set_setting($key, $val);
+        $notice = $ok ? 'Saved: ' . $key . ' = ' . $val : 'Could not save ' . $key . ' (api_settings not writable?)';
+    } else {
+        $notice = 'Unknown setting';
+    }
+}
+
 if ($authed && $pdo && strtolower((string) ($_POST['action'] ?? '')) === 'repair') {
     $repairReport = bfix_repair($pdo);
     $notice = sprintf(
@@ -509,7 +521,63 @@ if (!$gameReport['found']): ?>
 <?php endif; ?>
 </div>
 
-<h2>6 · After this, do this in the app</h2>
+<h2>6 · Game me kaunsa balance dikhe (site setting)</h2>
+<div class="card">
+  <table>
+    <tr>
+      <th style="width:46%">Wingo balance source</th>
+      <td>
+        current: <code><?= bfix_e((string) api_setting('wingo_balance_mode', 'game')) ?></code>
+        <div class="note">game wallet = sirf wo paisa jo Wingo me transfer hai (platform ka normal rule).
+        total = main wallet + game wallet, yaani app header wala number.</div>
+      </td>
+      <td style="white-space:nowrap">
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="wingo_balance_mode"><input type="hidden" name="value" value="game">
+          <button type="submit" class="ghost">Use game wallet</button></form>
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="wingo_balance_mode"><input type="hidden" name="value" value="total">
+          <button type="submit" class="ghost">Show total (wallet + game)</button></form>
+      </td>
+    </tr>
+    <tr>
+      <th>Auto-transfer on game entry</th>
+      <td>current: <code><?= (string) api_setting('wingo_auto_transfer', '0') === '1' ? 'ON' : 'off' ?></code>
+        <div class="note">ON karne se game kholte waqt poora main wallet game wallet me chala jaata hai
+        (app ke Transfer button jaisa rule). Default off — paisa user ke bina action ke move na ho isliye.</div></td>
+      <td style="white-space:nowrap">
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="wingo_auto_transfer"><input type="hidden" name="value" value="1">
+          <button type="submit" class="ghost">Turn ON</button></form>
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="wingo_auto_transfer"><input type="hidden" name="value" value="0">
+          <button type="submit" class="ghost">OFF</button></form>
+      </td>
+    </tr>
+    <tr>
+      <th>Identity debug log</th>
+      <td>current: <code><?= (string) api_setting('balance_debug', '0') === '1' ? 'ON' : 'off' ?></code>
+        <div class="note">ON karke ek baar game kholo, neeche log me dikhega ki game ke request ke saath
+        token aa raha hai ya nahi (auth / cookie / query). Kaam ke baad OFF kar dena.</div></td>
+      <td style="white-space:nowrap">
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="balance_debug"><input type="hidden" name="value" value="1">
+          <button type="submit" class="ghost">Turn ON</button></form>
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="balance_debug"><input type="hidden" name="value" value="0">
+          <button type="submit" class="ghost">OFF</button></form>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<?php
+$debugFile = api_storage_dir() . '/balance-debug.log';
+if (is_file($debugFile)):
+    $lines = array_slice(array_filter(explode("\n", (string) file_get_contents($debugFile))), -25);
+?>
+<h2>7 · Identity log (last <?= count($lines) ?> lines)</h2>
+<div class="card"><pre><?= bfix_e(implode("\n", array_reverse($lines))) ?></pre>
+  <div class="note">auth=YES matlab request me bearer token aaya. auth=no & cookie=no matlab game
+  bina member ke khula — tab balance jaan-boojh ke 0 dikhaya jaata hai (kisi aur ka paisa dikhane se better).</div>
+</div>
+<?php endif; ?>
+
+<h2>8 · After this, do this in the app</h2>
 <div class="card note">
   1. Open the site → hard reload (Ctrl+F5 / on phone: clear the app webview cache once).<br>
   2. Log out and log in again inside the app (this re-saves the member token).<br>

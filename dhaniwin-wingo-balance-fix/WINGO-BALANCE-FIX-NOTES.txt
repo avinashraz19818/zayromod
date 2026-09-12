@@ -102,6 +102,48 @@ IMPORTANT — business logic note
   Agar aap chahte hain ki game me total (wallet + game) dikhe, bolo — 1 line
   ka change hai.
 
+ROUND 3 — game page DIRECTLY kholne pe bhi member pehchane
+--------------------------------------------------------------------
+Ab tak token sirf "Play" click ke flow (GetGameUrl ?Token=) se game tak jaata tha.
+Aapne browser me seedha /Wingo... khol liya → koi token nahi → balance 0.
+(₹158,507 ab nahi dikhega — wo demo account ka leak band ho gaya hai, isliye
+ ab 0 dikh raha hai. 0 = "mujhe nahi pata kaun hai", jo safe behaviour hai.)
+
+Isliye ab:
+  - jo bhi authenticated API call hoti hai, uske response pe server
+    `Set-Cookie: ar_g_token=<member token>` bhejta hai (HttpOnly, SameSite=Lax,
+    30 din). Game page same-origin hai → cookie khud chala jaata hai → direct
+    /Wingo link, bookmark, reload — sab me member pehchana jaayega.
+  - `Authorization` response header bhi pehle jaisa (localStorage flow).
+  - 'null'/'undefined' jaise khaali token values ab ignore hoti hain (SDK kabhi
+    kabhi 'Bearer null' bhej deta tha) — isse galat "guest" resolve nahi hoga.
+
+Naye site settings (admin/balance-fix.php section 6 se click karke set ho jaate
+hain, DB me api_settings row ban jaati hai):
+  wingo_balance_mode = game | total
+      game  (default) → Wingo me sirf game wallet
+      total           → Wingo me main wallet + game wallet (app header jaisa number)
+  wingo_auto_transfer = 0 | 1
+      1 → game kholte waqt poora main wallet game wallet me transfer (default 0)
+  balance_debug = 0 | 1
+      1 → api/storage/balance-debug.log me har lottery call ka identity status;
+          tool me section 7 last 25 lines dikhata hai. Debug ke liye ON, baad me OFF.
+
+AAPKE CASE KE LIYE SHORTCUT
+--------------------------------------------------------------------
+Aapko ₹13,235 game me bhi chahiye → section 6 me "Show total (wallet + game)"
+dabao. Bas. (Ya "Turn ON" for auto-transfer, phir game me ₹13,235 available for
+betting bhi ho jaayega — bet lagane ke liye game wallet me paisa chahiye hi hota
+hai, total mode sirf display ke liye hai.)
+
+VERIFY (30 second)
+--------------------------------------------------------------------
+1. zip extract → site ka home page ek baar kholo (login ke saath) → isse cookie set
+2. ab WinGo kholo (Play se ya direct link se, dono) → balance aana chahiye
+3. phir bhi 0? → section 6 me "Identity debug log: Turn ON" → ek baar game kholo →
+   section 7 ka log yahan paste kar dena, main bata dunga kaunsi call anonymous aa
+   rahi thi.
+
 Data safety: koi table/schema change nahi, koi user/order delete nahi.
 Repair button sirf `api_responses.enabled = 0` karta hai (frozen snapshots off).
 ====================================================================
