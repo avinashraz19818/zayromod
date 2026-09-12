@@ -51,14 +51,26 @@ function api_headers(string $contentType = 'application/json; charset=utf-8'): v
 
 function api_emit($payload, int $status = 200): void
 {
+    $payload = api_strip_stale_game_login_url($payload);
     http_response_code($status);
     api_headers();
+    $bearer = (string) ($GLOBALS['api_issue_token'] ?? '');
+    if ($bearer === '' && !empty($GLOBALS['api_user_matched_by_token'])) {
+        $bearer = api_request_token();
+    }
+    if ($bearer !== '' && !headers_sent()) {
+        header('Authorization: Bearer ' . $bearer);
+        header('Access-Control-Expose-Headers: Authorization');
+    }
     echo json_encode($payload, api_json_flags());
     exit;
 }
 
 function api_success($data = null, array $extra = []): array
 {
+    if (is_array($data) && isset($data['token']) && is_string($data['token']) && $data['token'] !== '') {
+        api_issue_bearer($data['token']);
+    }
     return array_merge([
         'data' => $data,
         'code' => 0,
@@ -1537,6 +1549,12 @@ function api_is_live_money_endpoint(string $endpoint): bool
         'home/register',
         'home/refresh',
         'home/refreshtoken',
+        'home/autologin',
+        'home/mobileautologin',
+        'home/emailautologin',
+        'thirdgame/getgameurl',
+        'lottery/getwingoliveurl',
+        'lottery/getuserinfo',
     ];
     return in_array($e, $live, true);
 }
@@ -1587,9 +1605,12 @@ function api_request_token(): string
         }
     }
     $candidates = [
+        $_GET['Token'] ?? '',
         $_GET['token'] ?? '',
         $_POST['token'] ?? '',
         $_REQUEST['token'] ?? '',
+        $_REQUEST['Token'] ?? '',
+        $_COOKIE['ar_g_token'] ?? '',
         $_COOKIE['ar_token'] ?? '',
         $_COOKIE['token'] ?? '',
     ];
@@ -1639,7 +1660,7 @@ function api_user_balances(array $user): array
 
 function api_user_fresh(): array
 {
-    $user = api_primary_user();
+    $user = api_member_user();
     $pdo = api_pdo();
     if (!$pdo || empty($user['id'])) {
         return $user;
@@ -1654,6 +1675,73 @@ function api_user_fresh(): array
     } catch (Throwable $e) {
     }
     return $user;
+}
+
+/**
+ * The API must hand the member token back in an `Authorization` response header:
+ * the lottery/game SDK only ever learns its token from that header (it writes it
+ * to localStorage as `ar_g_token`). Without it every /Lottery/* call was
+ * anonymous -> the game showed the FIRST member's balance, not the real one.
+ */
+function api_issue_bearer(string $token): void
+{
+    if ($token !== '') {
+        $GLOBALS['api_issue_token'] = $token;
+    }
+}
+
+/**
+ * The app caches a game-entry URL (`ar_saas_lottery` / lotteryLoginUrl) that used
+ * to embed the template vendor's own token. Empty it so the game always asks
+ * /ThirdGame/GetGameUrl, which now answers per member.
+ */
+function api_strip_stale_game_login_url($payload, int $depth = 0)
+{
+    if (!is_array($payload) || $depth > 3) {
+        return $payload;
+    }
+    foreach ($payload as $key => $value) {
+        if (is_array($value)) {
+            // big game/asset lists never hold a login url - skip them for speed
+            if (count($value) > 200) {
+                continue;
+            }
+            $payload[$key] = api_strip_stale_game_login_url($value, $depth + 1);
+            continue;
+        }
+        $name = strtolower((string) $key);
+        if (in_array($name, ['lotteryloginurl', 'sasslotteryurl', 'gameloginurl', 'lotteryurl'], true)
+            && is_string($value) && $value !== '') {
+            $payload[$key] = '';
+        }
+    }
+    return $payload;
+}
+
+function api_request_origin(): string
+{
+    $setting = trim((string) api_setting('site_url', ''));
+    if ($setting !== '') {
+        return rtrim($setting, '/');
+    }
+    $proto = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    $https = $proto === 'https' || (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off');
+    $host = (string) ($_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost');
+    $host = preg_replace('/[^A-Za-z0-9\.\-:]/', '', $host);
+    return ($https ? 'https' : 'http') . '://' . $host;
+}
+
+/**
+ * Strictly the logged-in member: never the "first row of api_users" demo
+ * fallback, which is what made the Wingo screen show another account's money.
+ */
+function api_member_user(): array
+{
+    $user = api_primary_user();
+    if (!empty($GLOBALS['api_user_matched_by_token'])) {
+        return $user;
+    }
+    return api_guest_user();
 }
 
 function api_primary_user(): array
@@ -1673,6 +1761,7 @@ function api_primary_user(): array
             $stmt->execute([$token]);
             $user = $stmt->fetch();
             if ($user) {
+                $GLOBALS['api_user_matched_by_token'] = true;
                 $currentUser = $user;
                 return $user;
             }
@@ -2852,7 +2941,10 @@ function api_lottery_current_balance(int $userDbId): float
 function api_lottery_place_bet(string $endpoint, array $input): array
 {
     $pdo = api_pdo();
-    $user = api_primary_user();
+    $user = api_user_fresh();
+    if (empty($user['id'])) {
+        return api_error('Please login again to place a bet', 143, 401);
+    }
     $gameCode = api_lottery_game_from_input($input, $endpoint);
     $issue = (string) (api_param($input, 'issueNumber', '') ?: api_lottery_issue_data($gameCode)['issueNumber']);
     $gameCode = api_lottery_game_from_issue($issue) ?: $gameCode;
@@ -3222,8 +3314,13 @@ function api_lottery_dynamic(string $endpoint, array $input): ?array
         ]);
     }
     if ($action === 'getuserinfo') {
+        $member = api_user_fresh();
         $info = api_user_info_data();
-        $bal = api_user_balances(api_user_fresh());
+        $info['userId'] = (int) ($member['user_id'] ?? 0);
+        $info['nickName'] = (string) ($member['nickname'] ?? '');
+        $info['inviteCode'] = (string) ($member['inviteCode'] ?? ($member['username'] ?? ''));
+        $info['verifyMethods']['phone'] = (string) ($member['phone'] ?? '');
+        $bal = api_user_balances($member);
         $currency = (string) (api_config()['site']['currency'] ?? 'INR');
         $info['amount'] = $bal['game'];
         $info['balance'] = $bal['game'];
@@ -4318,6 +4415,25 @@ function api_explicit_dynamic_response(string $endpoint, array $input): ?array
         return api_success([
             ['vendorCode' => 'ARGame', 'balance' => $bal['game'], 'currency' => $currency, 'tenantId' => $tenantId, 'userId' => $uid],
             ['vendorCode' => 'PlatForm', 'balance' => $bal['wallet'], 'currency' => $currency, 'tenantId' => $tenantId, 'userId' => $uid],
+        ]);
+    }
+    if ($e === 'thirdgame/getgameurl') {
+        $member = api_user_fresh();
+        $token = (string) ($member['token'] ?? '');
+        if (empty($member['id']) || $token === '') {
+            return api_error('Please login again to open the game', 143, 401);
+        }
+        $gameCode = (string) api_param($input, 'gameCode', '');
+        $vendor = (string) api_param($input, 'vendorCode', 'ARLottery');
+        api_issue_bearer($token);
+        return api_success([
+            'url' => api_request_origin() . '/?Token=' . rawurlencode($token)
+                . '&gameCode=' . rawurlencode($gameCode)
+                . '&vendorCode=' . rawurlencode($vendor),
+            'vendorCode' => $vendor,
+            'gameCode' => $gameCode,
+            'token' => $token,
+            'isLogin' => true,
         ]);
     }
     if ($e === 'thirdgame/transfer') {

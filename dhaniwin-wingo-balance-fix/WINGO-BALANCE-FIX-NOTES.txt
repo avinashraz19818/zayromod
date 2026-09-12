@@ -1,99 +1,107 @@
 ====================================================================
- DhaniWin — WINGO "BALANCE SHOW NAHI HO RAHA" FIX
- (cPanel File Manager se hi install hoga — NO terminal, NO SSH chahiye)
+ DhaniWin — Wingo balance GALAT account ka dikh raha tha (₹1,58,507
+ inside game vs ₹13,235 in the app) — FIXED.  No terminal needed.
 ====================================================================
 
-KYA GALAT THA
+ASLI KAARAN ( ye 2 cheezein milkar ho rahi thi )
 --------------------------------------------------------------------
-1) FROZEN SNAPSHOT OVERRIDE (main culprit)
-   Router (`api/_router.php`) pehle DB table `api_responses` ka saved "API
-   snapshot/override" use karta tha — aur wo LIVE balance handler se UPAR tha.
-   Template import ke waqt wahan static JSON `enabled=1` ke saath save ho gaya:
-        ThirdGame/RecoverSaasBalance        -> "balance": 4.45   (frozen)
-        ThirdGame/GetARGameAndPlatWallets   -> 4.45 / 0.0        (frozen)
-        Recharge/GetRechargeBasicInfo       -> frozen
-        Home/Login                          -> frozen
-   Result: live DB balance kabhi pucha hi nahi jata tha — har user ko same ya
-   0 balance dikhta tha, game ke andar blank.
+A) GAME KO MEMBER HI NAHI PATA THA
+   Lottery/Wingo SDK apna token sirf 2 jagah se leta hai:
+     1) game-entry URL ka  ?Token=....   (key: ar_g_token)
+     2) API ke RESPONSE me `Authorization: Bearer ...` header
+   Aapke PHP API me dono hi nahi the:
+     - `Home/Login` sirf JSON body me token deta tha → `ar_g_token` set hi
+       nahi hota tha
+     - `api_headers()` me response `Authorization` header set nahi hota tha
+   Isliye har `/Lottery/*` call ANONYMOUS jaati thi.
 
-2) WRONG RESPONSE SHAPE — /ThirdGame/GetARGameBalance
-   Backend:  {"data": 4.45}      (sirf ek number)
-   Frontend: Wt.arGameBalance = data.arGameBalance || 0   -> hamesha 0
-   (wallet + game-wallet balance isi field se aata hai)
+B) ANONYMOUS CALL = DEMO ACCOUNT
+   Token na milne par code `api_users` ki PEHLI row use kar leta tha —
+   yaani template ka demo member (₹1,58,507.83). Isliye:
+     app header  = ₹13,235      (sahi member, apni `ar_token` se)
+     game ke andar = ₹1,58,507  (demo account!)
+   Sabse khatarnak baat: game me jo BET lag rahi thi wo bhi us DEMO account
+   ke balance se kat rahi thi, member ke account se nahi.
 
-3) USER RESOLUTION (cPanel pe common)
-   Token match na hone par code "pehla user" (local_member) use kar leta tha,
-   jiska game_balance DB me 0 tha. Apache/LiteSpeed kuch setups pe
-   Authorization header drop kar dete hain -> isi liye balance 0/blank.
-   Ab: Authorization / X-Authorization / token header + cookie + query/body
-   sab check hote hain, aur token bheja gaya par match nahi hua -> guest (0).
-   Kisi OR member ka balance/bet ab kabhi nahi dikhega (safety).
+C) PURANA FROZEN GAME-URL (booster)
+   Config (`Home/TenantFrontStyle`) ke snapshot me vendor ka
+   `lotteryLoginUrl` embedded tha (usme vendor ka apna Token). App use
+   localStorage me `ar_saas_lottery` ke naam me save kar leta tha → game hamesha
+   usi stale URL/token se khulta tha, `/ThirdGame/GetGameUrl` ko bula bhi nahi
+   tha. Aur `ThirdGame/GetGameUrl` ka server pe koi handler tha hi nahi — sirf
+   frozen snapshot tha.
 
-4) TRANSFER / RECOVER ke baad UI purana balance dikhata tha
-   (static cache wapas hota tha -> ab fresh DB value).
-
-KYA FILES BADLI HAIN
+KYA BADLA (sab server-side, JS dobara build karne ki zarurat NAHI)
 --------------------------------------------------------------------
-  api/_bootstrap.php   -> saare logic fixes (yahin se API requests pass hoti hain)
-  _bootstrap.php       -> root copy (_draw_router.php isi ko include karta hai,
-                          parity ke liye same fixes)
-  admin/balance-fix.php-> NEW browser tool (report + one-click repair)
-  JS/assets/APK kuch bhi nahi badla — koi rebuild/pack nahi karna hai.
+api/_bootstrap.php  (+ root _bootstrap.php copy)
+  1. `ThirdGame/GetGameUrl` ab LIVE handler hai: usi member ka fresh token
+     wala game URL banata hai →  /?Token=<member token>&gameCode=...&vendorCode=...
+     → game ko ab sahi member milta hai, balance aur bet dono usi ke account me.
+  2. Har response pe `Authorization: Bearer <token>` header (jab tak member ka
+     token resolve ho) + login/register/autologin pe naya token — isse SDK ka
+     `ar_g_token` khud-ba-khud save/renew ho jaata hai.
+  3. `lotteryLoginUrl` / `sassLotteryUrl` / `gameLoginUrl` ko API har response me
+     blank kar deta hai → app hamesha `/ThirdGame/GetGameUrl` se fresh token lega
+     (skin/theme config ka baaki data unaffected).
+  4. `index.html` boot script ab purana cached `ar_saas_lottery` hata deta hai
+     (jo galat token pin kar chuka tha). — isliye index.html bhi zip me hai.
+  5. PAISAY wale endpoints ab sirf REAL member ke liye answer karte hain:
+     token nahi/mita nahi → balance 0 + `isGuest:true` (kisi aur ka balance 0.01
+     bhi nahi dikhega). Bet bina member → "Please login again to place a bet".
+  6. `?Token=` (capital) query param bhi token ke roop me accept hota hai — wahi
+     format game use karta hai.
+  7. Snapshot overrides paisa/login/game-entry endpoints ko ab shadow nahi kar
+     sakte (pichhli baar yehi kaafi nahi tha, kyunki `GetGameUrl` list me nahi tha).
 
-INSTALL — 2 MINUTE, SIRF FILE MANAGER
+FILES JO ZIP ME HAIN (5)
 --------------------------------------------------------------------
-STEP 1
-  cPanel -> File Manager -> public_html kholein.
-  "dhaniwin-balance-fix.zip" ko public_html ke ANDAR upload karein.
-  Zip pe right-click -> "Extract" -> "Extract Files" (Overwrite existing ON).
-  -> Ye sirf 4 files replace/add karta hai. Aapka database, images, members,
-     orders — kuch bhi overwrite/delete NAHI hoga.
-     (Isliye aapki live `api/storage/dhaniwin.sqlite` is zip me jaan-boojh ke
-      nahi dala gaya — warna purane snapshot se data udh jaata.)
+  api/_bootstrap.php        main API logic
+  _bootstrap.php            root copy (_draw_router.php isi ko include karta hai)
+  index.html                sirf 3 line ka boot-script addition
+  admin/balance-fix.php     browser tool (report + repair) — koi SSH nahi
+  WINGO-BALANCE-FIX-NOTES.txt   ye file
 
-STEP 2 — ek baar refresh
-  Browser me:  https://AAPKA-DOMAIN/admin/balance-fix.php
-  Admin panel wala same username/password daalein.
-  -> "Turn off frozen balance overrides" button dabayein.
-  Page aapko wahi JSON dikhaayega jo ab app ko mil raha hai:
-     Lottery/GetBalance  -> { "balance": <game wallet>, "amount": ..., ... }
-  Agar wahan balance sahi dikh raha hai -> app me bhi dikhega.
-  (Step 2 optional hai — STEP 1 ka code-guard already frozen overrides ko
-   ignore kar deta hai. Step 2 bas DB ko saaf karta hai taaki admin panel me
-   wo purane rows dobara kaam na karein.)
-
-STEP 3 — app side
-  Site kholke ek baar hard refresh (phone pe app close -> open).
-  Member ko ek baar LOGOUT -> LOGIN karwa dein (isse token dobara save ho
-  jaata hai — balance-fix.php page me "token: missing/expired" wali row isi
-  baat ka signal hai).
-  Cloudflare / LiteSpeed cache ON hai to `/api/*` purge kar dein.
-
-FAQ
+INSTALL — cPanel File Manager
 --------------------------------------------------------------------
-Q: Balance-fix page pe "token: MISSING" dikh raha hai?
-A: Us member ko app me ek baar logout/login karwa dein. Token DB me
-   `api_users.token` me save hota hai; uske bina API member ko resolve
-   nahi kar sakti, isliye balance 0 dikhta tha.
+STEP 1  public_html me `dhaniwin-balance-fix.zip` upload → right-click →
+        Extract (Overwrite existing files ON). 5 files replace hongi, aapka
+        database/media/APK kuch nahi chhedega.
+        (Aapki live `api/storage/dhaniwin.sqlite` zip me jaan-boojh ke nahi hai.)
 
-Q: Balance 0 hai par user ke paas paisa hai?
-A: WinGo game sirf GAME wallet kharch karta hai. "walletBalance" me paisa hai
-   aur "balance" 0 -> member ko app ke andar "Transfer to game wallet" karna
-   hai (ye correct behaviour hai, bug nahi).
+STEP 2  https://AAPKA-DOMAIN/admin/balance-fix.php kholo → admin panel wala
+        username/password → "Turn off frozen balance overrides" button.
+        Naya section "5 · Game entry token" dikhayega:
+          - us member ka game wallet vs main wallet
+          - DB me token MISSING hai ya nahi
+          - game ko kaunsa URL + Token milega
+        Member ka naam daalke Check karo — wahi number game me aana chahiye.
 
-Q: Purane override rows delete karne hain?
-A: Zaroorat nahi — `enabled=0` hi kaafi hai, aur code inhe money endpoints pe
-   kabhi use hi nahi karta ab.
+STEP 3  Phone me ek baar: app ka cache clear (ya site kholke logout → login),
+        phir WinGo pe "Play" dabao. Play dabate hi naya token game ko mil jayega.
 
-Q: Security?
-A: `admin/balance-fix.php` admin login ke bina kuch bhi nahi dikhata (403
-   jaisa login form). Kaam ke baad ye file delete kar sakte hain — app iske
-   bhi 100% chalega. Koi database schema change nahi kiya gaya.
+STEP 4  Agar kisi user ko game me abhi bhi purana/dusra balance dikhe:
+        uska `ar_saas_lottery`/`ar_g_token` purana hai → STEP 2 ke tool me
+        member ka naam check karo; token MISSING ho to us member ko ek baar
+        logout/login karwa do. (index.html patch ye cache khud saaf kar deta hai,
+        isliye app ko ek baar fully close→open karna kaafi hai.)
 
-Q: Update ke baad site crash ho jaye to?
-A: Zip me se 2 files (`api/_bootstrap.php`, `_bootstrap.php`) hatake apne
-   purane files wapas rakh dein — bas, site pehle jaisi. Tool/notes se kuch
-   nahi todta.
+VERIFY (browser me, bina tool ke bhi)
+--------------------------------------------------------------------
+  https://AAPKA-DOMAIN/api/Lottery/GetBalance
+     → { "data": { "balance":..., "isGuest": true }, ... }   (bina token ke
+        anonymous check hai, isliye isme guest aayega — ye SAHI hai)
+  Member ke liye game ke andar wala number = tool ke section 5 ka
+  "game wallet" number. Dono same hone chahiye.
 
-Files patched: 3 (+1 notes). DB touched: no. JS rebuilt: no.
+IMPORTANT — business logic note
+--------------------------------------------------------------------
+  Wingo sirf GAME wallet kharch karta hai. Agar member ke paas main wallet me
+  ₹13,235 hain aur game wallet ₹0 hai, to game me ₹0 hi dikhega — user ko
+  "Transfer to game wallet" karna hai (ya aap admin me default game balance
+  setting set karein). Ye galat nahi, isi platform ka rule hai.
+  Agar aap chahte hain ki game me total (wallet + game) dikhe, bolo — 1 line
+  ka change hai.
+
+Data safety: koi table/schema change nahi, koi user/order delete nahi.
+Repair button sirf `api_responses.enabled = 0` karta hai (frozen snapshots off).
 ====================================================================

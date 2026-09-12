@@ -198,6 +198,54 @@ if (!$isCli && !bfix_is_authed()) {
 
 $authed = $isCli || bfix_is_authed();
 
+/* ------------------------------------------------------------------ game entry */
+function bfix_member_by_username(PDO $pdo, string $username): ?array
+{
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM api_users WHERE username = ? OR phone = ? OR nickname = ? LIMIT 1");
+        $stmt->execute([$username, $username, $username]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * The game (lottery SDK) only ever stores the token it receives either from
+ * ?Token= in the game-entry URL or from an `Authorization` response header.
+ * This shows exactly what a member would be handed.
+ */
+function bfix_game_entry_report(PDO $pdo, string $username): array
+{
+    $out = ['queried' => $username, 'found' => false];
+    $member = $username === '' ? null : bfix_member_by_username($pdo, $username);
+    if (!$member && $username === '') {
+        $member = bfix_members($pdo, 1)[0] ?? null;
+    }
+    if (!$member) {
+        return $out;
+    }
+    $token = (string) ($member['token'] ?? '');
+    $origin = api_request_origin();
+    $out['found'] = true;
+    $out['username'] = (string) $member['username'];
+    $out['user_id'] = (int) $member['user_id'];
+    $out['game_balance'] = (float) $member['game_balance'];
+    $out['wallet_balance'] = (float) $member['wallet_balance'];
+    $out['token_state'] = $token === '' ? 'MISSING' : ('ok (' . substr($token, 0, 10) . '...)');
+    $out['game_url'] = $token === '' ? '' : $origin . '/?Token=' . $token . '&gameCode=WinGo_1M&vendorCode=ARLottery';
+    $out['api_balance_for_that_token'] = null;
+    if ($token !== '') {
+        // answer as that member would, without touching the real request
+        $stmt = $pdo->prepare("SELECT game_balance, wallet_balance FROM api_users WHERE token = ? LIMIT 1");
+        $stmt->execute([$token]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $out['api_balance_for_that_token'] = $row ? (float) $row['game_balance'] : 'token matches no row';
+    }
+    return $out;
+}
+
 /* --------------------------------------------------------------------- actions */
 $pdo = api_pdo();
 $repairReport = null;
@@ -428,7 +476,40 @@ endif; ?>
   <?php endif; ?>
 </div>
 
-<h2>5 · After this, do this in the app</h2>
+<h2>5 · Game entry token (bahar vs andar balance ka asli karan)</h2>
+<div class="card">
+  <form method="get" action="" style="display:flex;gap:8px;align-items:center;max-width:520px">
+    <input style="margin:0;flex:1" name="member" placeholder="member username / phone (optional)" value="<?= bfix_e($_GET['member'] ?? '') ?>">
+    <button type="submit" class="" style="background:#1b2740;border:1px solid #2b3c5f;color:#cfe0ff;font-weight:500">Check game entry</button>
+  </form>
+<?php
+$gameReport = bfix_game_entry_report($pdo, trim((string) ($_GET['member'] ?? '')));
+if (!$gameReport['found']): ?>
+  <div class="note" style="margin-top:10px">Member not found.</div>
+<?php else: ?>
+  <table style="margin-top:12px">
+    <tr><th>member</th><td><code><?= bfix_e($gameReport['username']) ?></code> · userId <?= (int) $gameReport['user_id'] ?></td></tr>
+    <tr><th>game wallet (Wingo screen)</th><td>₹<?= number_format($gameReport['game_balance'], 2) ?></td></tr>
+    <tr><th>main wallet (app header)</th><td>₹<?= number_format($gameReport['wallet_balance'], 2) ?></td></tr>
+    <tr><th>token in DB</th><td>
+      <?php if ($gameReport['token_state'] === 'MISSING'): ?>
+        <span class="bad">MISSING</span> — is member ko app me ek baar logout/login karwana zaroori hai
+      <?php else: ?>
+        <span class="ok"><?= bfix_e($gameReport['token_state']) ?></span>
+      <?php endif; ?>
+    </td></tr>
+    <tr><th>game entry URL</th><td><code style="font-size:11px;word-break:break-all"><?= bfix_e($gameReport['game_url'] ?: '(no token -> GetGameUrl will ask the member to log in)') ?></code></td></tr>
+  </table>
+  <div class="note" style="margin-top:10px">
+    Game ka screen <code>?Token=</code> (ya <code>Authorization</code> response header) se hi member pehchanta hai.
+    Pehle ye token template ke purane snapshot URL me embedded tha — isliye game me <b>dusre account</b> ka balance
+    (aur app header me member ka) dikh raha tha. Ab <code>ThirdGame/GetGameUrl</code> har baar usi member ka live
+    token deta hai, aur <code>lotteryLoginUrl</code> (stale cached URL) server ki taraf se blank kar di jati hai.
+  </div>
+<?php endif; ?>
+</div>
+
+<h2>6 · After this, do this in the app</h2>
 <div class="card note">
   1. Open the site → hard reload (Ctrl+F5 / on phone: clear the app webview cache once).<br>
   2. Log out and log in again inside the app (this re-saves the member token).<br>
