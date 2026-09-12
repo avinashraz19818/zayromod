@@ -887,7 +887,7 @@ setInterval(function(){
 
 function routeText(value){if(value===undefined||value===null) return "";if(typeof value==="object"){value=value.url!==undefined?value.url:(value.href!==undefined?value.href:(value.currentUrl!==undefined?value.currentUrl:(value.currentURL!==undefined?value.currentURL:(value.path!==undefined?value.path:""))));}return String(value||"").trim();}
 function classifyRoute(url){
-  var u=routeText(url).toLowerCase();var hash=u.split('#')[1]||'';var route=hash||u;
+  var u=routeText(url).toLowerCase();var hash=u.split('#')[1]||'';var route=hash||u.split('?')[0];
   var isReg=route.indexOf('register')>=0||route.indexOf('invitationcode')>=0||route.indexOf('invitecode')>=0;
   var isLogin=!isReg&&route.indexOf('login')>=0;
   var isWingo=route.indexOf('saaslottery')>=0||route.indexOf('wingo')>=0||route.indexOf('lottery')>=0;
