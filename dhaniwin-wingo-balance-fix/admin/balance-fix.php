@@ -252,7 +252,7 @@ $repairReport = null;
 if ($authed && $pdo && strtolower((string) ($_POST['action'] ?? '')) === 'set') {
     $key = (string) ($_POST['key'] ?? '');
     $val = (string) ($_POST['value'] ?? '');
-    $allowed = ['wingo_balance_mode' => ['game', 'total'], 'wingo_auto_transfer' => ['0', '1'], 'balance_debug' => ['0', '1'], 'wingo_instant_settle' => ['0', '1'], 'settlement_mode' => ['auto', 'auto_hedge', 'force_win', 'force_loss']];
+    $allowed = ['wingo_bet_time_offset_seconds' => ['-60', '-300', '0', '60'], 'wingo_balance_mode' => ['game', 'total'], 'wingo_auto_transfer' => ['0', '1'], 'balance_debug' => ['0', '1'], 'wingo_instant_settle' => ['0', '1'], 'settlement_mode' => ['auto', 'auto_hedge', 'force_win', 'force_loss']];
     if (isset($allowed[$key]) && in_array($val, $allowed[$key], true)) {
         $ok = api_set_setting($key, $val);
         $notice = $ok ? 'Saved: ' . $key . ' = ' . $val : 'Could not save ' . $key . ' (api_settings not writable?)';
@@ -574,6 +574,19 @@ if (!$gameReport['found']): ?>
         <?php foreach (['auto', 'auto_hedge', 'force_win', 'force_loss'] as $mode): ?>
         <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="settlement_mode"><input type="hidden" name="value" value="<?= bfix_e($mode) ?>">
           <button type="submit" class="ghost"><?= bfix_e($mode) ?></button></form>
+        <?php endforeach; ?>
+      </td>
+    </tr>
+    <tr>
+      <th>Bet time offset (My history ka time)</th>
+      <td>current: <code><?= (int) api_setting('wingo_bet_time_offset_seconds', '-60') ?>s</code>
+        <div class="note">Instant settle me bet, issue khatam hone se pehle lagti hai — isliye record ka
+        time thoda aage lagta hai. Ye sirf <b>display</b> time khisakata hai (paisa/settle/issue number
+        same rehte hain). <code>-60</code> = 1 minute peeche (default), <code>0</code> = asli time.</div></td>
+      <td style="white-space:nowrap">
+        <?php foreach ([['-60', '-1 min'], ['-300', '-5 min'], ['0', 'real time'], ['60', '+1 min']] as $opt): ?>
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="wingo_bet_time_offset_seconds"><input type="hidden" name="value" value="<?= bfix_e($opt[0]) ?>">
+          <button type="submit" class="ghost"><?= bfix_e($opt[1]) ?></button></form>
         <?php endforeach; ?>
       </td>
     </tr>

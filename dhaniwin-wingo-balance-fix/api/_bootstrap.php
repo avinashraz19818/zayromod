@@ -3249,6 +3249,22 @@ function api_lottery_issue_closed(string $gameCode, string $issueNumber): bool
  * The drawn number is stored in lottery_results for that issue, so history,
  * chart, "Game history" and "My history" stay consistent with what was paid.
  */
+/**
+ * "My history" / statement me bet ka time kitna peeche dikhana hai.
+ * Instant settle me bet us issue ke khatam hone se PEHLE lagti hai, isliye
+ * recorded time thoda aage lagta hai — default -60s (1 minute peeche).
+ * Sirf DISPLAY time badalta hai: paisa, settle, issue number — kuch nahi chhedta.
+ * Off karna ho to setting wingo_bet_time_offset_seconds = 0 (admin tool se).
+ */
+function api_lottery_bet_time_offset_ms(): int
+{
+    $seconds = (float) api_setting('wingo_bet_time_offset_seconds', '-60');
+    if ($seconds > 86400 || $seconds < -86400) {
+        $seconds = -60.0;
+    }
+    return (int) round($seconds * 1000);
+}
+
 function api_lottery_instant_settle(): bool
 {
     return (string) api_setting('wingo_instant_settle', '1') === '1';
@@ -3386,7 +3402,13 @@ function api_lottery_record_page(array $input): array
         $realAmount = max(0.0, round($stakeAmount - $fee, 4));
         $profitAmount = $statusText === 'pending' ? 0.0 : (float) $row['profit_amount'];
         $winLoseAmount = $statusText === 'pending' ? 0.0 : ($statusText === 'won' ? (float)$row['win_amount'] - $stakeAmount : -$stakeAmount);
-        $createdMs = strtotime((string) $row['created_at']) ? strtotime((string) $row['created_at']) * 1000 : api_now_ms();
+        $betTimeOffsetMs = api_lottery_bet_time_offset_ms();
+        $createdRawMs = strtotime((string) $row['created_at']) ? strtotime((string) $row['created_at']) * 1000 : api_now_ms();
+        $createdMs = (int) max(0, $createdRawMs + $betTimeOffsetMs);
+        $createdTimeText = (string) ($row['created_at'] ?? '');
+        if ($betTimeOffsetMs !== 0 && strtotime($createdTimeText) !== false) {
+            $createdTimeText = date('Y-m-d H:i:s', (int) (strtotime($createdTimeText) + (int) round($betTimeOffsetMs / 1000)));
+        }
         $list[] = [
             'orderNo' => (string) $row['order_no'],
             'issueNumber' => (string) $row['issue_number'],
@@ -3413,7 +3435,7 @@ function api_lottery_record_page(array $input): array
             'result_premium' => $resultPremium,
             'betTime' => $createdMs,
             'createTime' => $createdMs,
-            'createdTime' => (string) $row['created_at'],
+            'createdTime' => $createdTimeText,
         ];
     }
 

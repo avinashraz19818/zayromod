@@ -176,3 +176,32 @@ Band karna ho: admin/balance-fix.php → section 6 → "Instant settle: OFF"
 Data safety: koi table/schema change nahi, koi user/order delete nahi.
 Repair button sirf `api_responses.enabled = 0` karta hai (frozen snapshots off).
 ====================================================================
+
+================================================================================
+ROUND 5 (2026-09-12) - bet time in "My history" 1 minute peeche
+================================================================================
+Kya bola gaya tha: bet ka jo time record me dikhta hai (jaise 2026-09-12
+20:55:26) use 1 minute peeche dikhaiye (20:54:26).
+
+Kyun zaroori tha: instant settle (round 4) me bet us issue ke khatam hone se
+PEHLE lag jaati hai aur turant settle ho jaati hai, isliye row ka timestamp
+"abhi" ka lagta hai — player ko aisa dikhta hai jaise bet draw ke baad lagi.
+
+Fix (sirf DISPLAY):
+  api_lottery_record_page() me betTime / createTime (epoch ms) aur
+  createdTime (text) ek fixed offset se khisakte hain:
+      wingo_bet_time_offset_seconds  =  -60   (default, = 1 minute peeche)
+  Helper: api_lottery_bet_time_offset_ms() (±86400s se clamp, value 0 = asli
+  time).  Offset admin tool > section "Site settings" > "Bet time offset" se
+  ek click me: -1 min (default) / -5 min / real time / +1 min.
+
+Jo Nahi badla (jaan boojh kar):
+  * DB me created_at / settled_at untouched — offset sirf API response me lagta
+    hai, record save nahi hota. So purani rows ka bhi time 1 min peeche dikhega
+    (nayi rows bhi) — consistent.
+  * settlement, payout, fee, issue number, order_no, result — kuch nahi chhua.
+  * Sirf bet list: draw/period list aur "current issue" countdown same real
+    time par hain (wo alag endpoint hai).
+  * Wallet/financial statement (UserFinancial/HistoryList) isi list ka
+    createTime reuse karta hai, isliye wahan bhi time ek jaisa dikhega —
+    "My history" se mismatch nahi hoga.
