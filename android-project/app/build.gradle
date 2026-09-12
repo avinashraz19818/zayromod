@@ -2,14 +2,13 @@ plugins {
 	id 'com.android.application'
 }
 
-// ── ADVANCED APK PROTECTION — build variants ──
+// ── Build variants ──
 //   debug             : developer friendly, koi minify nahi
 //   release           : R8 + resource shrink (standard production)
-//   protectedRelease  : MAXIMUM — R8 aggressive rules + resource shrink +
-//                       protected-rules.pro + (optional) native security
-// Native security module sirf tab compile hota hai jab:
-//   ./gradlew assembleProtectedRelease -PenableNativeSecurity
-// (NDK chahiye; bina NDK ke bhi saare Java-level checks active rehte hain.)
+//   protectedRelease  : R8 aggressive rules + resource shrink +
+//                       security/protected-rules.pro
+// Koi native/NDK module nahi — app me koi extra .so ship nahi hota.
+// Popup + loading HTML assets me encrypted .bin ki tarah rehte hain.
 
 android {
 	compileSdk 34
@@ -54,10 +53,6 @@ android {
 	}
 }
 
-// Optional native security module (sirf -PenableNativeSecurity ke saath)
-if (project.hasProperty("enableNativeSecurity")) {
-	apply from: 'native-security.gradle'
-}
 
 dependencies {
 	implementation fileTree(dir: 'libs', include: ['*.jar'])

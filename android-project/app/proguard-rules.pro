@@ -21,11 +21,6 @@
 -keep public class * extends android.content.BroadcastReceiver
 -keep public class * extends android.app.Application
 
-# Native methods protection
--keepclasseswithmembernames class * {
-    native <methods>;
-}
-
 # Enum safety
 -keepclassmembers enum * {
     public static **[] values();

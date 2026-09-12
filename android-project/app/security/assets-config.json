@@ -3,5 +3,5 @@
   "protectedExtensions": [".html", ".js", ".json", ".xml", ".txt", ".dat", ".bin"],
   "sensitivePaths": ["assets/config/", "assets/internal/"],
   "publicAlwaysPlain": [".mp3", ".png", ".jpg", ".jpeg", ".ttf", ".otf", ".webp", ".gif", ".ogg"],
-  "_whyPublicAlwaysPlain": "WebView + MediaPlayer inhe seedha assets se load karte hain (file:// base URL) — encrypt karne par sounds/images toot jate hain. Popup HTML waise bhi APK me hota hi nahi (remote content)."
+  "_whyPublicAlwaysPlain": "WebView + MediaPlayer inhe seedha assets se load karte hain (file:// base URL) — encrypt karne par sounds/images toot jate hain. Popup/loading HTML assets me hi encrypted .bin ki tarah rehte hain (koi .so/lib vault nahi, koi remote fetch nahi)."
 }

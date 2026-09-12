@@ -4,13 +4,15 @@ const crypto = require('crypto');
 const fs = require('fs');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HTML .bin ENCRYPTION — fixed key (no per-build native vault, no asset crypto)
+// HTML .bin ENCRYPTION — popup + loading HTML APK ke assets me hi encrypted
 //
-// Sirf popup/loading HTML files (.bin) encrypted rehte hain. Baaki saare
-// assets (PNG / MP3 / fonts / icon) APK me PLAIN hain — koi encrypt/decrypt
-// nahi, jaise pehle chalta tha.
+// Popup HTML ab assets/zayro.bin me rehta hai (lib/.so vault aur remote fetch
+// dono hata diye gaye). Loading splash assets/loading.bin me. Dono AES-256-CBC
+// + PBKDF2 se encrypted hain, key per-build random hoti hai (custom template
+// na support kare to FIXED_PASSWORD fallback). Baaki assets (PNG / MP3 / fonts
+// / icon) PLAIN rehte hain — WebView/MediaPlayer ko wahi chahiye.
 //
-// Bin layout (MainActivity Java me isi ko decode karta hai):
+// Bin layout (MainActivity.decryptAsset() isi ko decode karta hai):
 //   MARKER(8 bytes) | salt(16) | iv(16) | AES-256-CBC(PKCS5) | padding(64)
 // ─────────────────────────────────────────────────────────────────────────────
 

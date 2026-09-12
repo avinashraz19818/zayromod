@@ -4,16 +4,19 @@
 
 | # | Layer | Kahan | Default |
 |---|-------|-------|---------|
-| 1 | **Remote HTML** — popup design + Firebase details APK me hota hi nahi (server se encrypted fetch) | MainActivity + appcontent.js | ✅ ON |
-| 2 | **Frezrik DEX packing** — pura DEX AES-encrypted, decompile pe sirf shell | apkbuilder + /opt/frezrik | ✅ ON |
-| 3 | **R8 aggressive obfuscation** — repackageclasses 'o', overload, log removal | proguard-rules.pro | ✅ ON |
-| 4 | **XOR-masked strings** — server URL / path / password / cert hash DEX me plaintext nahi | apkbuilder build-time patch | ✅ ON |
-| 5 | **Signature verification** — galat certificate pe app BLOCK (tamper screen) | SecurityManager | ✅ protectedRelease |
-| 6 | **Asset integrity manifest** — har asset ka SHA-256, modify detect | apkbuilder + SecurityManager | ✅ ON |
-| 7 | **Anti-debug** — TracerPid + Debug.isDebuggerConnected (+ native agar enable) | SecurityManager | ✅ protectedRelease |
-| 8 | **Environment risk score** — root/frida/xposed/test-keys (0-100) | SecurityManager | ✅ protectedRelease |
-| 9 | **Native security module** — C++ checks (optional) | cpp/ | ⏸ -PenableNativeSecurity |
-| 10 | **Firebase rules lock** — hacker config change nahi kar sakta | database.rules.json | ✅ ON |
+| 1 | **Encrypted HTML in assets** — popup + loading HTML `.bin` me AES-256-CBC (per-build key), APK me plaintext HTML nahi | assets/zayro.bin + MainActivity | ✅ ON |
+| 2 | **R8 aggressive obfuscation** — repackageclasses 'o', overload, log removal | proguard-rules.pro | ✅ ON |
+| 3 | **XOR-masked strings** — decrypt password / cert hash DEX me plaintext nahi (0x5A mask) | apkbuilder build-time patch | ✅ ON |
+| 4 | **Signature verification** — galat certificate pe app BLOCK (tamper screen) | SecurityManager | ✅ protectedRelease |
+| 5 | **Asset integrity manifest** — har asset ka SHA-256, modify detect | apkbuilder + SecurityManager | ✅ ON |
+| 6 | **Anti-debug** — Debug.isDebuggerConnected + waitingForDebugger | SecurityManager | ✅ protectedRelease |
+| 7 | **Environment risk score** — root/xposed/test-keys (0-100) | SecurityManager | ✅ protectedRelease |
+| 8 | **Firebase rules lock** — hacker config change nahi kar sakta | database.rules.json | ✅ ON |
+
+Hata diye gaye layers (user request): 360 Jiagu + Frezrik DEX packers aur
+`libnativesecurity.so` content vault (popup HTML ko `lib/<abi>/*.so` me chhupane
+wala system). Ab APK me koi extra native `.so` nahi aur build pipeline me koi
+packer step nahi.
 
 ## Authentication security
 
@@ -60,22 +63,21 @@ session on those legacy runtime routes.
 
 - `SECURITY_OK` → normal
 - `SECURITY_WARNING` (risk 21-50) → root/frida signals — app chalti hai (false positive avoid)
-- `SECURITY_FAILED` (risk 51+ ya signature mismatch) → remote content BLOCK + "Security Verification Failed" screen
+- `SECURITY_FAILED` (risk 51+ ya signature mismatch) → content BLOCK + "Security Verification Failed" screen
 
 **Sirf signature mismatch hard-fail hai.** Root users block nahi hote (business).
 
 ## Build variants
 
 ```
-./gradlew assembleDebug             → developer (koi protection nahi)
+./gradlew assembleDebug             → developer (koi minify nahi)
 ./gradlew assembleRelease           → R8 + shrink (standard)
-./gradlew assembleProtectedRelease  → MAXIMUM (default pipeline yahi use karta hai)
-./gradlew assembleProtectedRelease -PenableNativeSecurity   → + native module
+./gradlew assembleProtectedRelease  → R8 aggressive + extra rules (default pipeline)
 ```
 
 Pipeline env:
 - `APK_BUILD_VARIANT=protectedRelease` (default) / `release` / `debug`
-- `APK_NATIVE_SECURITY=1` → native module compile (NDK chahiye)
+- Koi NDK/native module nahi — build me `externalNativeBuild` configured nahi hai.
 
 ## Build ke baad automatic verification
 
@@ -87,15 +89,17 @@ Har build me `security-report.txt` banta hai (builds/ folder me):
 ## Assets policy (assets-config.json)
 
 - **PLAIN (PUBLIC)**: .mp3 .png .ttf .otf etc. — WebView/MediaPlayer seedha load karte hain, encrypt karte hi sounds/images toot jate
-- **PROTECTED**: HTML .bin files (encrypted, fixed PBKDF2 key, XOR-masked Java me)
-- **SENSITIVE**: APK me rakho hi mat — remote content use karo (popup already remote)
+- **ENCRYPTED**: popup = `assets/zayro.bin`, splash = `assets/loading.bin` (dhani ke liye `lodale.bin` alias bhi) — AES-256-CBC + PBKDF2, per-build key DEX me XOR-masked
+- **NAHI**: koi .html/.js plaintext asset nahi, koi `lib/<abi>/libnativesecurity.so` vault nahi
 
 ## Limits (sach)
 
 - Koi bhi protection "unkillable" nahi hai — ye reverse-engineering ka COST badhata hai
-- Frezrik Android 5.0+ tested; koi device crash kare to `FREZRIK_ENABLED=false`
+- Packer (360/Frezrik) hatane se DEX plain hai: decompiler Java logic padh sakta hai,
+  par popup HTML phir bhi encrypted .bin hi rahega (per-build key ke bina decode nahi)
 - MP3/PNG plain hi rehte hain (functional requirement)
-- Sabse valuable cheez (design + links + logic) server-side hai — APK untrusted client hai
+- Popup APK ke andar hai: HTML badalne ke liye APK dobara build karna padega
+  (remote-fetch system se wo live update ho jata tha)
 
 ## Troubleshooting
 
@@ -104,7 +108,5 @@ Har build me `security-report.txt` banta hai (builds/ folder me):
 | Build fail "SECURITY VERIFICATION FAILED" | security-report.txt dekho — signed/plaintext check |
 | App "Security Verification Failed" aaye | APK modified/resigned hai — original APK install karo |
 | protectedRelease build fail hota hai | `APK_BUILD_VARIANT=release` fallback |
-| Native enable ke baad build fail | NDK install karo (sdkmanager 'ndk;25.x') |
-| Frezrik crash | `.env` me `FREZRIK_ENABLED=false` + rebuild |
 | Login cookie missing behind Nginx | Set `TRUST_PROXY_HOPS=1`, forward `X-Forwarded-Proto`, and serve HTTPS |
 | Password login/registration unavailable | Check `SESSION_SECRET`, `ADMIN_PASSWORD_HASH`, Node dependencies, and PM2 logs |
