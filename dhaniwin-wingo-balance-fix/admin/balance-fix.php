@@ -578,6 +578,16 @@ if (!$gameReport['found']): ?>
       </td>
     </tr>
     <tr>
+      <th>APK me balance 0? (checker)</th>
+      <td><div class="note">Ye page batata hai game ko <b>us window</b> me kya dikh raha hai:
+        origin, iframe/SW-shell, localStorage/cookies chale ya nahi, token aaya ya nahi, aur
+        <code>Lottery/GetBalance</code> ka live jawab. <b>Kuch badalta nahi hai (read-only).</b>
+        Use karne ka tarika: APK builder me link thodi der ke liye
+        <code>/admin/wingo-check.php</code> daalo, app kholo, REPORT ka screenshot lo, phir
+        normal link wapas daal do.</div></td>
+      <td style="white-space:nowrap"><a class="btn" href="wingo-check.php" target="_blank">Open checker</a></td>
+    </tr>
+    <tr>
       <th>APK / WebView token handoff</th>
       <td>current: <code><?= api_wingo_webview_handoff() ? 'ON' : 'OFF' ?></code>
         <div class="note">APK (WebView) game page ko member ka bearer token URL

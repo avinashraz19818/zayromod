@@ -278,3 +278,64 @@ Test kiya gaya (sandbox me, node vm harness se handoff block):
   C) SDK ne "Bearer null" bheja            -> replace ho gaya ✓
   D) #auth=<base64> bridge                 -> parse hokar handoff ✓
   E) anonymous visitor                     -> kuch nahi likha, vendor/cross-origin untouched ✓
+
+================================================================================
+ROUND 7 (2026-09-12) - APK me ab bhi 0.00: document hi hamare paas se nahi aa raha
+================================================================================
+User report (2 screenshots): APK ke andar site header me Rs 5,936 dikhta hai,
+Wingo card me Rs 0.00 — round 6 lagane ke baad bhi waisa hi.
+
+Naya saboot (repo me Mila): /ar-sw.js (service worker, scope "/") har us GET ko
+intercept karta hai jiske path me "." nahi hai — matlab saare SPA routes,
+/ Wingo_1M / Wingo sab. Network jawab na de (ya non-OK de) to wo
+sw-page.js ka HARDCODED shell HTML lauta deta hai:
+
+    iframe.src = availableDomain + '?' + urlParams   // acc/pass/token from IndexedDB
+
+`availableDomain` = landingDomainList (mirror/landing domain). Yani APK me game
+page **dusre origin** par khul sakta hai — jahan hamara patched index.html,
+hamari localStorage aur hamare cookies nahi hain. Isliye index.html ka handoff
+APK me kuch nahi kar paaya: us document ko hamara code chala hi nahi raha tha.
+(uppar wala code path tab bhi chalta hai jab response sirf non-OK ho — 404/500
+par bhi shell mil jata hai; yahi APK me sabse zyada trigger hota hai)
+
+Round 7 me 4 cheezein:
+1) ar-sw.js (PATCHED, naya file zip me): network jo bhi jawab de (404/500 bhi)
+   wahi page diya jata hai; mirror shell SIRF tab jab fetch sach me throw kare
+   (domain really unreachable) — failover feature bacha rehta hai. Activate par
+   purana 'online-page' cache delete hota hai, taaki already-installed shell dobara
+   serve na ho. SW script hamesha network se check hota hai, isliye ye update
+   cache toot-te hi chalega.
+2) index.php (naya file zip me): index.html serve karta hai + agar wo document
+   purana hai (ushme __DH_HANDOFF__ nahi) to <script src="/dh-handoff.js?v=7">
+   inject kar deta hai. SPA fallback (.htaccess: RewriteRule ^ index.php) isi se
+   guzarta hai aur no-store hai — APK isse cache nahi kar sakta.
+   Header X-Dhaniwin-Handoff: inline|injected|missing (devtools/checker me dikhta hai).
+3) dh-handoff.js: round 6 ka handoff block, same logic + re-entry guard, taaki
+   stale index.html wale case me bhi game ko token mil jaye. (JS/CSS .htaccess me
+   no-store hain, isliye ye file bhi purani nahi phasegi.)
+4) admin/wingo-check.php (naya, READ-ONLY): APK ke andar hi batata hai —
+   origin, page iframe/shell me hai ya nahi, localStorage/cookies chalte hain ya
+   nahi, ar_token/ar_g_token present hain ya nahi, server ne kaunsa token padha,
+   aur /api/Lottery/GetBalance ka live jawab (game ke token se vs app ke token se).
+   REPORT block copy/screenshot ke liye. Ye hi batayega kaunsi 1 line fix karni hai.
+   Use: APK builder me link temporarily https://DOMAIN/admin/wingo-check.php
+   → app kholo → REPORT bhejo → normal link wapas. (admin login zaroori nahi,
+   isliye kaam khatam hone par file delete kar dena behtar hai.)
+
+Deploy (public_html me extract, Overwrite ON) — round 7 ki zip me 9 files:
+   api/_bootstrap.php   _bootstrap.php   index.html   index.php   dh-handoff.js
+   ar-sw.js   admin/balance-fix.php   admin/wingo-check.php   WINGO-BALANCE-FIX-NOTES.txt
+Zaroori: index.php, dh-handoff.js aur ar-sw.js teeno upload hone chahiye — ek chhoot
+gaya to APK wala case theek nahi hoga (checker page ye khud dikha deta hai).
+Aur haan: agar APK ka link mirror/landing domain par hai, to **wahan bhi yahi files
+extract karo** (ya APK ka link main domain par badlo) — dusri baat APK me ek baar
+force-stop → start karke WebView cache clear karo, kyunki ar-sw.js ka update tabhi
+lagta hai.
+
+APK builder settings (bitvi/blackmartee/custom wrapper jo bhi ho):
+  - WebView: setJavaScriptEnabled(true), setDomStorageEnabled(true),
+    CookieManager.setAcceptCookie(true), aur game iframe use ho to
+    setAcceptThirdPartyCookies(webView, true)
+  - "Clear cache on exit"/incognito option ON hai to OFF karo (stale SW/shell)
+  - App ka start URL = main site domain (mirror nahi), path khali: https://DOMAIN/

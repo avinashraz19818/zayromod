@@ -3559,7 +3559,8 @@ function api_lottery_dynamic(string $endpoint, array $input): ?array
         $shown = api_wingo_shown_balance($bal);
         if (empty($user['id'])) {
             api_balance_debug(sprintf(
-                'Lottery/GetBalance -> no member resolved (showing 0) | tokenSeen=%s ua=%s ref=%s',
+                'Lottery/GetBalance -> no member resolved (showing 0) | host=%s tokenSeen=%s ua=%s ref=%s',
+                substr((string) ($_SERVER['HTTP_HOST'] ?? ''), 0, 60),
                 api_request_token() !== '' ? 'yes(invalid)' : 'no',
                 substr(str_replace("\n", ' ', (string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 90),
                 substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 90)
