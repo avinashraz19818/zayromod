@@ -152,7 +152,7 @@ apk-builder/
 ├── server.js              — Main server
 ├── database/db.js         — SQLite database
 ├── utils/
-│   ├── encrypt.js         — HTML .bin encryption (fixed key) — assets plain rehte hain
+│   ├── encrypt.js         — Popup/loading HTML ko .bin me encrypt karta hai (per-build key)
 │   ├── htmlprocessor.js   — Template injection
 │   ├── apkbuilder.js      — APK build pipeline
 │   └── telegram.js        — Telegram bot
@@ -169,19 +169,19 @@ apk-builder/
 
 ## APK Hardening (automatic — no setup needed)
 
-Bas itna protection hai:
+Protection simple rakha hai — koi DEX packer (360/Frezrik) aur koi native .so
+vault nahi. Jo hai sirf ye:
 
-1. **HTML encryption (fixed key)** — sirf popup/loading HTML files (.bin) AES-256-CBC
-   se encrypted hote hain (PBKDF2, fixed password). APK ke assets me HTML readable
-   nahi hota.
-2. **Assets plain** — PNG, MP3, fonts, icon sab PLAIN rehte hain (koi encrypt/decrypt
-   nahi). MP3 seedha MediaPlayer se assets se hi play hota hai — saare sounds sahi
-   chalte hain.
+1. **Popup + loading HTML assets me encrypted** — dono HTML `.bin` (AES-256-CBC +
+   PBKDF2) ban kar `app/src/main/assets/` me jate hain (`zayro.bin` popup,
+   `loading.bin` splash). Decrypt key per-build random hoti hai aur DEX me
+   XOR-masked rehti hai. APK me HTML kahin plaintext nahi milta.
+2. **Assets baaki plain** — PNG, MP3, fonts, icon (WebView/MediaPlayer inhe seedha
+   assets se load karte hain; encrypt karne par sounds/images toot jate hain).
 3. **R8/ProGuard obfuscation** — Java code obfuscated hota hai (pehle se enabled).
 4. **No backup** — app data adb backup se extract nahi ho sakta.
-
-Native key vault / signature integrity check NAHI hai (hata diya gaya — purana
-simple style, jaise pehle chalta tha).
+5. **Signature + asset-integrity check** (protectedRelease) — APK re-sign/modify ho
+   to app block screen dikhati hai. Native (.so) checks hata diye gaye hain.
 
 ## Firebase Security (HACK LOCK — zaroori)
 
@@ -210,53 +210,24 @@ Iske baad:
 Service account ke bina bhi sab chalega — sirf admin panel ka link
 change fail hoga (wohi hacker ka darwaza tha, ab band).
 
-## Remote Content + 360 Protection (APK me kuch nahi hota)
+## Popup HTML — APK ke assets me (encrypted)
 
-### Remote HTML (automatic)
-- Popup HTML ab APK me embed NAHI hota. App launch hote hi server se
-  `GET /api/app-content/:path` (encrypted .bin, fixed key, HTTPS) fetch
-  karta hai — APK me koi design HTML / Firebase detail nahi milti.
-- Loading HTML sirf splash ke liye embedded rehta hai (koi secret nahi).
-- App me network fail ho to RETRY button dikhta hai.
-- Server route public hai par response encrypted hai — 360 laga ho to
-  decrypt key bhi DEX me locked hoti hai.
+Popup design ka HTML ab **APK ke `assets/zayro.bin`** me hota hai — build time pe
+per-build random key se AES-256-CBC encrypt hoke. App ise seedha assets se padhti
+hai aur decrypt karke WebView me load karti hai.
 
-### Frezrik Jiagu (DEFAULT — open-source DEX packer, koi account nahi)
-**AUTO SETUP:** VPS pe ye chalao — tool khud download hoga (~15MB):
-```
-bash scripts/setup-frezrik.sh
-```
-Ye har build me app ka DEX AES-encrypt karta hai (shell dex + 4 ABIs ke
-libjiagu). Decompile karne pe sirf shell dikhta hai — asli code kuch nahi.
-Pipeline khud pack.jar dhundti hai (/opt/frezrik/pack.jar); apne
-zipalign+apksigner se sign hoti hai. FREZRIK_ENABLED=false → band.
+- Pehle jo `libnativesecurity.so` vault tha (HTML ko `lib/<abi>/` .so me chhupane
+  wala system) — wo **hata diya gaya**. Ab APK me koi extra native `.so` nahi hai.
+- 360 Jiagu / Frezrik DEX packer bhi **hata diye** — build me koi packer nahi chalta,
+  isliye Play Protect "app may be harmful" type warnings packer ki wajah se nahi
+  aayengi aur build fast hoti hai.
+- App ko popup ke liye **internet ki zarurat nahi** — offline bhi UI khulta hai.
+- Loading splash isi tarah `assets/loading.bin` se aata hai (dhani designs ke liye
+  `lodale.bin` alias bhi likha jata hai).
 
-### 360 Jiagu hardening (optional — account wala, backup option)
-**AUTO SETUP:** VPS pe ye chalao — OFFICIAL tool khud
-download hoga (360 ke apne server se, ~270MB Linux package):
-```
-bash scripts/setup-jiagu.sh
-```
-(Link: down.360safe.com/360Jiagu/360jiagubao_linux_64.zip — official.
-Docker wrapper repo idocking/360jiagu ke Dockerfile se ye link mila.)
-Official site se manual chahiye to neeche wala tareeka bhi hai.
-
-**MANUAL:** jiagu.360.cn pe account banao + `jiagu.jar` download karo
-2. VPS pe rakho: `/opt/jiagu/jiagu.jar`
-3. `.env` me:
-   ```
-   JIAGU_ENABLED=true
-   JIAGU_JAR=/opt/jiagu/jiagu.jar
-   JIAGU_EMAIL=360_wala_email
-   JIAGU_PASS=360_wala_password
-   ```
-4. `pm2 restart apkbuilder`
-
-Ab har build: Gradle → 360 hardening (DEX encrypted + anti-tamper +
-string encryption) → autosign (imported keystore) → final APK.
-Jiagu fail ho to normal signing fallback — build kabhi nahi atakta.
-Note: 360 ke flags version ke hisaab se thode alag ho sakte hain
-(scripts/jiagu-protect.sh me adjust kar lena).
+Note: purane APKs (jo abhi field me distribute ho chuke hain) server se remote
+content fetch karte rehte hain — `/api/app-content/:path` route isliye zinda hai
+(`utils/appcontent.js`). Naye builds us par depend nahi karte.
 
 ## Security
 

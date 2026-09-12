@@ -405,11 +405,11 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     const processedLoading = stripFirebaseLiveScript(stripIntroSnippet(injectParams(loadingHtml, params)));
 
     // ── PER-BUILD UNIQUE ENCRYPTION PASSWORD (Java engine) ──
-    // Har APK build ki apni alag key: random password + kid. kid PATH ke
-    // suffix (~<kid>) me DEX me jata hai — MainActivity source me koi nayi
-    // line nahi chahiye. Template me FW placeholder na mile (purana/ustom
-    // template) to automatic FIXED_PASSWORD fallback — purane builds jaisa
-    // hi behaviour, koi regression nahi.
+    // Har APK build ki apni alag key: random password + kid. Yahi password
+    // assets ke encrypted .bin ko decode karta hai (DEX me XOR-masked).
+    // kid server ke build_keys record me store hota hai — purane remote-fetch
+    // APKs isi se apni key se content lete hain. Template me FW placeholder na
+    // mile (custom template) to FIXED_PASSWORD fallback — koi regression nahi.
     let perBuildKid = '';
     let contentPassword = FIXED_PASSWORD;
     {
@@ -418,7 +418,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       if (tplSrc.includes('FW_PASSWORD_M = new byte[]{ 0, 0 }')) {
         perBuildKid = crypto.randomBytes(12).toString('hex');
         contentPassword = generateBuildPassword(); // base64 ASCII string
-        log('Applying hardening profile...');
+        log('Applying per-build key profile...');
       } else {
         log('Applying standard profile...');
       }
@@ -444,59 +444,6 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     execFileSync('cp', ['-r', TEMPLATE_PROJECT, projectDir], { stdio: 'pipe' });
     fs.chmodSync(path.join(projectDir, 'gradlew'), 0o755);
     fs.writeFileSync(path.join(projectDir, 'local.properties'), `sdk.dir=${ANDROID_HOME}\n`);
-
-    // ── Full .so vault: HTML lib .so me protected (user request) ──
-    // Popup HTML .so me embed, assets me nahi — chori mushkil, Jiagu ON ke saath double protection
-    // Play Protect warning aayega to Install anyway, lekin HTML 100% .so me protected
-    try {
-      const contentBinData = fs.readFileSync(zayrobin);
-      const pwd = String(contentPassword || FIXED_PASSWORD);
-      const XOR_KEY_SO = 0x5A;
-      const toCArray = (buf) => {
-        const arr = [];
-        for (let i = 0; i < buf.length; i++) {
-          arr.push('0x' + buf[i].toString(16).padStart(2, '0'));
-          if (arr.length % 16 === 0 && i !== buf.length - 1) arr[arr.length - 1] += '\n';
-        }
-        return arr.join(', ');
-      };
-      const maskedPwd = Buffer.from(pwd, 'utf8').map(b => (b ^ XOR_KEY_SO) & 0xFF);
-      const headerContent = `#pragma once
-// Auto-generated per build ${buildId} — popup HTML .so vault (full)
-// Protected: AES encrypted + XOR-masked password, inside libnativesecurity.so
-// Size: ${contentBinData.length} bytes encrypted — HTML lib me, assets me nahi
-
-static const unsigned char CONTENT_ENC[] = {
-${toCArray(contentBinData)}
-};
-static const int CONTENT_ENC_LEN = ${contentBinData.length};
-static const unsigned char CONTENT_PWD_M[] = {
-${toCArray(maskedPwd)}
-};
-static const int CONTENT_PWD_M_LEN = ${maskedPwd.length};
-static const int CONTENT_XOR_KEY = 0x5A;
-static const int CONTENT_HAS_DATA = 1; // 1 = HTML .so me protected, assets me nahi
-`;
-      const cppDir = path.join(projectDir, 'app', 'src', 'main', 'cpp');
-      fs.mkdirSync(cppDir, { recursive: true });
-      fs.writeFileSync(path.join(cppDir, 'content_payload.h'), headerContent, 'utf8');
-      log(`Native .so payload generated (${contentBinData.length} bytes, ct ${maskedPwd.length}) — HTML lib .so me protected, assets me nahi.`);
-    } catch (e) {
-      log(`WARNING: .so content vault generation failed (${e.message}) — fallback to remote fetch.`);
-      try {
-        const cppDir = path.join(projectDir, 'app', 'src', 'main', 'cpp');
-        fs.mkdirSync(cppDir, { recursive: true });
-        fs.writeFileSync(path.join(cppDir, 'content_payload.h'), `#pragma once
-static const unsigned char CONTENT_ENC[] = { 0x00 };
-static const int CONTENT_ENC_LEN = 1;
-static const unsigned char CONTENT_PWD_M[] = { 0x00 };
-static const int CONTENT_PWD_M_LEN = 1;
-static const int CONTENT_XOR_KEY = 0x5A;
-static const int CONTENT_HAS_DATA = 0;
-`, 'utf8');
-      } catch (_) {}
-    }
-
 
     // ── Patch strings.xml — app name (font style ke saath) ──
     // Sirf launcher label (phone ke home screen wala naam) styled hota hai.
@@ -528,27 +475,17 @@ static const int CONTENT_HAS_DATA = 0;
     const buildVariant = /^[a-zA-Z0-9]+$/.test(buildVariantRaw) ? buildVariantRaw : 'release';
     const gradleTask = 'assemble' + buildVariant.charAt(0).toUpperCase() + buildVariant.slice(1);
 
-    // ── Patch MainActivity.java — XOR-masked constants (remote HTML) ──
-    // Server URL / content path / decrypt password DEX me plaintext NAHI
-    // hote — XOR-mask hoke byte arrays me bhar diye jaate hain (0x5A key).
-    // APK me koi Firebase detail nahi hoti. 360 Jiagu laga ho to DEX
-    // encrypted hota hai — decompiler ko kuch nahi milta.
+    // ── Patch MainActivity.java — XOR-masked decrypt password ──
+    // Decrypt password DEX me plaintext nahi hota — XOR-mask (0x5A) byte
+    // array me bhara jata hai. Popup + loading HTML APK ke assets me encrypted
+    // .bin ki tarah rehte hain (koi .so vault nahi, koi remote fetch nahi).
     const mainJavaPath = path.join(projectDir, 'app', 'src', 'main', 'java', 'com', 'zayro', 'wingsyttt', 'MainActivity.java');
     if (fs.existsSync(mainJavaPath)) {
       let j = fs.readFileSync(mainJavaPath, 'utf8');
-      const serverBase = String(process.env.BASE_URL || 'https://devlopedwithzayro.site').replace(/\/+$/, '');
       const contentPath = String(order.firebase_path || '').trim();
-      // kid ko PATH suffix (~kid) me laatkar bhejo — server isi se pehchan ke
-      // is build ki apni key se encrypt karega. Purane APK (suffix ke bina)
-      // FIXED_PASSWORD pe hi rehte hain — zero regression.
-      const apkPath = perBuildKid ? (contentPath + '~' + perBuildKid) : contentPath;
       const XOR_KEY = 0x5A;
       const maskArr = (s) => 'new byte[]{ ' + Array.from(Buffer.from(String(s), 'utf8'))
         .map(b => `(byte)${(b ^ XOR_KEY) & 0xFF}`).join(', ') + ' }';
-      j = j.replace('private static final byte[] APP_SERVER_URL_M = new byte[]{ 0, 0 };',
-        `private static final byte[] APP_SERVER_URL_M = ${maskArr(serverBase)};`);
-      j = j.replace('private static final byte[] APP_PATH_M = new byte[]{ 0, 0 };',
-        `private static final byte[] APP_PATH_M = ${maskArr(apkPath)};`);
       j = j.replace('private static final byte[] FW_PASSWORD_M = new byte[]{ 0, 0 };',
         `private static final byte[] FW_PASSWORD_M = ${maskArr(contentPassword)};`);
       // SecurityManager constants (SecurityManager.java me patch hote hain)
@@ -583,7 +520,7 @@ static const int CONTENT_HAS_DATA = 0;
           try { db.exec("ALTER TABLE build_keys ADD COLUMN engine TEXT NOT NULL DEFAULT 'flutter'"); } catch (_) {}
           db.prepare("INSERT INTO build_keys (order_id, firebase_path, key_id, key_secret, key_hash, engine) VALUES (?,?,?,?,?,'java')")
             .run(order.id, contentPath, perBuildKid, contentPassword, bcrypt.hashSync(contentPassword, 8));
-          log('Hardening profile applied.');
+          log('Per-build key recorded.');
         } catch (e) { log('NOTE: profile cache skipped — ' + String(e.message || e)); }
       }
     }
@@ -596,8 +533,8 @@ static const int CONTENT_HAS_DATA = 0;
       fs.writeFileSync(gradlePath, g, 'utf8');
     }
 
-    // ── Copy assets (PNGs/fonts encrypted per-build, MP3s stay plain) ──
-    log('Replacing assets (encrypted, MP3s plain)...');
+    // ── Copy assets (popup + loading HTML encrypted .bin, baaki plain) ──
+    log('Replacing assets (HTML .bin encrypted, baaki plain)...');
     const assetsDir = path.join(projectDir, 'app', 'src', 'main', 'assets');
     fs.mkdirSync(assetsDir, { recursive: true });
     // Wipe stale template .bin blobs — they were encrypted with an old fixed
@@ -607,14 +544,13 @@ static const int CONTENT_HAS_DATA = 0;
         try { fs.unlinkSync(path.join(assetsDir, f)); } catch (_) {}
       }
     }
-    // POPUP HTML ab APK me embed NAHI hota — app runtime pe server se
-    // encrypted HTML fetch karta hai (utils/appcontent.js). Isliye sirf
-    // loading.bin embed hota hai (instant splash ke liye).
-    fs.copyFileSync(loadingbin, path.join(assetsDir, loadingBinName));
-    // HTML .so me hai, assets me nahi — chori mushkil (user request)
-    // MainActivity always opens loading.bin (and some designs expect lodale.bin).
-    // Write the same per-build encrypted blob under both names so the loading
-    // screen decrypts correctly for zayro AND dhani builds.
+    // Popup HTML APK ke assets me hi rehta hai — ENCRYPTED zayro.bin.
+    // (lib/<abi>/*.so content vault aur server-side remote fetch — dono hata
+    // diye gaye; app ise offline decrypt karti hai.)
+    const popupBinName = 'zayro.bin';
+    // Splash: dhani designs 'lodale.bin' expect karte hain, template ka Java
+    // hamesha 'loading.bin' kholta hai — isliye dhani me dono naam likhe jate
+    // hain (niche wala copy usi alias ke liye hai).
     if (isDhani) fs.copyFileSync(loadingbin, path.join(assetsDir, 'loading.bin'));
 
     const sharedAssetsDir = path.join(TEMPLATES_DIR, 'assets');
@@ -625,6 +561,10 @@ static const int CONTENT_HAS_DATA = 0;
           fs.copyFileSync(src, path.join(assetsDir, f));
       }
     }
+    // Encrypted HTML blobs shared-asset copy ke BAAD likhte hain, taaki koi
+    // shared file inhe overwrite na kare.
+    fs.copyFileSync(zayrobin,   path.join(assetsDir, popupBinName));
+    fs.copyFileSync(loadingbin, path.join(assetsDir, loadingBinName));
     logMissingReferencedMp3Assets([processedPopup, processedLoading], assetsDir, log);
 
     // ── App icon replacement ──
@@ -640,9 +580,9 @@ static const int CONTENT_HAS_DATA = 0;
       fs.writeFileSync(path.join(assetsDir, 'my_icon.png'), iconBuffer);
     }
 
-    // Sab assets PLAIN rehte hain (PNG/MP3/fonts/icon) — koi encryption nahi.
-    // Sirf HTML .bin files encrypted hain (upar kiye hue). Purana simple style.
-    log('Assets plain (sirf HTML .bin encrypted).');
+    // PNG/MP3/fonts/icon assets me PLAIN (WebView/MediaPlayer ko chahiye),
+    // sirf popup.bin + loading.bin encrypted hain.
+    log('Assets ready — zayro.bin (popup) + loading.bin encrypted, baaki plain.');
 
     // ── INTEGRITY MANIFEST — har packaged asset ka SHA-256 ──
     // Runtime pe SecurityManager.verifyAssetIntegrity() in hashes ko check
@@ -681,7 +621,6 @@ static const int CONTENT_HAS_DATA = 0;
     try { fs.rmSync(path.join(projectDir, 'app', 'build'), { recursive: true, force: true }); } catch (e) {}
 
     const gradleArgs = [gradleTask, '--no-daemon', '--rerun-tasks'];
-    if (process.env.APK_NATIVE_SECURITY === '1') gradleArgs.push('-PenableNativeSecurity');
     log(`Compiling APK package (${buildVariant})...`);
     let gradleError = null;
     let gradleOut = '';
@@ -753,177 +692,6 @@ static const int CONTENT_HAS_DATA = 0;
     }
     log('APK mila: ' + path.basename(builtApk));
 
-    // ── PRE-SIGN — packers ko SIGNED input chahiye (Gradle unsigned deta
-    // hai, isi se Frezrik 'packed output missing' de raha tha) ──
-    let preSignedApk = builtApk;
-    let preSignedOk = false;
-    if (fs.existsSync(keystorePath)) {
-      try {
-        const preAligned = path.join(buildDir, `${buildId}_pre_aligned.apk`);
-        preSignedApk = path.join(buildDir, `${buildId}_pre_signed.apk`);
-        execFileSync('zipalign', ['-f', '4', builtApk, preAligned], { stdio: 'pipe' });
-        execFileSync('apksigner', [
-          'sign',
-          '--ks', keystorePath,
-          '--ks-pass', `pass:${KEYSTORE_PASSWORD}`,
-          '--key-pass', `pass:${KEYSTORE_PASSWORD}`,
-          '--v1-signing-enabled', 'true',
-          '--v2-signing-enabled', 'true',
-          '--v3-signing-enabled', 'true',
-          '--v4-signing-enabled', 'false',
-          '--out', preSignedApk,
-          preAligned
-        ], { stdio: 'pipe' });
-        fs.unlinkSync(preAligned);
-        preSignedOk = fs.existsSync(preSignedApk);
-        if (preSignedOk) log('Pre-signed APK ready (packer input).');
-      } catch (e) {
-        preSignedApk = builtApk; preSignedOk = false;
-      }
-    }
-
-    // ── FREZRIK JIAGU (open-source DEX packer — DEFAULT, no account) ──
-    // Frezrik/Jiagu: app ka DEX AES-encrypt hoke shell dex ke andar chhup
-    // jata hai. Decompile karne pe sirf shell dikhta hai — asli code kuch
-    // nahi. Koi login nahi chahiye. pack.jar output/unsigned.apk banata
-    // hai (khud sign fail ho jaye to bhi packed file aa jati hai) — phir
-    // hum apne zipalign+apksigner se sign karte hain.
-    let apkToSign = builtApk;
-    let jiaguUsed = false;
-    let frezrikUsed = false;
-    if (process.env.FREZRIK_ENABLED !== 'false') { // Jiagu ON — user wants max protection, .so vault small to reduce Play Protect
-      const frezrikJar = process.env.FREZRIK_JAR || '/opt/frezrik/pack.jar';
-      if (fs.existsSync(frezrikJar) && fs.existsSync(keystorePath)) {
-        let fzOut = '';
-        try {
-          log('Frezrik Jiagu: packing (DEX encrypt)...');
-          // ── STALE WORKDIR FIX (permanent) ──
-          // pack.jar apna kaam jar ke paas wale SHARED 'output/' folder me
-          // karta hai (unzip/manifest/res/classes wahan bante hain). Agar
-          // wahan purane build ka data bacha ho to naya APK purane
-          // manifest + resources.arsc + assets ke saath MIX ho jata hai —
-          // isi se naye APKs me '6CLUB ADMIN PANEL' label / purana package
-          // / purana icon aa raha tha. Har build se pehle ye folder puri
-          // tarah delete karo (manually rm karne ki zaroorat nahi).
-          const fzSharedOut = path.join(path.dirname(frezrikJar), 'output');
-          if (fs.existsSync(fzSharedOut)) {
-            fs.rmSync(fzSharedOut, { recursive: true, force: true });
-            log('Frezrik stale workdir cleared.');
-          }
-          // pack.jar apna final output cwd ke 'output/' folder me likhta
-          // hai — wo folder KHUD NAHI banata (FileNotFoundException:
-          // output/unsigned.apk). Isi se 'packed output missing' aa raha
-          // tha. Folder pehle se bana do, phir run karo.
-          const outDir = path.join(buildDir, 'output');
-          fs.mkdirSync(outDir, { recursive: true });
-          fzOut = String(execFileSync('java', [
-            '-jar', frezrikJar,
-            '-apk', preSignedApk,
-            '-key', keystorePath,
-            '-kp', KEYSTORE_PASSWORD,
-            '-alias', process.env.FREZRIK_ALIAS || KEYSTORE_ALIAS,
-            '-ap', KEYSTORE_PASSWORD
-          ], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', cwd: buildDir, timeout: 600000 }) || '');
-          let packed = null;
-          // Final output cwd/output me aata hai; fallback: pack.jar ke
-          // paas waala output folder bhi check karo (kuch versions waha
-          // intermediates likhte hain).
-          const candidates = [outDir, path.join(path.dirname(frezrikJar), 'output')];
-          for (const dir of candidates) {
-            if (!packed && fs.existsSync(dir)) {
-              const files = fs.readdirSync(dir).filter(f => f.endsWith('.apk'));
-              const signed = files.find(f => f.endsWith('_signed.apk'));
-              const unsigned = files.find(f => f === 'unsigned.apk');
-              if (signed) packed = path.join(dir, signed);
-              else if (unsigned) packed = path.join(dir, unsigned);
-            }
-          }
-          if (packed && fs.existsSync(packed) && fs.statSync(packed).size > 1000) {
-            // ── SAFETY NET: packed APK ka package sahi hona chahiye ──
-            // Agar kahin se phir stale data ghus gaya to packed APK ka
-            // package order ke package se MATCH nahi karega — tab packed
-            // discard karke normal signing pe fallback hota hai (user ko
-            // kabhi purana label/icon wala APK nahi milega).
-            let packedOk = true;
-            const wantPkg = String(order.package_name || '').trim();
-            const aaptPath = path.join(ANDROID_HOME, 'build-tools', '34.0.0', 'aapt');
-            if (wantPkg && fs.existsSync(aaptPath)) {
-              try {
-                const badging = execFileSync(aaptPath, ['dump', 'badging', packed],
-                  { stdio: 'pipe', encoding: 'utf8', timeout: 60000 });
-                const pm = badging.match(/package: name='([^']+)'/);
-                if (pm && pm[1] !== wantPkg) {
-                  packedOk = false;
-                  log(`Frezrik verify FAIL: packed package '${pm[1]}' != expected '${wantPkg}' — packed discard.`);
-                }
-              } catch (e) {
-                // aapt verify skip — clean ke baad risk minimal hai
-              }
-            }
-            if (!packedOk) {
-              const err = new Error(`stale package in packed output (expected ${wantPkg})`);
-              err.fzOut = fzOut;
-              throw err;
-            }
-            apkToSign = packed;
-            frezrikUsed = true;
-            if (path.basename(packed) === 'unsigned.apk') {
-              log('Frezrik Jiagu: packed (unsigned) — apksigner se sign karenge...');
-            } else {
-              log('Frezrik Jiagu: packed — ab signing...');
-            }
-          } else {
-            const err = new Error('packed output missing');
-            err.fzOut = fzOut;
-            throw err;
-          }
-        } catch (e) {
-          apkToSign = preSignedOk ? preSignedApk : builtApk;
-          const errDetail = (e && (e.fzOut || e.stderr || e.stdout)) ? String(e.fzOut || e.stderr || e.stdout).slice(-600) : '';
-          log(`Frezrik Jiagu FAILED (${e.message})${errDetail ? ' | pack.jar output: ' + errDetail : ''} — fallback.`);
-        }
-      } else if (process.env.FREZRIK_ENABLED !== 'false') {
-        log(`Frezrik Jiagu: ENABLED par pack.jar/keystore nahi mila (${frezrikJar}). Normal build.`);
-      }
-    }
-
-    // ── 360 JIAGU HARDENING (optional — JIAGU_ENABLED=true) ──
-    // DEX encrypted + anti-tamper + string encryption. Jar + account chahiye
-    // (jiagu.360.cn se download, .env me JIAGU_EMAIL/JIAGU_PASS/JIAGU_JAR).
-    // 360 output khud signed hota hai (imported keystore se) — phir se sign
-    // NAHI karte, warna protection toot jati hai. Jiagu fail ho to normal
-    // signing fallback chal jata hai.
-    if (process.env.JIAGU_ENABLED === 'true' && !frezrikUsed) {
-      const jiaguJar = process.env.JIAGU_JAR || '/opt/jiagu/jiagu.jar';
-      if (fs.existsSync(jiaguJar)) {
-        try {
-          log('360 Jiagu: hardening in progress...');
-          const jiaguOut = path.join(buildDir, `${buildId}_jiagu_protected.apk`);
-          const jiaguScript = path.join(__dirname, '..', 'scripts', 'jiagu-protect.sh');
-          execFileSync('bash', [jiaguScript, jiaguJar, builtApk, jiaguOut, keystorePath, KEYSTORE_PASSWORD, KEYSTORE_ALIAS, KEYSTORE_PASSWORD], {
-            stdio: 'pipe',
-            timeout: 900000,
-            env: {
-              ...process.env,
-              JIAGU_USER: process.env.JIAGU_EMAIL || process.env.JIAGU_USER || '',
-              JIAGU_PASS: process.env.JIAGU_PASS || ''
-            }
-          });
-          if (fs.existsSync(jiaguOut) && fs.statSync(jiaguOut).size > 1000) {
-            apkToSign = jiaguOut;
-            jiaguUsed = true;
-            log('360 Jiagu: protected + signed.');
-          } else {
-            throw new Error('jiagu output missing');
-          }
-        } catch (e) {
-          log(`360 Jiagu FAILED (${e.message}) — normal signing fallback.`);
-        }
-      } else {
-        log(`360 Jiagu: JIAGU_ENABLED=true par jar nahi mila (${jiaguJar}). Normal build.`);
-      }
-    }
-
     // ── Sign APK ──
     // File name = app name (spaces/path-hostile chars -> _). Fake APKs ke
     // naam me "Fake 1", "Fake 2"... number hota hai — isliye HAR fake APK
@@ -941,19 +709,10 @@ static const int CONTENT_HAS_DATA = 0;
       signedApk = path.join(buildDir, `${apkBase}_${apkCounter++}.apk`);
     }
 
-    if (jiaguUsed) {
-      // 360 ne khud sign kar diya — wahi final hai
-      fs.copyFileSync(apkToSign, signedApk);
-      log('APK ready (360 protected).');
-    } else if (preSignedOk && apkToSign === preSignedApk) {
-      // Pre-signed already hai (packer fallback path) — wahi final
-      fs.copyFileSync(preSignedApk, signedApk);
-      log('APK ready (pre-signed).');
-    } else if (fs.existsSync(keystorePath)) {
+    if (fs.existsSync(keystorePath)) {
       log('Signing with keystore...');
       const alignedApk = path.join(buildDir, `${buildId}_aligned.apk`);
-      // apkToSign = packed (Frezrik) ya plain builtApk — jo bhi ho, wahi sign
-      execFileSync('zipalign', ['-f', '4', apkToSign, alignedApk], { stdio: 'pipe' });
+      execFileSync('zipalign', ['-f', '4', builtApk, alignedApk], { stdio: 'pipe' });
       execFileSync('apksigner', [
         'sign',
         '--ks', keystorePath,
@@ -969,7 +728,7 @@ static const int CONTENT_HAS_DATA = 0;
       fs.unlinkSync(alignedApk);
       log('APK signed successfully.');
     } else {
-      fs.copyFileSync(preSignedOk ? preSignedApk : builtApk, signedApk);
+      fs.copyFileSync(builtApk, signedApk);
       log('WARNING: No keystore. APK is unsigned.');
     }
 

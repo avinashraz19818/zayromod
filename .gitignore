@@ -43,3 +43,10 @@ database/*.db-shm
 keystore/*.keystore
 *.backup.*
 *.before-*
+
+# Android template project — local build cruft (never commit)
+android-project/.gradle/
+android-project/app/.gradle/
+android-project/app/.cxx/
+android-project/app/build/
+android-project/build/

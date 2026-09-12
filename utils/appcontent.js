@@ -1,19 +1,17 @@
 'use strict';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// appcontent.js — RUNTIME HTML SERVER (remote content system)
+// appcontent.js — LEGACY RUNTIME HTML SERVER (purane APKs ke liye)
 //
-// APK me ab popup HTML embed NAHI hota. App launch hote hi server se
-// encrypted HTML fetch karta hai:
-//   GET /api/app-content/:path          → popup HTML (.bin, fixed key)
-//   GET /api/app-content/:path/loading  → loading HTML (.bin, fixed key)
+// Naye APK popup + loading HTML khud apne assets me encrypted .bin ki tarah
+// rakhte hain — naye builds is route par depend NAHI karte. Ye routes sirf
+// un already-distributed APKs ke liye zinda hain jo runtime pe fetch karte
+// the:
+//   GET /api/app-content/:path          → popup HTML (.bin)
+//   GET /api/app-content/:path/loading  → loading HTML (.bin)
 //
-// Fayde:
-//   - APK me koi Firebase detail ya design HTML nahi hota — decompile karo
-//     to sirf khali shell milta hai
-//   - Design/links change ho to bina naya APK banaye sab update ho jata hai
-//   - HTML server pe bhi encrypted serve hota hai (fixed password), aur
-//     transport HTTPS hai
+// Path ke suffix '~<kid>' se per-build key lookup hota hai; bina suffix ke
+// FIXED_PASSWORD (purane builds). Response hamesha encrypted .bin hi hai.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const fs = require('fs');
