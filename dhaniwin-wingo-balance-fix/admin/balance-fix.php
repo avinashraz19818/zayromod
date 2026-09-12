@@ -252,7 +252,7 @@ $repairReport = null;
 if ($authed && $pdo && strtolower((string) ($_POST['action'] ?? '')) === 'set') {
     $key = (string) ($_POST['key'] ?? '');
     $val = (string) ($_POST['value'] ?? '');
-    $allowed = ['wingo_balance_mode' => ['game', 'total'], 'wingo_auto_transfer' => ['0', '1'], 'balance_debug' => ['0', '1']];
+    $allowed = ['wingo_balance_mode' => ['game', 'total'], 'wingo_auto_transfer' => ['0', '1'], 'balance_debug' => ['0', '1'], 'wingo_instant_settle' => ['0', '1'], 'settlement_mode' => ['auto', 'auto_hedge', 'force_win', 'force_loss']];
     if (isset($allowed[$key]) && in_array($val, $allowed[$key], true)) {
         $ok = api_set_setting($key, $val);
         $notice = $ok ? 'Saved: ' . $key . ' = ' . $val : 'Could not save ' . $key . ' (api_settings not writable?)';
@@ -548,6 +548,33 @@ if (!$gameReport['found']): ?>
           <button type="submit" class="ghost">Turn ON</button></form>
         <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="wingo_auto_transfer"><input type="hidden" name="value" value="0">
           <button type="submit" class="ghost">OFF</button></form>
+      </td>
+    </tr>
+    <tr>
+      <th>Instant settle (bet lagate hi win/loss)</th>
+      <td>current: <code><?= (string) api_setting('wingo_instant_settle', '1') === '1' ? 'ON' : 'off' ?></code>
+        <div class="note">ON = issue ka number bet lagte hi draw ho jaata hai aur bet turant settle
+        (jeete to payout turant game wallet me). Draw engine wahi hai jo countdown ke end par karta
+        tha — yani number same rahega, sirf pehle draw hota hai, aur lottery_results me save hone se
+        history/chart/records match karte rehte hain. OFF = normal rule (countdown ke baad settle).</div></td>
+      <td style="white-space:nowrap">
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="wingo_instant_settle"><input type="hidden" name="value" value="1">
+          <button type="submit" class="ghost">Turn ON</button></form>
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="wingo_instant_settle"><input type="hidden" name="value" value="0">
+          <button type="submit" class="ghost">OFF (settle after countdown)</button></form>
+      </td>
+    </tr>
+    <tr>
+      <th>Draw rule (settlement_mode)</th>
+      <td>current: <code><?= bfix_e((string) api_setting('settlement_mode', 'auto')) ?></code>
+        <div class="note">instant settle ke saath bhi yehi rule lagta hai: auto = normal draw,
+        auto_hedge = house loss kam karo, force_win / force_loss = sab ko jeetwaao / haaraao
+        (test ke liye; production me mat rakhiyega).</div></td>
+      <td style="white-space:nowrap">
+        <?php foreach (['auto', 'auto_hedge', 'force_win', 'force_loss'] as $mode): ?>
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="settlement_mode"><input type="hidden" name="value" value="<?= bfix_e($mode) ?>">
+          <button type="submit" class="ghost"><?= bfix_e($mode) ?></button></form>
+        <?php endforeach; ?>
       </td>
     </tr>
     <tr>

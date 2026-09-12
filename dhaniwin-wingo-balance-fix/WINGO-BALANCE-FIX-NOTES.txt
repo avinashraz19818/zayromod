@@ -144,6 +144,35 @@ VERIFY (30 second)
    section 7 ka log yahan paste kar dena, main bata dunga kaunsi call anonymous aa
    rahi thi.
 
+ROUND 4 — BET LAGATE HI WIN/LOSS SETTLE (instant settle)
+--------------------------------------------------------------------
+Ab default ON: `wingo_instant_settle = 1`.
+Bet place hote hi:
+  1. us issue ka number draw hota hai (wahi draw engine jo countdown ke end par
+     chalata tha — `api_lottery_default_premium(gameCode, issueNumber)`, issue ke
+     hisaab se fix number, yani odds/fairness same, sirf pehle draw ho raha hai)
+  2. result `lottery_results` me us issue ke liye save ho jaata hai → Game
+     history / Chart / countdown ke end ka number / "My history" — sab match
+  3. bet turant settle: jeete to payout turant game wallet me, haare to stake
+     hi gaya; response me `status`(won|lost), `result`, `winAmount`,
+     `profitAmount`, `settleState` (1 = won, 0 = lost, 2 = pending),
+     `isPending:false`, aur settle-ke-baad ka `balance` bhi aata hai
+  4. `GetWinLossResult` / `GetRecordPage` ab us bet ko pending nahi dikhate
+
+Band karna ho: admin/balance-fix.php → section 6 → "Instant settle: OFF"
+(wahan `settlement_mode` bhi set hota hai: auto | auto_hedge | force_win | force_loss)
+
+⚠️ Dhyan rakhne wali baat
+  - force_win / force_loss test ke liye hain, production me mat chhodiye.
+  - Agar aap `auto_hedge` (house-loss optimizer) use karte ho to instant settle
+    OFF rakhiye: hedge ko issue ki saari bets chahiye hoti hain, instant mode me
+    draw issue ki pehli bet par hi ho jaata hai.
+  - Admin ka "manual result queue" / "user target control" instant mode me bhi
+    pehle chalta hai (bet DB me insert hone ke baad draw hota hai), to wo kaam
+    karta rahega.
+  - Ek hi issue me baad me lagne wali bets us pre-drawn number par settle hongi
+    (normal baat hai — number to fix hi tha issue ka).
+
 Data safety: koi table/schema change nahi, koi user/order delete nahi.
 Repair button sirf `api_responses.enabled = 0` karta hai (frozen snapshots off).
 ====================================================================
