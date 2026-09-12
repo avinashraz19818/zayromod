@@ -205,3 +205,76 @@ Jo Nahi badla (jaan boojh kar):
   * Wallet/financial statement (UserFinancial/HistoryList) isi list ka
     createTime reuse karta hai, isliye wahan bhi time ek jaisa dikhega —
     "My history" se mismatch nahi hoga.
+
+================================================================================
+ROUND 6 (2026-09-12) - APK / WebView me Wingo balance 0.00
+================================================================================
+Problem: browser me sab thik (balance, bet, settle) — lekin same link ko APK
+(WebView wrapper) me kholne par Wingo screen ka balance "Rs 0.00" dikhata hai,
+jabki site ka baaki hissa (aur player ka asli balance) logged-in hai.
+
+Kyun hota tha (root cause):
+  Game (Wingo) apna paisa "ar_g_token" se authenticate karta hai — ye key app
+  sirf tab bharti hai jab game /ThirdGame/GetGameUrl ke SPA-route path se khule
+  (R() -> new URL(data.url).searchParams.get("Token")).
+  APK me game page aksar naye window / iframe me khulta hai, ya user direct
+  /Wingo_1M khol deta hai. Us case me:
+    * "ar_g_token" -> SDK localStore me null (isliye game anonymous, balance 0)
+    * Authorization header WebView ke kuch builds me drop ho jata hai
+    * SameSite cookie handoff tab kaam nahi karta jab third-party cookies
+      band hote hain (Android WebView me default OFF: setAcceptThirdPartyCookies)
+  Browser me isliye thik tha kyunki wahan httpOnly ar_g_token cookie chala jata
+  tha.  (JS contract: index-BgAwOX9Q.js -> dr.TOKEN="ar_g_token",
+   window.state.token = localStore.get(dr.TOKEN) — ek hi bar, boot par.)
+
+Fix (index.html ka handoff block, v6):
+  Page ke app se PEHLE chalta hai aur member ka token in channels se uthata hai:
+     ?Token= / ?token=  ->  #auth=<base64 {token,refreshToken}>  ->
+     localStorage/sessionStorage ar_g_token  ->  ar_token  ->  dh_tok cookie  ->
+     window.name (dhT=)
+  Fir same token ko sab jagah likh deta hai jinhe game padh sakta hai:
+     ar_g_token  (SDK ke JSON {value,expires:-1} format me — jo woh expect karta hai)
+     ar_token    (sirf agar khali tha; app isse RAW padhta hai)
+     cookies ar_g_token + dh_tok (JS-readable sibling)
+     window.name (agar WebView me DOM storage band ho)
+  Aur ek fetch/XHR interceptor lagta hai: same-origin /api | /webapi |
+  lottery | ThirdGame requests me
+     header missing ho -> "Authorization: Bearer <token>" add,
+     header "Bearer null"/junk ho -> replace,
+     already valid header ho -> HUSTLE NAHI (doosre user ka token touch nahi)
+     cross-origin (vendor games) -> bilkul untreated.
+  => Cookies ho ya na ho, localStorage chale ya band ho, game ko member mil jata hai.
+
+Server side:
+  * api_request_token() ab "dh_tok" cookie bhi padhta hai, aur
+    wingo_webview_handoff (default 1) se ?Token=/?token= handoff on/off hota hai.
+    0 karne par sirf Authorization header chalega (thoda sakht, par APK me balance
+    phir 0 dikhega). Note: isse koi "userId" trust nahi hota — token hi chalta hai,
+    to spoof nahi ho sakta.
+  * balance_debug=1 par anonymous game request ab is tarah log hota hai:
+      Lottery/GetBalance -> no member resolved ... tokenSeen=no ua=... ref=...
+    (admin tool ke log section me dikh jayega — APK bug confirm karne ke liye ek click)
+  * Lottery/GetUserInfo ka amount/balance/walletBalance ab wingo_balance_mode
+    follow karte hain (game|total). Warna aise member ka Wingo header 0 dikhata
+    hai jiska paisa game wallet me hai. asli wallet "realWalletBalance" me hai.
+
+APK banate waqt (developer checklist) — fix ko aur mazboot karta hai:
+  1) WebView settings: setJavaScriptEnabled(true), setDomStorageEnabled(true),
+     setAcceptCookie(true). Agar game iframe me hai to
+     WebViewCompat.setAcceptThirdPartyCookies(webView, true) bhi.
+  2) App ka start URL normal site URL hi ho (https://aapka-domain/).
+     Koi ?Token= khud se attach karne ki zaroorat nahi — app login ke baad
+     handoff khud sambhal leta hai.
+  3) "Clear cache" / incognito WebView se test karne se pehle ek baar site
+     browser me khol kar login kar lein — phir APK me Wingo kholhein.
+  4) Agar phir bhi 0 dikhe: admin/balance-fix.php > balance_debug ON karein,
+     APK me Wingo kholein, fir wahi section kholein — "tokenSeen=no" aaye to
+     matlab WebView token bhej hi nahi raha (storage/cookie band), "yes(invalid)"
+     aaye to token purana/expired hai (app me dobara login).
+
+Test kiya gaya (sandbox me, node vm harness se handoff block):
+  A) /?Token=<t> se game khula            -> ar_g_token + ar_token + cookies + window.name + header ✓
+  B) direct /Wingo_1M, app pehle se logged in -> ar_token se handoff ✓
+  C) SDK ne "Bearer null" bheja            -> replace ho gaya ✓
+  D) #auth=<base64> bridge                 -> parse hokar handoff ✓
+  E) anonymous visitor                     -> kuch nahi likha, vendor/cross-origin untouched ✓

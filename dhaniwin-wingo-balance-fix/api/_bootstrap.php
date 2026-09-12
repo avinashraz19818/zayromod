@@ -1619,15 +1619,22 @@ function api_request_token(): string
         }
     }
     $candidates = [
-        $_GET['Token'] ?? '',
-        $_GET['token'] ?? '',
-        $_POST['token'] ?? '',
-        $_REQUEST['token'] ?? '',
-        $_REQUEST['Token'] ?? '',
         $_COOKIE['ar_g_token'] ?? '',
+        $_COOKIE['dh_tok'] ?? '',
         $_COOKIE['ar_token'] ?? '',
         $_COOKIE['token'] ?? '',
     ];
+    // WebView / APK builds often cannot keep an Authorization header, so the token is
+    // also read from the URL. wingo_webview_handoff=0 hardens this back to headers only.
+    if ((string) api_setting('wingo_webview_handoff', '1') === '1') {
+        $candidates = array_merge([
+            $_GET['Token'] ?? '',
+            $_GET['token'] ?? '',
+            $_POST['token'] ?? '',
+            $_REQUEST['token'] ?? '',
+            $_REQUEST['Token'] ?? '',
+        ], $candidates);
+    }
     foreach ($candidates as $value) {
         $value = trim((string) $value);
         if ($value !== '' && !in_array(strtolower($value), ['null', 'undefined', 'false', '[object object]', '0', '""', "\'\'"], true)) {
@@ -1757,6 +1764,17 @@ function api_balance_debug(string $what): void
  * 'game' (default) = Wingo shows the game wallet only.
  * 'total'          = Wingo shows game + main wallet.
  */
+/**
+ * WebView / APK handoff switch. 1 (default) = the member bearer token may also arrive
+ * as ?Token= / ?token= or the readable dh_tok cookie, because a WebView that opens the
+ * game in its own window or iframe loses the Authorization header and (with third-party
+ * cookies off) the httpOnly handoff cookie. 0 = headers only, for a locked-down build.
+ */
+function api_wingo_webview_handoff(): bool
+{
+    return (string) api_setting('wingo_webview_handoff', '1') === '1';
+}
+
 function api_wingo_shown_balance(array $bal): float
 {
     $mode = strtolower((string) api_setting('wingo_balance_mode', 'game'));
@@ -3540,7 +3558,12 @@ function api_lottery_dynamic(string $endpoint, array $input): ?array
         $currency = (string) (api_config()['site']['currency'] ?? 'INR');
         $shown = api_wingo_shown_balance($bal);
         if (empty($user['id'])) {
-            api_balance_debug('Lottery/GetBalance -> no member resolved (showing 0)');
+            api_balance_debug(sprintf(
+                'Lottery/GetBalance -> no member resolved (showing 0) | tokenSeen=%s ua=%s ref=%s',
+                api_request_token() !== '' ? 'yes(invalid)' : 'no',
+                substr(str_replace("\n", ' ', (string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 90),
+                substr((string) ($_SERVER['HTTP_REFERER'] ?? ''), 0, 90)
+            ));
         }
         return api_lottery_success([
             'balance' => $shown,
@@ -3569,10 +3592,15 @@ function api_lottery_dynamic(string $endpoint, array $input): ?array
         $info['verifyMethods']['phone'] = (string) ($member['phone'] ?? '');
         $bal = api_user_balances($member);
         $currency = (string) (api_config()['site']['currency'] ?? 'INR');
-        $info['amount'] = $bal['game'];
-        $info['balance'] = $bal['game'];
+        // The game card reads `amount` / `balance` / `walletBalance` from this payload, so
+        // all three follow the mode the site picked in admin (game | total). Otherwise the
+        // Wingo header shows 0 for a member whose money sits in the game wallet.
+        $shown = api_wingo_shown_balance($bal);
+        $info['amount'] = $shown;
+        $info['balance'] = $shown;
         $info['gameBalance'] = $bal['game'];
-        $info['walletBalance'] = $bal['wallet'];
+        $info['walletBalance'] = $shown;
+        $info['realWalletBalance'] = $bal['wallet'];
         $info['totalBalance'] = $bal['game'] + $bal['wallet'];
         $info['currency'] = $currency;
         return api_lottery_success($info);

@@ -252,7 +252,7 @@ $repairReport = null;
 if ($authed && $pdo && strtolower((string) ($_POST['action'] ?? '')) === 'set') {
     $key = (string) ($_POST['key'] ?? '');
     $val = (string) ($_POST['value'] ?? '');
-    $allowed = ['wingo_bet_time_offset_seconds' => ['-60', '-300', '0', '60'], 'wingo_balance_mode' => ['game', 'total'], 'wingo_auto_transfer' => ['0', '1'], 'balance_debug' => ['0', '1'], 'wingo_instant_settle' => ['0', '1'], 'settlement_mode' => ['auto', 'auto_hedge', 'force_win', 'force_loss']];
+    $allowed = ['wingo_webview_handoff' => ['0', '1'], 'wingo_bet_time_offset_seconds' => ['-60', '-300', '0', '60'], 'wingo_balance_mode' => ['game', 'total'], 'wingo_auto_transfer' => ['0', '1'], 'balance_debug' => ['0', '1'], 'wingo_instant_settle' => ['0', '1'], 'settlement_mode' => ['auto', 'auto_hedge', 'force_win', 'force_loss']];
     if (isset($allowed[$key]) && in_array($val, $allowed[$key], true)) {
         $ok = api_set_setting($key, $val);
         $notice = $ok ? 'Saved: ' . $key . ' = ' . $val : 'Could not save ' . $key . ' (api_settings not writable?)';
@@ -574,6 +574,22 @@ if (!$gameReport['found']): ?>
         <?php foreach (['auto', 'auto_hedge', 'force_win', 'force_loss'] as $mode): ?>
         <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="settlement_mode"><input type="hidden" name="value" value="<?= bfix_e($mode) ?>">
           <button type="submit" class="ghost"><?= bfix_e($mode) ?></button></form>
+        <?php endforeach; ?>
+      </td>
+    </tr>
+    <tr>
+      <th>APK / WebView token handoff</th>
+      <td>current: <code><?= api_wingo_webview_handoff() ? 'ON' : 'OFF' ?></code>
+        <div class="note">APK (WebView) game page ko member ka bearer token URL
+        (<code>?Token=</code>) ya <code>dh_tok</code> cookie se milta hai — kyun ki kuch
+        WebView builds me <code>Authorization</code> header aur third-party cookies drop ho
+        jate hain. <b>ON</b> = game balance APK me bhi dikhega. <b>OFF</b> = sirf header
+        (browser-only). Ye kisi random userId ko trust nahi karta, isliye spoofable nahi —
+        jiske paas token hai wahi apna account dekhta hai.</div></td>
+      <td style="white-space:nowrap">
+        <?php foreach ([['1', 'ON'], ['0', 'OFF']] as $opt): ?>
+        <form method="post" style="display:inline"><input type="hidden" name="action" value="set"><input type="hidden" name="key" value="wingo_webview_handoff"><input type="hidden" name="value" value="<?= bfix_e($opt[0]) ?>">
+          <button type="submit" class="ghost"><?= bfix_e($opt[1]) ?></button></form>
         <?php endforeach; ?>
       </td>
     </tr>
