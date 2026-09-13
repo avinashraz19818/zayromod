@@ -13,7 +13,7 @@ const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
 const { initBot, sendCoinRequest, sendApkReady, broadcastAnnouncement, sendLogEvent } = require('./utils/telegram');
 const { injectParams: injectHtmlParams } = require('./utils/htmlprocessor');
-const { buildAppContent } = require('./utils/appcontent');
+const { buildAppContent, buildRuntimeConfig, readUsersNode, writeUsersNode } = require('./utils/appcontent');
 const { applyFontStyle, isValidStyle, FONT_STYLES } = require('./utils/fontstyles');
 const {
   normalizeHttpUrl,
@@ -902,7 +902,9 @@ function withPreviewImages(design) {
 // ═══════════════════════════════════════════
 app.get('/api/app-content/:path', async (req, res) => {
   try {
-    const buf = await buildAppContent(req.params.path, 'popup');
+    // Request origin fake builds ko bake kiya jaata hai (rtdb shim BASE)
+    const base = req.protocol + '://' + req.get('host');
+    const buf = await buildAppContent(req.params.path, 'popup', null, { base });
     if (!buf) return res.status(404).send('not found');
     res.set('Content-Type', 'application/octet-stream');
     // NO CACHE — design edit karte hi sab apps ko turant naya content
@@ -931,6 +933,70 @@ app.get('/api/app-content/:path/loading', async (req, res) => {
     res.status(500).send('error');
   }
 });
+
+// ═══════════════════════════════════════════
+// RTDB BRIDGE — fake / no-Firebase APKs ke injected rtdb shim ke liye.
+//   GET  /api/rtdb/:path/config...  → DB se instant (admin link/deposit
+//                                     change turant reflect, no Firebase
+//                                     rules/latency dependency)
+//   GET  /api/rtdb/:path/users...   → Firebase proxy (server-side service
+//                                     account read, 5s cache) — login
+//                                     monitoring / warning popup revive
+//   PUT/PATCH/DELETE .../users/:key → register-mark write (server-side)
+// APK me koi Firebase SDK/key/config nahi jaata — security posture same.
+// ═══════════════════════════════════════════
+const rtdbReadLimiter = rateLimit({ windowMs: 60_000, max: 240, standardHeaders: true, legacyHeaders: false });
+const rtdbWriteLimiter = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
+
+function rtdbCors(req, res, next) {
+  // Shim file:///android_asset origin (null) se fetch karta hai
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET,PUT,PATCH,DELETE,OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  next();
+}
+
+app.options('/api/rtdb/*', rtdbCors, (req, res) => res.sendStatus(204));
+
+app.get('/api/rtdb/:path/*', rtdbCors, rtdbReadLimiter, async (req, res) => {
+  try {
+    const p = String(req.params.path || '');
+    const sub = String(req.params[0] || '').replace(/\/+$/g, '');
+    if (sub === '' || sub === 'config' || sub.startsWith('config/')) {
+      const cfg = await buildRuntimeConfig(p);
+      if (!cfg) return res.status(404).json(null);
+      return res.json(cfg);
+    }
+    if (sub === 'users' || sub.startsWith('users/')) {
+      const v = await readUsersNode(p, sub);
+      if (v === undefined) return res.status(404).json(null);
+      return res.json(v === undefined ? null : v);
+    }
+    return res.status(404).json(null);
+  } catch (e) {
+    return res.status(500).json(null);
+  }
+});
+
+for (const m of ['put', 'patch', 'delete']) {
+  app[m]('/api/rtdb/:path/*', rtdbCors, rtdbWriteLimiter, async (req, res) => {
+    try {
+      const p = String(req.params.path || '');
+      const sub = String(req.params[0] || '').replace(/\/+$/g, '');
+      if (!/^users\/[A-Za-z0-9_+@-]{1,80}$/.test(sub)) {
+        return res.status(403).json({ error: 'only users/<key> writes allowed' });
+      }
+      const method = m === 'put' ? 'PUT' : m === 'patch' ? 'PATCH' : 'DELETE';
+      const body = method === 'DELETE' ? undefined : (req.body === undefined ? null : req.body);
+      const ok = await writeUsersNode(p, sub, method, body);
+      if (!ok) return res.status(404).json({ error: 'unknown path' });
+      return res.json({ ok: true });
+    } catch (e) {
+      return res.status(500).json({ error: 'write failed' });
+    }
+  });
+}
 
 app.get('/api/designs', (req, res) => {
   const designs = db.prepare(`
