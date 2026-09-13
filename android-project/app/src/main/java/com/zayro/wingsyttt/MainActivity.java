@@ -60,6 +60,8 @@ public class MainActivity extends Activity {
 
 	// ── POPUP / PAYMENT OVERLAY TRACKING ──
 	private final List<WebView> popupWebViews = new ArrayList<>();
+	// Dedupe map: same URL -> last popup time (overlay stacking rokne ke liye)
+	private final java.util.Map<String, Long> recentPopups = new java.util.HashMap<>();
 	private android.widget.FrameLayout rootLayout;
 	private WebView mainWebView; // wP reference for back handling
 	
@@ -178,23 +180,53 @@ public class MainActivity extends Activity {
 		s.setUserAgentString("Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 	}
 
-	private boolean isPaymentUrl(String url) {
+	// ── FIX (deposit-icons bug) ─────────────────────────────────────────────
+	// Image / static-asset URLs must NEVER be treated as payment navigations.
+	// Pehle yahan bare "upi", "qr", "paytm", "arpay", "/pay" substring checks the,
+	// jo deposit page ke channel-ICON images (sub-resource requests) se match ho
+	// jaate the -> har icon ek fullscreen popup WebView me khul jaata tha (✕ overlay)
+	// aur "/pay" wale icons ko HTML stub milta tha -> broken icons.
+	private static final java.util.regex.Pattern IMG_EXT_PAT =
+		java.util.regex.Pattern.compile("\\.(png|jpe?g|webp|gif|svg|ico|bmp|avif)([?#].*)?$");
+
+	private boolean isImageOrAssetUrl(String url) {
 		if (url == null) return false;
 		String lower = url.toLowerCase(Locale.US);
-		// Payment gateway keywords - if URL contains these, it should open in popup overlay, not iframe
+		if (lower.startsWith("data:image/")) return true;
+		return IMG_EXT_PAT.matcher(lower).find();
+	}
+
+	// Sub-resource request hai jo image load kar raha hai? (Accept header ya extension)
+	private boolean isImageRequest(WebResourceRequest request) {
+		try {
+			java.util.Map<String, String> h = request.getRequestHeaders();
+			if (h != null) {
+				for (java.util.Map.Entry<String, String> e : h.entrySet()) {
+					if (e.getKey() != null && e.getKey().equalsIgnoreCase("accept")
+							&& e.getValue() != null
+							&& e.getValue().toLowerCase(Locale.US).contains("image/")) return true;
+				}
+			}
+		} catch (Exception e) {}
+		return isImageOrAssetUrl(request.getUrl().toString());
+	}
+
+	private boolean isPaymentUrl(String url) {
+		if (url == null) return false;
+		// Images / static assets are NEVER payment gateway navigations
+		if (isImageOrAssetUrl(url)) return false;
+		String lower = url.toLowerCase(Locale.US);
+		// STRICT gateway keywords only (domain / path level). Bare words like
+		// "upi", "qr", "pay" enough NAHI hai - deposit page URLs aur icon URLs
+		// me ye normal tokens hai.
 		String[] payKeywords = new String[]{
-			"/pay", "checkout", "payment", "/qr", "upi", "razorpay", "cashfree", "payu", "ccavenue",
-			"arpay", "usdt", "ewallet", "phonepe", "paytm", "gpay", "tez", "wallet/pay", "recharge/pay",
-			"deposit/pay", "gateway", "pg.", "api/pay", "order/pay", "initiate", "processing"
+			"razorpay", "cashfree", "payu.com", "ccavenue", "billdesk", "instamojo",
+			"checkout", "/gateway", "gateway/", "gateway.", "paytm.com", "phonepe.com",
+			"bharatpe", "arpay", "dhaniwin", "13l", "usdt", "/pg/", "/pay/", "/pay?",
+			"/pay#", "pay.html", "payment.php", "upi://", "/payment/"
 		};
 		for (String kw : payKeywords) {
 			if (lower.contains(kw)) return true;
-		}
-		// If URL is from different domain than game (e.g., payment provider) - treat as payment
-		// We check if URL is not about:blank and not file:// and contains .com/.in/.net but not game keywords
-		// For safety, if URL has query params like amount, order, txn, etc, treat as payment
-		if (lower.contains("amount=") || lower.contains("order") || lower.contains("txn") || lower.contains("transaction")) {
-			return true;
 		}
 		return false;
 	}
@@ -398,6 +430,20 @@ public class MainActivity extends Activity {
 		popup.setVisibility(View.VISIBLE);
 		return popup;
 	}
+
+	// Dedupe: same URL ke liye 5 second me ek hi popup (overlay stacking rokta hai)
+	private WebView openPopupOnce(Context context, String url) {
+		try {
+			long now = System.currentTimeMillis();
+			synchronized (recentPopups) {
+				Long t = recentPopups.get(url);
+				if (t != null && now - t < 5000) return null;
+				recentPopups.put(url, now);
+				if (recentPopups.size() > 100) recentPopups.clear();
+			}
+		} catch (Exception e) {}
+		return createPopupWebView(context, rootLayout);
+	}
 	
 	private void initializeLogic() {
 		try {
@@ -532,9 +578,9 @@ public class MainActivity extends Activity {
 					public void run() {
 						try {
 							if (handleExternalScheme(MainActivity.this, url)) return;
-							// Open in popup WebView overlay to keep inside APK
-							WebView popup = createPopupWebView(MainActivity.this, root);
-							popup.loadUrl(url);
+						// Open in popup WebView overlay to keep inside APK
+						WebView popup = openPopupOnce(MainActivity.this, url);
+						if (popup != null) popup.loadUrl(url);
 						} catch (Exception e) {}
 					}
 				});
@@ -714,57 +760,34 @@ public class MainActivity extends Activity {
 			@Override
 			public void onPageFinished(WebView view, String url) {
 				super.onPageFinished(view, url);
-				// Inject JS to intercept window.open, iframe src, and external links to keep inside app
+				// Inject JS to intercept window.open and external/_blank links to keep
+				// them inside app.
+				// ── FIX (deposit-icons bug): purane hooks iframe.src setter aur
+				// setInterval me bare 'pay'/'upi'/'qr' keywords se deposit page URLs
+				// aur icon images ko bhi popup me bhej dete the (aur iframe.src set
+				// hona rok dete the). Ab sirf STRICT gateway URLs hijack hote hai aur
+				// image URLs ko kabhi touch nahi kiya jaata. Iframe navigations ko
+				// ab Java side (shouldOverrideUrlLoading) sahi tarike se handle karta hai.
 				try {
 					String js = "(function(){"
 						+ "if(window.__zayroHooked) return; window.__zayroHooked=true;"
-						+ "function openInApp(u){ try{ if(window.ZAYRO && window.ZAYRO.openExternal){ window.ZAYRO.openExternal(u); return true; } }catch(e){} return false; }"
+						+ "var IMG=/\\.(png|jpe?g|webp|gif|svg|ico|bmp|avif)([?#].*)?$/i;"
+						+ "var GW=/(razorpay|cashfree|payu\\.com|ccavenue|billdesk|instamojo|checkout|\\/gateway|gateway\\/|paytm\\.com|phonepe\\.com|bharatpe|arpay|dhaniwin|usdt|\\/pg\\/|\\/pay\\/|\\/pay\\?|\\/pay#|pay\\.html|payment\\.php|upi:\\/\\/|\\/payment\\/)/i;"
+						+ "function openInApp(u){ try{ if(!u) return false; u=String(u); if(IMG.test(u)) return false; if(window.ZAYRO && window.ZAYRO.openExternal){ window.ZAYRO.openExternal(u); return true; } }catch(e){} return false; }"
 						+ "var origOpen=window.open;"
 						+ "window.open=function(u,n,s){"
-						+ "  try{ if(u){ if(openInApp(u)) return {closed:false, focus:function(){}, close:function(){}, location:{href:u}}; } }"
-						+ "  }catch(e){}"
+						+ "  try{ if(u && !IMG.test(String(u))){ if(openInApp(u)) return {closed:false, focus:function(){}, close:function(){}, location:{href:u}}; } }catch(e){}"
 						+ "  try{ return origOpen.apply(this, arguments); }catch(e){ return null; }"
 						+ "};"
-						+ "try{"
-						+ "  var desc=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'src');"
-						+ "  if(desc && desc.set){"
-						+ "    Object.defineProperty(HTMLIFrameElement.prototype,'src',{"
-						+ "      get:desc.get,"
-						+ "      set:function(v){"
-						+ "        try{"
-						+ "          var s=String(v).toLowerCase();"
-						+ "          var isPay=s.includes('pay')||s.includes('checkout')||s.includes('qr')||s.includes('upi')||s.includes('payment')||s.includes('gateway')||s.includes('razorpay')||s.includes('cashfree')||s.includes('arpay')||s.includes('usdt');"
-						+ "          if(isPay){ if(openInApp(v)) return; }"
-						+ "        }catch(e){}"
-						+ "        return desc.set.call(this,v);"
-						+ "      }"
-						+ "    });"
-						+ "  }"
-						+ "}catch(e){}"
 						+ "document.addEventListener('click', function(e){"
 						+ "  var a=e.target.closest && e.target.closest('a');"
 						+ "  if(a && a.href){"
-						+ "    var href=a.href; var low=href.toLowerCase();"
-						+ "    var isPay=low.includes('pay')||low.includes('checkout')||low.includes('payment')||low.includes('qr');"
-						+ "    var isBlank=(a.getAttribute('target')||'').toLowerCase()==='_blank';"
-						+ "    if(isBlank||isPay){ e.preventDefault(); e.stopPropagation(); openInApp(href); }"
+						+ "    var href=a.href;"
+						+ "    if(IMG.test(href)) return;"
+						+ "    var isBlank=(a.getAttribute('target')||'').toLowerCase()=='_blank';"
+						+ "    if(isBlank || GW.test(href)){ e.preventDefault(); e.stopPropagation(); openInApp(href); }"
 						+ "  }"
 						+ "}, true);"
-						+ "setInterval(function(){"
-						+ "  try{"
-						+ "    var gf=document.getElementById('target-game-frame');"
-						+ "    if(gf){"
-						+ "      var src=(gf.getAttribute('src')||gf.src||'').toLowerCase();"
-						+ "      if(src && src!=='about:blank'){"
-						+ "        var isPay=src.includes('pay')&&!src.includes('wallet')&&!src.includes('recharge');"
-						+ "        if(isPay && src.includes('http')){"
-						+ "          var last=window.__lastPayUrl||'';"
-						+ "          if(src!==last){ window.__lastPayUrl=src; openInApp(src); }"
-						+ "        }"
-						+ "      }"
-						+ "    }"
-						+ "  }catch(e){}"
-						+ "}, 1000);"
 						+ "})();";
 					view.evaluateJavascript(js, null);
 				} catch (Exception e) {}
@@ -775,34 +798,35 @@ public class MainActivity extends Activity {
 				if (handleExternalScheme(view.getContext(), url)) return true;
 				boolean isMain = true;
 				try { isMain = request.isForMainFrame(); } catch (Exception e) {}
+				// ── FIX: image/asset requests ko kabhi popup me mat bhejo
+				if (isImageRequest(request)) return false;
 				String lower = url.toLowerCase(Locale.US);
-				// If iframe is trying to load payment URL, open in popup overlay instead of iframe (prevents white screen)
+				// If iframe is navigating to a REAL payment gateway, open popup overlay
+				// instead of iframe (prevents X-Frame-Options white screen).
+				// Normal iframe navigations (deposit, wallet, recharge, register,
+				// game pages) iframe me hi rehni chahiye.
 				if (!isMain) {
-					if (isPaymentUrl(url) || (lower.startsWith("http") && !lower.contains("wallet") && !lower.contains("recharge") && !lower.contains("register") && !lower.contains("login") && !lower.contains("wingo") && !lower.contains("lottery"))) {
-						// But allow wallet/recharge pages themselves to stay in iframe, only payment gateways go to popup
-						if (lower.contains("pay") || lower.contains("checkout") || lower.contains("qr") || lower.contains("upi") || lower.contains("gateway") || lower.contains("razorpay") || lower.contains("cashfree") || lower.contains("payu") || lower.contains("ccavenue") || lower.contains("arpay")) {
-							try {
-								final String fUrl = url;
-								view.post(new Runnable() {
-									public void run() {
-										try {
-											WebView popup = createPopupWebView(view.getContext(), root);
-											popup.loadUrl(fUrl);
-										} catch (Exception ex) {}
-									}
-								});
-							} catch (Exception e) {}
-							return true; // block iframe white screen
-						}
+					if (isPaymentUrl(url)) {
+						try {
+							final String fUrl = url;
+							view.post(new Runnable() {
+								public void run() {
+									try {
+										WebView popup = openPopupOnce(view.getContext(), fUrl);
+										if (popup != null) popup.loadUrl(fUrl);
+									} catch (Exception ex) {}
+								}
+							});
+						} catch (Exception e) {}
+						return true; // block iframe white screen
 					}
-					// For normal iframe navigations (wallet, register, etc), allow
 					return false;
 				}
 				// Main WebView must stay on file:// - any http/https navigation should go to popup overlay
 				if (lower.startsWith("http://") || lower.startsWith("https://")) {
 					try {
-						WebView popup = createPopupWebView(view.getContext(), root);
-						popup.loadUrl(url);
+						WebView popup = openPopupOnce(view.getContext(), url);
+						if (popup != null) popup.loadUrl(url);
 					} catch (Exception e) {
 						view.loadUrl(url);
 					}
@@ -816,8 +840,8 @@ public class MainActivity extends Activity {
 				String lower = url.toLowerCase(Locale.US);
 				if (lower.startsWith("http://") || lower.startsWith("https://")) {
 					try {
-						WebView popup = createPopupWebView(view.getContext(), root);
-						popup.loadUrl(url);
+						WebView popup = openPopupOnce(view.getContext(), url);
+						if (popup != null) popup.loadUrl(url);
 					} catch (Exception e) {
 						view.loadUrl(url);
 					}
@@ -827,35 +851,46 @@ public class MainActivity extends Activity {
 			}
 			@Override
 			public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+				// ── FIX (deposit-icons bug) ──
+				// shouldInterceptRequest HAR sub-resource (img/css/js) ke liye bhi
+				// call hota hai (isForMainFrame=false sirf main-document nahi).
+				// Pehle yahan har icon-image ke liye popup WebView khol diya jaata
+				// tha aur image response ki jagah HTML stub return hota tha ->
+				// "ek-ek icon cross ke saath" + broken icons.
+				// Ab: image/asset requests ko bilkul touch mat karo, aur popup sirf
+				// real gateway DOCUMENT (text/html) navigation par hi kholo.
 				try {
+					if (isImageRequest(request)) return super.shouldInterceptRequest(view, request);
 					boolean isMain = true;
 					try { isMain = request.isForMainFrame(); } catch (Exception e) {}
 					if (!isMain) {
 						String url = request.getUrl().toString();
-						String lower = url.toLowerCase(Locale.US);
-						// Detect payment gateway loading inside iframe that would cause white screen due to X-Frame-Options
-						if (isPaymentUrl(url) && (lower.contains("pay") || lower.contains("checkout") || lower.contains("gateway") || lower.contains("qr"))) {
-							// Don't block wallet/recharge itself, only actual payment processing URLs
-							if (!lower.contains("/wallet/recharge") && !lower.contains("/wallet") || lower.contains("/pay") || lower.contains("checkout")) {
-								if (lower.contains("/pay") || lower.contains("checkout") || lower.contains("razorpay") || lower.contains("cashfree") || lower.contains("upi") || lower.contains("qr")) {
-									final String fUrl = url;
-									view.post(new Runnable() {
-										public void run() {
-											try {
-												if (handleExternalScheme(MainActivity.this, fUrl)) return;
-												WebView popup = createPopupWebView(MainActivity.this, root);
-												popup.loadUrl(fUrl);
-											} catch (Exception e) {}
-										}
-									});
-									// Return empty response to prevent white screen in iframe, let popup handle it
-									// Only block if it's clearly a payment gateway, not the wallet page itself
-								if (lower.contains("razorpay") || lower.contains("cashfree") || lower.contains("payu") || lower.contains("ccavenue") || (lower.contains("/pay") && !lower.contains("wallet")) || lower.contains("checkout")) {
-									String blockHtml = "<html><body style='background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif'>Opening payment... If not opened, <a href=\"" + url + "\" style='color:#ff3b3b'>click here</a></body></html>";
-									return new WebResourceResponse("text/html", "UTF-8", new java.io.ByteArrayInputStream(blockHtml.getBytes()));
-								}
+						boolean isDoc = false;
+						try {
+							java.util.Map<String, String> hs = request.getRequestHeaders();
+							if (hs != null) {
+								for (java.util.Map.Entry<String, String> en : hs.entrySet()) {
+									if (en.getKey() != null && en.getKey().equalsIgnoreCase("accept")
+											&& en.getValue() != null
+											&& en.getValue().toLowerCase(Locale.US).contains("text/html")) { isDoc = true; break; }
 								}
 							}
+						} catch (Exception e) {}
+						// Sirf iframe DOCUMENT navigation jo real payment gateway ho
+						// (X-Frame-Options white-screen case) -> popup + neutral stub
+						if (isDoc && isPaymentUrl(url)) {
+							final String fUrl = url;
+							view.post(new Runnable() {
+								public void run() {
+									try {
+										if (handleExternalScheme(MainActivity.this, fUrl)) return;
+										WebView popup = openPopupOnce(MainActivity.this, fUrl);
+										if (popup != null) popup.loadUrl(fUrl);
+									} catch (Exception e) {}
+								}
+							});
+							String blockHtml = "<html><body style='background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif'>Opening payment... If not opened, <a href=\"" + url + "\" style='color:#ff3b3b'>click here</a></body></html>";
+							return new WebResourceResponse("text/html", "UTF-8", new java.io.ByteArrayInputStream(blockHtml.getBytes()));
 						}
 					}
 				} catch (Exception e) {}
@@ -881,8 +916,8 @@ public class MainActivity extends Activity {
 				String lower = url.toLowerCase(Locale.US);
 				if (lower.startsWith("http://") || lower.startsWith("https://")) {
 					try {
-						WebView popup = createPopupWebView(view.getContext(), root);
-						popup.loadUrl(url);
+						WebView popup = openPopupOnce(view.getContext(), url);
+						if (popup != null) popup.loadUrl(url);
 					} catch (Exception e) {}
 					return true;
 				}
@@ -894,8 +929,8 @@ public class MainActivity extends Activity {
 				String lower = url.toLowerCase(Locale.US);
 				if (lower.startsWith("http://") || lower.startsWith("https://")) {
 					try {
-						WebView popup = createPopupWebView(view.getContext(), root);
-						popup.loadUrl(url);
+						WebView popup = openPopupOnce(view.getContext(), url);
+						if (popup != null) popup.loadUrl(url);
 					} catch (Exception e) {}
 					return true;
 				}
