@@ -351,6 +351,11 @@ function injectParams(htmlContent, params) {
     var nextDeposit=data.depositUrl||data.deposit_url;
     var nextWingo=data.wingoUrl||data.wingo_url;
     if(!valid(nextRegister)||!valid(nextDeposit)||!valid(nextWingo))return;
+    if(nextRegister===REGISTER_URL&&nextDeposit===DEPOSIT_URL&&nextWingo===WINGO_URL){return;}
+    // FIX 13-Sep: links same hai to iframe ko bilkul mat chhoo. Pehla har
+    // config echo/poll applyLinks chala kar gameFrame.src reset kar deta tha
+    // (src attribute register-URL hi rehta hai jab game andar se route badle)
+    // -> user bet ke beech home/login par phek jaata tha.
     REGISTER_URL=nextRegister;
     DEPOSIT_URL=nextDeposit;
     WINGO_URL=nextWingo;

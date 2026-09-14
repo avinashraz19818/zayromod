@@ -330,8 +330,12 @@ async function buildRuntimeConfig(pathKey) {
     wingoUrl: params.wingoUrl,
     minDeposit: params.minDeposit || 300,
     registerCondition,
-    depositCondition,
-    linkUpdatedAt: Date.now()
+    depositCondition
+    // NOTE: koi volatile field (jaise Date.now()) YAHAAN MAT daalo — shim
+    // pure JSON ko compare karta hai; har poll par naya value = har 20s
+    // applyLinks = iframe reset = user bet ke beech home/login par phek
+    // jaata tha (client reports 13 Sep). Config sirf tab badle jab admin
+    // sach me link/amount/condition badle.
   };
 }
 
