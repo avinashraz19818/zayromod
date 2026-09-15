@@ -47,21 +47,21 @@ const PE = {
 function getSiteUrl() { return String(process.env.BASE_URL || ''); }
 
 function getSupportUrl() {
-  if (!_db) return 'https://t.me/';
+  if (!_db) return null;
   const sup = _db.prepare("SELECT value FROM settings WHERE key='telegram_support_user'").get()?.value;
   if (sup && sup.trim()) {
     const clean = sup.trim().replace(/^@/, '');
     return `https://t.me/${clean}`;
   }
-  const adminId = _db.prepare("SELECT value FROM settings WHERE key='telegram_admin_id'").get()?.value;
-  if (adminId && adminId.trim()) return `tg://user?id=${adminId.trim()}`;
-  return 'https://t.me/';
+  const adminId = _db.prepare("SELECT value FROM settings WHERE key='telegram_admin_id'").get()?.value || process.env.TELEGRAM_ADMIN_CHAT_ID;
+  if (adminId && /^[1-9]\d*$/.test(String(adminId).trim())) return `tg://user?id=${adminId.trim()}`;
+  return null;
 }
 
 function getChannelUrl() {
-  if (!_db) return 'https://t.me/';
+  if (!_db) return null;
   const ch = _db.prepare("SELECT value FROM settings WHERE key='telegram_channel_url'").get()?.value;
-  return (ch && ch.trim()) ? ch.trim() : 'https://t.me/';
+  return (ch && /^https:\/\//.test(ch.trim())) ? ch.trim() : null;
 }
 
 function escapeHtml(text) {
@@ -103,12 +103,12 @@ function initBot(token, db) {
       request: { agent: deliveryAgent, timeout: 10 * 60_000 }
     });
 
-    // ── /start Handler — Ultra-Premium Seamless VIP Hub ──
+    // ── /start Handler — MizanMod Studio workspace hub ──
     bot.onText(/\/start/, async (msg) => {
       const chatId    = String(msg.chat.id);
       if (msg.chat.type !== 'private' || !require('./telegram-access').telegramAllowed(msg.from?.id)) return;
       const rawUsername = msg.from?.username ? msg.from.username.trim() : '';
-      const firstName = escapeHtml(msg.from?.first_name || 'VIP Member');
+      const firstName = escapeHtml(msg.from?.first_name || 'there');
       const siteUrl   = getSiteUrl();
       const supportUrl = getSupportUrl();
       const channelUrl = getChannelUrl();
@@ -158,38 +158,32 @@ function initBot(token, db) {
       }
 
       const welcomeMsg =
-`╔══════════════════════════════════╗
-║  ${PE.diamond} <b>MIZANMOD MOD BUILDER VIP</b> ${PE.diamond}  ║
-╚══════════════════════════════════╝
+`<b>MizanMod Studio</b>
+<i>Your ideas. Your apps. One workspace.</i>
 
-${PE.wave} <b>Welcome, ${firstName}!</b> ${rawUsername ? `(<code>@${rawUsername}</code>)` : ''}
+Hi ${firstName} 👋
+Your workspace is ready.
 
-${PE.bot} <b>System Status:</b> <code>ONLINE 🟢</code>
-${PE.money} <b>Your Balance:</b> <code>${userCoins} Coins</code>
-${PE.trophy} <b>Total Orders:</b> <code>${userOrders} APKs Built</code>
+<b>${userCoins} credits</b> available · <b>${userOrders} orders</b>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${PE.fire} <b>Next-Gen Sideload & Auto-Bypass Engine:</b>
-• ${PE.lock} <i>100% Antivirus & Phone Manager Safe</i>
-• ${PE.rocket} <i>Universal DhaniWin & Multi-Game Compatible</i>
-• ${PE.broadcast} <i>Live Cloud Sync & Zero-Downtime Builds</i>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${PE.down} <b>Choose an option below to proceed:</b>`;
+Choose a design, customize your app, and follow its build from Studio. Your order status and downloads stay together.
+
+<b>Where would you like to go?</b>`;
 
       // ── Bot API 9.4+ Colored Inline Buttons (Attached directly to message) ──
       const reply_markup = {
         inline_keyboard: [
           [
-            { text: '🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: siteUrl }, style: 'success' }
+            { text: 'Open Studio ↗', web_app: { url: siteUrl }, style: 'success' }
           ],
           [
-            { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
-            { text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ', web_app: { url: `${siteUrl}#wallet` }, style: 'success' }
+            { text: 'My builds', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
+            { text: 'Credits', web_app: { url: `${siteUrl}#wallet` }, style: 'success' }
           ],
-          [
-            { text: '👨‍💻 24/7 ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl, style: 'primary' },
-            { text: '📢 ᴏꜰꜰɪᴄɪᴀʟ ᴄʜᴀɴɴᴇʟ', url: channelUrl, style: 'primary' }
-          ]
+          ...(supportUrl || channelUrl ? [[
+            ...(supportUrl ? [{text:'Contact support',url:supportUrl}] : []),
+            ...(channelUrl ? [{text:'Studio updates',url:channelUrl}] : [])
+          ]] : [])
         ]
       };
 
@@ -228,18 +222,18 @@ ${PE.down} <b>Choose an option below to proceed:</b>`;
           });
         }
 
-        let txt = `${PE.mobile} <b>Your Recent Orders (${orders.length}):</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+        let txt = `${PE.mobile} <b>Your Recent Orders (${orders.length}):</b>\n\n\n`;
         orders.forEach(o => {
           const st = o.status === 'done' ? `${PE.check} Ready` : o.status === 'failed' ? `❌ Failed` : `⏳ Building`;
           txt += `${PE.dot} <b>#${o.id} - ${escapeHtml(o.app_name)}</b>\n  Status: ${st} | ${PE.card} <code>${new Date(o.created_at).toLocaleDateString()}</code>\n\n`;
         });
-        txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+        txt += ``;
 
         await bot.sendMessage(chatId, txt, {
           parse_mode: 'HTML',
           reply_markup: {
             inline_keyboard: [
-              [{ text: '📱 ᴍᴀɴᴀɢᴇ ɪɴ ᴡᴇʙ ᴀᴘᴘ', web_app: { url: `${siteUrl}#orders` } }]
+              [{ text: 'View builds in Studio', web_app: { url: `${siteUrl}#orders` } }]
             ]
           }
         });
@@ -260,20 +254,17 @@ ${PE.down} <b>Choose an option below to proceed:</b>`;
         const upiId = _db.prepare("SELECT value FROM settings WHERE key='upi_id'").get()?.value || '';
 
         const txt =
-`╔══════════════════════════════════╗
-║  ${PE.money} <b>YOUR WALLET &amp; BALANCE</b> ${PE.money}  ║
-╚══════════════════════════════════╝
+`<b>MizanMod · Your credits</b>
 
-${PE.diamond} <b>Available Balance:</b> <code>${coins} Coins</code>
-${upiId ? `${PE.card} <b>UPI ID:</b> <code>${escapeHtml(upiId)}</code>\n` : ''}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${PE.fire} <i>Deposit credits instantly to build your modded APKs.</i>`;
+<b>${coins} coins</b> available for your next build.
+${upiId ? `\nPayment ID: <code>${escapeHtml(upiId)}</code>\n` : ''}
+Open Credits to choose an amount and submit your payment request. Your balance updates after approval.`;
 
         await bot.sendMessage(chatId, txt, {
           parse_mode: 'HTML',
           reply_markup: {
             inline_keyboard: [
-              [{ text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ ɴᴏᴡ', web_app: { url: `${siteUrl}#wallet` } }]
+              [{ text: 'Top up credits', web_app: { url: `${siteUrl}#wallet` } }]
             ]
           }
         });
@@ -286,9 +277,8 @@ ${PE.fire} <i>Deposit credits instantly to build your modded APKs.</i>`;
     bot.onText(/\/help|\/guide/, async (msg) => {
       const chatId = String(msg.chat.id);
       const helpMsg =
-`╔══════════════════════════════════╗
-║  ${PE.sparkles} <b>APK INSTALLATION GUIDE</b> ${PE.sparkles}  ║
-╚══════════════════════════════════╝
+`
+  ${PE.sparkles} <b>APK INSTALLATION GUIDE</b> ${PE.sparkles}
 
 ${PE.fire} <b>How to install APKs smoothly:</b>
 
@@ -298,16 +288,15 @@ ${PE.fire} <b>How to install APKs smoothly:</b>
    • If Android shows <i>"App scan recommended"</i>, use the scan option and review any warning before installation.
    • Do not disable device protection to install an app.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${PE.lock} <b>Security Guarantee:</b>
+${PE.lock} <b>Before you install:</b>
 Install only builds and designs you trust. Signing is not a malware safety guarantee.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+`;
 
       await bot.sendMessage(chatId, helpMsg, {
         parse_mode: 'HTML',
         reply_markup: {
           inline_keyboard: [[
-            { text: '👨‍💻 Contact Support', url: getSupportUrl() }
+            { text: 'Open Studio', web_app: {url: getSiteUrl()} }
           ]]
         }
       });
@@ -352,13 +341,13 @@ Install only builds and designs you trust. Signing is not a malware safety guara
             await bot.answerCallbackQuery(query.id, { text: `✅ Approved +${row.coins_requested} coins!` });
             const cap =
 `${PE.check} <b>COIN REQUEST APPROVED</b> ${PE.money}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ${PE.user} <b>User:</b> <code>#${row.user_id}</code>
 ${PE.money} <b>Coins Added:</b> <b>+${row.coins_requested}</b>
 ${PE.gift} <b>Amount Paid:</b> ₹${row.amount_paid}
 ${PE.verified} <b>UTR:</b> <code>${escapeHtml(row.utr)}</code>
 ${PE.dot} <b>Request ID:</b> <code>#${reqId}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+`;
             await bot.editMessageCaption(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' })
               .catch(() => bot.editMessageText(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }));
 
@@ -366,23 +355,21 @@ ${PE.dot} <b>Request ID:</b> <code>#${reqId}</code>
             const targetUser = _db.prepare('SELECT telegram_id, coins FROM users WHERE id=?').get(row.user_id);
             if (targetUser?.telegram_id) {
               const userNotice =
-`╔══════════════════════════════════╗
-║  ${PE.party} <b>COIN DEPOSIT APPROVED!</b> ${PE.money}  ║
-╚══════════════════════════════════╝
+`
+  ${PE.party} <b>COIN DEPOSIT APPROVED!</b> ${PE.money}
 
 ${PE.check} <b>+${row.coins_requested} Coins</b> have been added to your account!
 ${PE.money} <b>Current Balance:</b> <code>${targetUser.coins} Coins</code>
 ${PE.verified} <b>UTR / Ref:</b> <code>${escapeHtml(row.utr)}</code>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${PE.rocket} <i>Aapka balance update ho chuka hai. Ab aap instant APK build kar sakte hain!</i>`;
 
               bot.sendMessage(targetUser.telegram_id, userNotice, {
                 parse_mode: 'HTML',
                 reply_markup: {
                   inline_keyboard: [
-                    [{ text: '🟢 🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: getSiteUrl() } }],
-                    [{ text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${getSiteUrl()}#orders` } }]
+                    [{ text: '🟢 Open Studio ↗', web_app: { url: getSiteUrl() } }],
+                    [{ text: 'My builds', web_app: { url: `${getSiteUrl()}#orders` } }]
                   ]
                 }
               }).catch(() => {});
@@ -395,31 +382,29 @@ ${PE.rocket} <i>Aapka balance update ho chuka hai. Ab aap instant APK build kar 
             await bot.answerCallbackQuery(query.id, { text: '❌ Request rejected' });
             const cap =
 `${PE.alert} <b>COIN REQUEST REJECTED</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ${PE.user} <b>User:</b> <code>#${row.user_id}</code>
 ${PE.verified} <b>UTR:</b> <code>${escapeHtml(row.utr)}</code>
 ${PE.dot} <b>Request ID:</b> <code>#${reqId}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+`;
             await bot.editMessageCaption(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' })
               .catch(() => bot.editMessageText(cap, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }));
 
             const targetUser = _db.prepare('SELECT telegram_id FROM users WHERE id=?').get(row.user_id);
             if (targetUser?.telegram_id) {
               const userNotice =
-`╔══════════════════════════════════╗
-║  ${PE.alert} <b>COIN DEPOSIT UPDATE</b> ${PE.alert}  ║
-╚══════════════════════════════════╝
+`
+  ${PE.alert} <b>COIN DEPOSIT UPDATE</b> ${PE.alert}
 
 ${PE.alert} <b>Deposit Request #${reqId} could not be approved.</b>
 ${PE.verified} <b>UTR:</b> <code>${escapeHtml(row.utr)}</code>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Agar aapne payment ki hai to please payment screenshot ke saath <b>Admin Support</b> se contact karein.`;
 
               bot.sendMessage(targetUser.telegram_id, userNotice, {
                 parse_mode: 'HTML',
                 reply_markup: {
-                  inline_keyboard: [[{ text: '👨‍💻 ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ', url: getSupportUrl() }]]
+                  inline_keyboard: [[{ text: 'Open Studio', web_app: {url: getSiteUrl()} }]]
                 }
               }).catch(() => {});
             }
@@ -442,9 +427,8 @@ async function sendCoinRequest(adminChatId, user, request, screenshotPath) {
   if (!bot || !adminChatId) return null;
 
   const msg =
-`╔══════════════════════════════════╗
-║  ${PE.money} <b>NEW COIN REQUEST</b> ${PE.money}  ║
-╚══════════════════════════════════╝
+`
+  ${PE.money} <b>NEW COIN REQUEST</b> ${PE.money}
 
 ${PE.user} <b>Username:</b> <code>${escapeHtml(user.username)}</code>
 ${PE.card} <b>Email:</b> <code>${escapeHtml(user.email)}</code>
@@ -453,13 +437,12 @@ ${PE.gift} <b>Amount:</b> <b>₹${request.amount_paid}</b>
 ${PE.verified} <b>UTR:</b> <code>${escapeHtml(request.utr)}</code>
 ${PE.dot} <b>Request ID:</b> <code>#${request.id}</code>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <i>Verify payment and choose action below:</i>`;
 
   const reply_markup = {
     inline_keyboard: [[
-      { text: '✅ ᴀᴘᴘʀᴏᴠᴇ (+ᴄᴏɪɴꜱ)', callback_data: `approve_${request.id}`, style: 'success' },
-      { text: '❌ ʀᴇᴊᴇᴄᴛ', callback_data: `reject_${request.id}`, style: 'danger' }
+      { text: '✅ APPROVE (+COINS)', callback_data: `approve_${request.id}`, style: 'success' },
+      { text: '❌ REJECT', callback_data: `reject_${request.id}`, style: 'danger' }
     ]]
   };
 
@@ -535,18 +518,16 @@ async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
 
   if (validApkPaths.length > 0) {
     const headerCard =
-`╔══════════════════════════════════╗
-║  ${PE.rocket} <b>APK BUILD COMPLETED!</b> ${PE.rocket}  ║
-╚══════════════════════════════════╝
+`
+  ${PE.rocket} <b>APK BUILD COMPLETED!</b> ${PE.rocket}
 
 ${PE.crown} <b>App Name:</b>  <code>${escapeHtml(appNamePlain)}</code>
 ${PE.card} <b>Package:</b>   <code>${escapeHtml(order.package_name || 'com.client.app')}</code>
 ${PE.lock} <b>Protection:</b> <b>Signed Android build</b>
 ${PE.verified} <b>Status:</b>     <b>Ready to Install</b> ${PE.check}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${PE.down} <i>Uploading your APK files now… Please wait.</i>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+`;
 
     try {
       statusMessage = await sender.sendMessage(
@@ -582,11 +563,11 @@ ${PE.down} <i>Uploading your APK files now… Please wait.</i>
     const deliveryButtons = {
       inline_keyboard: [
         [
-          { text: '🔨 ʙᴜɪʟᴅ ᴀɴᴏᴛʜᴇʀ ᴀᴘᴋ', web_app: { url: siteUrl }, style: 'success' }
+          { text: 'Create another app', web_app: { url: siteUrl }, style: 'success' }
         ],
         [
-          { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
-          { text: '👨‍💻 ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl, style: 'primary' }
+          { text: 'My builds', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
+          ...(supportUrl ? [{ text: 'Contact support', url: supportUrl }] : [])
         ]
       ]
     };
@@ -644,13 +625,11 @@ async function broadcastAnnouncement(announcement) {
   const supportUrl = getSupportUrl();
 
   const text =
-`╔══════════════════════════════════╗
-║  ${PE.broadcast} <b>${escapeHtml(title.toUpperCase())}</b> ${PE.bell}  ║
-╚══════════════════════════════════╝
+`
+  ${PE.broadcast} <b>${escapeHtml(title.toUpperCase())}</b> ${PE.bell}
 
 ${escapeHtml(message)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${PE.rocket} <b>Official Portal:</b> <a href="${siteUrl}">${siteUrl}</a>`;
 
   const inlineKeyboard = [];
@@ -658,8 +637,8 @@ ${PE.rocket} <b>Official Portal:</b> <a href="${siteUrl}">${siteUrl}</a>`;
     inlineKeyboard.push([{ text: `✨ ${button_text}`, url: button_url.startsWith('http') ? button_url : `https://${button_url}`, style: 'success' }]);
   }
   inlineKeyboard.push([
-    { text: '🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ', web_app: { url: siteUrl }, style: 'success' },
-    { text: '👨‍💻 ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl, style: 'primary' }
+    { text: 'Open Studio', web_app: { url: siteUrl }, style: 'success' },
+    ...(supportUrl ? [{ text: 'Contact support', url: supportUrl }] : [])
   ]);
 
   const reply_markup = { inline_keyboard: inlineKeyboard };
@@ -707,9 +686,8 @@ async function sendLogEvent(eventType, data = {}, attachments = []) {
 
     if (eventType === 'user_registered') {
       text =
-`╔══════════════════════════════════╗
-║  ${PE.user} <b>NEW USER REGISTRATION</b> ${PE.party}  ║
-╚══════════════════════════════════╝
+`
+  ${PE.user} <b>NEW USER REGISTRATION</b> ${PE.party}
 
 ${PE.user} <b>Username:</b> <code>${escapeHtml(data.username)}</code>
 ${PE.card} <b>Email:</b> <code>${escapeHtml(data.email)}</code>
@@ -721,9 +699,8 @@ ${PE.card} <b>Timestamp:</b> <code>${new Date().toLocaleString('en-IN', { timeZo
     } else if (eventType === 'order_created') {
       const modeLabel = data.build_mode === 'fake' ? '🎭 Fake / Clone APK Only' : data.build_mode === 'both' ? '⚡ Real + Fake Both APKs' : '👑 Real Production APK';
       text =
-`╔══════════════════════════════════╗
-║  ${PE.rocket} <b>NEW APK BUILD STARTED</b> ${PE.fire}  ║
-╚══════════════════════════════════╝
+`
+  ${PE.rocket} <b>NEW APK BUILD STARTED</b> ${PE.fire}
 
 ${PE.user} <b>User:</b> <code>${escapeHtml(data.username)}</code> (ID: <code>#${data.user_id}</code>)
 ${PE.crown} <b>App Name:</b> <code>${escapeHtml(data.app_name)}</code>
@@ -737,16 +714,14 @@ ${PE.card} <b>Timestamp:</b> <code>${new Date().toLocaleString('en-IN', { timeZo
       await bot.sendMessage(targetChat, text, { parse_mode: 'HTML', disable_web_page_preview: true });
     } else if (eventType === 'order_completed') {
       text =
-`╔══════════════════════════════════╗
-║  ${PE.trophy} <b>APK BUILD SUCCESSFUL!</b> ${PE.trophy}  ║
-╚══════════════════════════════════╝
+`
+  ${PE.trophy} <b>APK BUILD SUCCESSFUL!</b> ${PE.trophy}
 
 ${PE.user} <b>User:</b> <code>${escapeHtml(data.username)}</code> (#${data.user_id})
 ${PE.crown} <b>App:</b> <code>${escapeHtml(data.app_name)}</code> (Order: <code>#${data.order_id}</code>)
-${PE.lock} <b>Security:</b> <b>100% Antivirus Clean • Dex Protect X Hardened</b>
+${PE.lock} <b>Security:</b> <b>Signed build · review before installation</b>
 ${PE.check} <b>Status:</b> <b>Compiled & Archived ✅</b>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📦 <i>APK file(s) attached below for archive.</i>`;
       await bot.sendMessage(targetChat, text, { parse_mode: 'HTML', disable_web_page_preview: true });
 
@@ -764,9 +739,8 @@ ${PE.check} <b>Status:</b> <b>Compiled & Archived ✅</b>
       }
     } else if (eventType === 'coin_requested') {
       text =
-`╔══════════════════════════════════╗
-║  ${PE.money} <b>NEW COIN DEPOSIT</b> ${PE.money}  ║
-╚══════════════════════════════════╝
+`
+  ${PE.money} <b>NEW COIN DEPOSIT</b> ${PE.money}
 
 ${PE.user} <b>User:</b> <code>${escapeHtml(data.username)}</code> (ID: <code>#${data.user_id}</code>)
 ${PE.money} <b>Coins Requested:</b> <b>+${data.coins_requested}</b>

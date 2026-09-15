@@ -2,7 +2,7 @@
 
 This directory ports the complete reference platform's server, administrative workflows, client catalog, orders, credits, announcements, HTML upload, runtime content, Firebase controls and Java Android build/template architecture. It is **not the previous minimal offline studio** and it does **not share its database schema**.
 
-**Status: staging source, not approved for a live cutover.** Seven automated tests pass (including many API/auth/CRUD assertions) and npm audit reports zero vulnerabilities. Real Firebase integration, live Telegram polling/delivery, the full Android template's signed APK build, device launch and complete UI regression tests have not yet been performed. A successful APK from the earlier minimal shell does not validate this platform.
+**Status: staging source, not approved for a live cutover.** Twelve automated tests pass (including many API/auth/CRUD assertions) and npm audit reports zero vulnerabilities. The user has verified Firebase read/write/cleanup, bot /start, admin login and Telegram panel access on the VPS. The full Android template's signed APK build/device launch and complete UI regression remain unverified. The Studio refresh has only local mocked-browser checks so far. A successful APK from the earlier minimal shell does not validate this platform.
 
 ## What stays independent
 
@@ -11,7 +11,7 @@ This directory ports the complete reference platform's server, administrative wo
 - Dedicated session secret, bcrypt admin password and content-encryption password.
 - Explicit new Firebase project/service account; no discovery of shared root credentials or hardcoded cloud account defaults.
 - Existing **new Mizan-owned keystore** can be preserved at its private external path; do not regenerate it.
-- MizanMod brand and fresh navy/amber theme/icon. Full layouts and interactions are inherited; this is not a wholly new UI redesign.
+- MizanMod Studio charcoal/teal identity, new client desktop rail/mobile dock, search, admin overview/login and quieter bot cards. Backend contracts and form actions remain compatible. See docs/STUDIO-UPDATE.md for the safe update path and published catalog.
 - All 69 HTML templates from the available source are included with new text branding and blank Firebase account fields. The old encrypted loading blob is excluded: builds generate a new one using the new content secret. See docs/TEMPLATES.md.
 
 ## Access model

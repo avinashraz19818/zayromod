@@ -1,0 +1,346 @@
+[
+  {
+    "key": "mizanmod-template-001",
+    "name": "MizanMod 6Club",
+    "file": "mizanmod-template-001.html",
+    "alternate": "mizanmod-template-037.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-002",
+    "name": "MizanMod BdgWin \u2014 Cyber Core v5.0",
+    "file": "mizanmod-template-002.html",
+    "alternate": "mizanmod-template-038.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-003",
+    "name": "MizanMod Jai Club 9x Panel",
+    "file": "mizanmod-template-003.html",
+    "alternate": "mizanmod-template-040.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-004",
+    "name": "MizanMod 6Club",
+    "file": "mizanmod-template-004.html",
+    "alternate": "mizanmod-template-042.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-005",
+    "name": "MizanMod BdgWin - Cyber Core v5.0",
+    "file": "mizanmod-template-005.html",
+    "alternate": "mizanmod-template-043.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-006",
+    "name": "MizanMod IN 999 NUMBER",
+    "file": "mizanmod-template-006.html",
+    "alternate": "mizanmod-template-039.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-007",
+    "name": "MizanMod BdgWin - Cyber Core v5.0",
+    "file": "mizanmod-template-007.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-008",
+    "name": "MizanMod SpidyXtrade - Cyber Core v5.0",
+    "file": "mizanmod-template-008.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-009",
+    "name": "MizanMod SpidyXtrade - Cyber Core v5.0",
+    "file": "mizanmod-template-009.html",
+    "alternate": "mizanmod-template-047.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-010",
+    "name": "MizanMod SpidyXtrade - Cyber Core v5.0",
+    "file": "mizanmod-template-010.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-011",
+    "name": "MizanMod BdgWin - Cyber Core v5.0",
+    "file": "mizanmod-template-011.html",
+    "alternate": "mizanmod-template-049.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-012",
+    "name": "MizanMod BdgWin - Cyber Core v5.0",
+    "file": "mizanmod-template-012.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-013",
+    "name": "MizanMod BdgWin - Cyber Core v5.0",
+    "file": "mizanmod-template-013.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-014",
+    "name": "MizanMod SpidyX Apex \u2014 3D Cyber Core",
+    "file": "mizanmod-template-014.html",
+    "alternate": "mizanmod-template-055.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-015",
+    "name": "MizanMod SpidyX Apex Tool - Cyber Core",
+    "file": "mizanmod-template-015.html",
+    "alternate": "mizanmod-template-051.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-016",
+    "name": "MizanMod MizanMod Template 16",
+    "file": "mizanmod-template-016.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-017",
+    "name": "MizanMod MIZANMOD \u2014 Jungle Relic",
+    "file": "mizanmod-template-017.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-018",
+    "name": "MizanMod MIZANMOD \u2014 Jungle Relic",
+    "file": "mizanmod-template-018.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-019",
+    "name": "MizanMod MizanMod Template 19",
+    "file": "mizanmod-template-019.html",
+    "alternate": "mizanmod-template-052.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-020",
+    "name": "MizanMod MizanMod Template 20",
+    "file": "mizanmod-template-020.html",
+    "alternate": "mizanmod-template-054.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-021",
+    "name": "MizanMod BdgWin \u2014 Cyber Core v5.0",
+    "file": "mizanmod-template-021.html",
+    "alternate": "mizanmod-template-056.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-022",
+    "name": "MizanMod MizanMod Template 22",
+    "file": "mizanmod-template-022.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-023",
+    "name": "MizanMod SpidyXtrade - Cyber Core v5.0",
+    "file": "mizanmod-template-023.html",
+    "alternate": "mizanmod-template-045.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-024",
+    "name": "MizanMod MIZANMOD \u2014 Jungle Relic",
+    "file": "mizanmod-template-024.html",
+    "alternate": "mizanmod-template-053.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-025",
+    "name": "MizanMod JAI CLUB - Prediction Panel",
+    "file": "mizanmod-template-025.html",
+    "alternate": "mizanmod-template-058.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-026",
+    "name": "MizanMod MIZANMOD \u2014 Prediction Panel",
+    "file": "mizanmod-template-026.html",
+    "alternate": "mizanmod-template-059.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-027",
+    "name": "MizanMod MIZANMOD \u2014 Prediction Panel",
+    "file": "mizanmod-template-027.html",
+    "alternate": "mizanmod-template-060.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-028",
+    "name": "MizanMod MIZANMOD \u2014 LIVE INJECTOR",
+    "file": "mizanmod-template-028.html",
+    "alternate": "mizanmod-template-061.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-029",
+    "name": "MizanMod SpidyX Apex \u2014 3D Cyber Core",
+    "file": "mizanmod-template-029.html",
+    "alternate": "mizanmod-template-062.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-030",
+    "name": "MizanMod MIZANMOD \u2014 LIVE INJECTOR",
+    "file": "mizanmod-template-030.html",
+    "alternate": "mizanmod-template-063.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-031",
+    "name": "MizanMod SpidyX Apex \u2014 3D Cyber Core",
+    "file": "mizanmod-template-031.html",
+    "alternate": "mizanmod-template-064.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-032",
+    "name": "MizanMod SpidyX Apex \u2014 3D Cyber Core",
+    "file": "mizanmod-template-032.html",
+    "alternate": "mizanmod-template-065.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-033",
+    "name": "MizanMod MIZANMOD \u2014 LIVE INJECTOR",
+    "file": "mizanmod-template-033.html",
+    "alternate": "mizanmod-template-066.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-034",
+    "name": "MizanMod MizanMod Template 34",
+    "file": "mizanmod-template-034.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-035",
+    "name": "MizanMod MIZANMOD \u2014 Prediction Panel",
+    "file": "mizanmod-template-035.html",
+    "alternate": "mizanmod-template-068.html",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-036",
+    "name": "MizanMod Secured Analysis - Crimson Protocol",
+    "file": "mizanmod-template-036.html",
+    "alternate": "",
+    "role": "primary",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-041",
+    "name": "MizanMod 6Club",
+    "file": "mizanmod-template-041.html",
+    "alternate": "",
+    "role": "alternate",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-044",
+    "name": "MizanMod BdgWin - Cyber Core v5.0",
+    "file": "mizanmod-template-044.html",
+    "alternate": "",
+    "role": "alternate",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-046",
+    "name": "MizanMod Dhaniwin Teacher Panel - Cyber Core v5.0",
+    "file": "mizanmod-template-046.html",
+    "alternate": "",
+    "role": "alternate",
+    "category": "dhani"
+  },
+  {
+    "key": "mizanmod-template-048",
+    "name": "MizanMod SpidyXtrade - Cyber Core v5.0",
+    "file": "mizanmod-template-048.html",
+    "alternate": "",
+    "role": "alternate",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-050",
+    "name": "MizanMod BdgWin - Cyber Core v5.0",
+    "file": "mizanmod-template-050.html",
+    "alternate": "",
+    "role": "alternate",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-057",
+    "name": "MizanMod MizanMod Template 57",
+    "file": "mizanmod-template-057.html",
+    "alternate": "",
+    "role": "alternate",
+    "category": "mizanmod"
+  },
+  {
+    "key": "mizanmod-template-067",
+    "name": "MizanMod MizanMod Template 67",
+    "file": "mizanmod-template-067.html",
+    "alternate": "",
+    "role": "alternate",
+    "category": "mizanmod"
+  }
+]

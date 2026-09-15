@@ -27,3 +27,11 @@ Latest scope includes 69 HTML templates and 37 original media files plus a new M
 ## Telegram polling diagnostic patch
 
 The VPS passed the original seven tests and live Telegram/Firebase checks, but `/start` delivery is still unverified. The adapter now explicitly subscribes to message/callback updates, uses a 10-second poll timeout and passes the requested HTTP timeout to the v2 client. Retry errors are rate-limited and redacted; `/start` logs only approved/private booleans, not account IDs or message contents. v2 `errorCode` is preserved instead of being mislabeled as a network failure. A new isolated mock test passes for polling options, dispatch, retry throttling and redaction. This patch has not yet been verified against live VPS polling; the precise original silence cause remains unconfirmed.
+
+## Studio refresh validation
+
+Twelve automated Node tests pass, covering the new additive/idempotent catalog importer, coverage of all 68 non-loading HTML files, script syntax and the earlier authentication, encryption and Telegram adapter tests. Dependency audit reports zero vulnerabilities. Chromium mocked-API UI checks pass at 1440px desktop and 390px mobile for both admin and client: search filters cards, navigation switches sections, page JavaScript has no uncaught errors and document width does not overflow. Reduced-motion overrides were corrected after visual inspection. These are synthetic fixtures, not actual account/order statistics or live Telegram session regression.
+
+The user separately confirmed live Firebase write/read/cleanup and Telegram /start on the preceding VPS version. Studio refresh deployment, its new bot profile and full-template APK/device acceptance remain pending.
+
+Updater safety checks: three Python tests pass with isolated temporary SQLite databases and mocked service commands. They verify success preserves env/existing data, a simulated post-import health failure restores files/database/service, and checksum mismatch or active orders stop before service shutdown. Actual systemd/Nginx behavior is still verified on the VPS, not simulated as production certification.
