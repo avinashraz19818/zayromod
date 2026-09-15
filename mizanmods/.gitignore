@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+runtime/
+secrets/
+*.keystore
+*.jks
+*service-account*.json
+*.apk
+*.aab
+*.zip
+.gradle/
+**/build/
+local.properties
+playwright-report/
+test-results/
