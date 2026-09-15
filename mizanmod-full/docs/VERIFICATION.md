@@ -23,3 +23,7 @@ Initially included 38 original PNG/font/audio files by explicit request and veri
 ## Full-template revision
 
 Latest scope includes 69 HTML templates and 37 original media files plus a new MizanMod default icon. Seven tests pass. Inline template scripts parse successfully, including processed scripts; the runtime bootstrap was moved ahead of original listeners and now survives templates declaring `var rtdb=null`. Text/credential scanning excludes image data-URI payloads to avoid mistaking random base64 bytes for account identifiers. Old account data, database files and compiled artifacts remain excluded.
+
+## Telegram polling diagnostic patch
+
+The VPS passed the original seven tests and live Telegram/Firebase checks, but `/start` delivery is still unverified. The adapter now explicitly subscribes to message/callback updates, uses a 10-second poll timeout and passes the requested HTTP timeout to the v2 client. Retry errors are rate-limited and redacted; `/start` logs only approved/private booleans, not account IDs or message contents. v2 `errorCode` is preserved instead of being mislabeled as a network failure. A new isolated mock test passes for polling options, dispatch, retry throttling and redaction. This patch has not yet been verified against live VPS polling; the precise original silence cause remains unconfirmed.
