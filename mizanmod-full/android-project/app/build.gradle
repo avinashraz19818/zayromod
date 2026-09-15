@@ -1,0 +1,57 @@
+plugins {
+	id 'com.android.application'
+}
+
+// ── ADVANCED APK PROTECTION — build variants ──
+//   debug             : developer friendly, koi minify nahi
+//   release           : R8 + resource shrink (standard production)
+//   protectedRelease  : MAXIMUM — R8 aggressive rules + resource shrink +
+//                       protected-rules.pro
+// (Pure Java — koi native/.so module nahi, NDK ki zarurat nahi.)
+
+android {
+	compileSdk 35
+
+	useLibrary 'org.apache.http.legacy'
+
+	defaultConfig {
+		applicationId "com.mizanmod.shell"
+		namespace "com.mizanmod.shell"
+		minSdkVersion 21
+		targetSdkVersion 35
+		versionCode 1
+		versionName "1.0"
+	}
+
+	buildTypes {
+		debug {
+			minifyEnabled false
+			shrinkResources false
+			debuggable true
+		}
+
+		release {
+			minifyEnabled true
+			shrinkResources true
+			debuggable false
+			jniDebuggable false
+			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+		}
+
+		protectedRelease {
+			minifyEnabled true
+			shrinkResources true
+			debuggable false
+			jniDebuggable false
+			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'security/protected-rules.pro'
+		}
+	}
+
+	buildFeatures {
+		viewBinding true
+	}
+}
+
+dependencies {
+	implementation fileTree(dir: 'libs', include: ['*.jar'])
+}

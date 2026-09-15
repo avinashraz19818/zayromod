@@ -1,0 +1,193 @@
+[
+  {
+    "path": "templates/assets/0.png",
+    "bytes": 27582,
+    "sha256": "053d2b993cb9c15eff6cb6ebd9ddd1b6edb5885be4a163fcf5519b55440b920f"
+  },
+  {
+    "path": "templates/assets/1.png",
+    "bytes": 7798,
+    "sha256": "49176bf808fc116924d5e320fb68117cae8205e3a4493c2c4e01afa43886d6c8"
+  },
+  {
+    "path": "templates/assets/2.png",
+    "bytes": 7749,
+    "sha256": "62fbe730725279f34da0db7dee463482b005aee728c9940d9a25b02ae38ed849"
+  },
+  {
+    "path": "templates/assets/3.png",
+    "bytes": 5074,
+    "sha256": "4222b83e39bdee2b76da95f3da4364bb183d1cd70e69a468d1ca7283cdf47fa3"
+  },
+  {
+    "path": "templates/assets/4.png",
+    "bytes": 7831,
+    "sha256": "ba9fa4ffde8b1149a81e724e584475ab228bf194f0d8012ab2f8e2924545a7e7"
+  },
+  {
+    "path": "templates/assets/5.png",
+    "bytes": 5604,
+    "sha256": "a3bed5e3ccb2eeba43dca799910a89e245f853f2433275bae93f7c1367e63675"
+  },
+  {
+    "path": "templates/assets/6.png",
+    "bytes": 7903,
+    "sha256": "9319baa40a65215e614a5c01ae4dac363cd099a1701b65d4bd755fa2a4b0d03e"
+  },
+  {
+    "path": "templates/assets/7.png",
+    "bytes": 7667,
+    "sha256": "4e868eeee050125bab099f961238c3c58d8a4f20daf465429d5e69288885767b"
+  },
+  {
+    "path": "templates/assets/8.png",
+    "bytes": 5758,
+    "sha256": "7023c2d11c3751d133ee02cabe03e58930f31cba7159990c692661104676ea9f"
+  },
+  {
+    "path": "templates/assets/9.png",
+    "bytes": 5070,
+    "sha256": "697126e4d0937f8d0eb86125cba99a4a26a6aa359f5e5999e95fb59cd1448bd3"
+  },
+  {
+    "path": "templates/assets/Eaglore.otf",
+    "bytes": 32328,
+    "sha256": "56f8328eeee03dae7edd2590d42e933914ae4fba0e90dc8d2dba9e878d77d6ae"
+  },
+  {
+    "path": "templates/assets/Sakana.ttf",
+    "bytes": 22584,
+    "sha256": "15a0105b6167c8a3a40fe9a278f5d77a99e8a2dd1cb5bcd554a84e326363c88c"
+  },
+  {
+    "path": "templates/assets/big.mp3",
+    "bytes": 5901,
+    "sha256": "40785cc1c2543ad1d96d9817a0a5dab7e23afdfb75dcf1d317e88cfde033809f"
+  },
+  {
+    "path": "templates/assets/bypass.mp3",
+    "bytes": 115819,
+    "sha256": "85836393da1484c344392bb9cf9dec72cd17828b4470f31d8387d33a79f0d240"
+  },
+  {
+    "path": "templates/assets/deposit.mp3",
+    "bytes": 127522,
+    "sha256": "00b719a942bd18375bfde187aeb7f98d0d9a7f2e990b4dbbf78b2a415d2a00b8"
+  },
+  {
+    "path": "templates/assets/intro.mp3",
+    "bytes": 77367,
+    "sha256": "60eabd8f10d6fb317a6211e2b3bd5be230f01f6ec024b6d089548904d010b87b"
+  },
+  {
+    "path": "templates/assets/low_deposit.mp3",
+    "bytes": 56469,
+    "sha256": "0533dff481136f5135c7ebc8df812667f22664ea726fa9f37bc6a5bb142d7758"
+  },
+  {
+    "path": "templates/assets/lowbalance.mp3",
+    "bytes": 140818,
+    "sha256": "00343eb4311ad5fd10011aae0dc79d2b447306a9d57380d4d6ece1f035335d22"
+  },
+  {
+    "path": "templates/assets/register.mp3",
+    "bytes": 122507,
+    "sha256": "b7805adef0377a693539d2ba53d8f52bcb54bd358cce1c9ff527c8abc49822f2"
+  },
+  {
+    "path": "templates/assets/small.mp3",
+    "bytes": 5229,
+    "sha256": "fd83636f175e14968ceddf338d73c59ac253ac2259e46757275046449ea181de"
+  },
+  {
+    "path": "templates/assets/successful.mp3",
+    "bytes": 140818,
+    "sha256": "00343eb4311ad5fd10011aae0dc79d2b447306a9d57380d4d6ece1f035335d22"
+  },
+  {
+    "path": "android-project/app/src/main/assets/0.png",
+    "bytes": 4670,
+    "sha256": "4df7a1a1d2195c7ad7f08cc0b1c9f90e9747f551ef7291bf73c5b65cced98969"
+  },
+  {
+    "path": "android-project/app/src/main/assets/1.png",
+    "bytes": 7798,
+    "sha256": "49176bf808fc116924d5e320fb68117cae8205e3a4493c2c4e01afa43886d6c8"
+  },
+  {
+    "path": "android-project/app/src/main/assets/2.png",
+    "bytes": 2708,
+    "sha256": "f01dfc7b4124e1ae1ca9fb085e4125b52481e23e76f4f63a26af6f1b8b23f55e"
+  },
+  {
+    "path": "android-project/app/src/main/assets/3.png",
+    "bytes": 5074,
+    "sha256": "4222b83e39bdee2b76da95f3da4364bb183d1cd70e69a468d1ca7283cdf47fa3"
+  },
+  {
+    "path": "android-project/app/src/main/assets/4.png",
+    "bytes": 6115,
+    "sha256": "d2fd005ed18e739e5444950e6b1999123fc9ef158fb681e7fcf0b7ea6372f83a"
+  },
+  {
+    "path": "android-project/app/src/main/assets/5.png",
+    "bytes": 5604,
+    "sha256": "a3bed5e3ccb2eeba43dca799910a89e245f853f2433275bae93f7c1367e63675"
+  },
+  {
+    "path": "android-project/app/src/main/assets/6.png",
+    "bytes": 5661,
+    "sha256": "d0758045766642c4c00b722321892a3416938538ef6ded93f74f2ef6bc9645c6"
+  },
+  {
+    "path": "android-project/app/src/main/assets/7.png",
+    "bytes": 7667,
+    "sha256": "4e868eeee050125bab099f961238c3c58d8a4f20daf465429d5e69288885767b"
+  },
+  {
+    "path": "android-project/app/src/main/assets/8.png",
+    "bytes": 5758,
+    "sha256": "7023c2d11c3751d133ee02cabe03e58930f31cba7159990c692661104676ea9f"
+  },
+  {
+    "path": "android-project/app/src/main/assets/9.png",
+    "bytes": 5070,
+    "sha256": "697126e4d0937f8d0eb86125cba99a4a26a6aa359f5e5999e95fb59cd1448bd3"
+  },
+  {
+    "path": "android-project/app/src/main/assets/bypass.mp3",
+    "bytes": 115819,
+    "sha256": "85836393da1484c344392bb9cf9dec72cd17828b4470f31d8387d33a79f0d240"
+  },
+  {
+    "path": "android-project/app/src/main/assets/deposit.mp3",
+    "bytes": 127522,
+    "sha256": "00b719a942bd18375bfde187aeb7f98d0d9a7f2e990b4dbbf78b2a415d2a00b8"
+  },
+  {
+    "path": "android-project/app/src/main/assets/intro.mp3",
+    "bytes": 77367,
+    "sha256": "60eabd8f10d6fb317a6211e2b3bd5be230f01f6ec024b6d089548904d010b87b"
+  },
+  {
+    "path": "android-project/app/src/main/assets/lowbalance.mp3",
+    "bytes": 140818,
+    "sha256": "00343eb4311ad5fd10011aae0dc79d2b447306a9d57380d4d6ece1f035335d22"
+  },
+  {
+    "path": "android-project/app/src/main/assets/my_icon.png",
+    "bytes": 466,
+    "sha256": "eb56383894cc57db6256ace8f7f9b524d8b043899cd2d8a8a58aab77cb50e9ad",
+    "rebranded": true
+  },
+  {
+    "path": "android-project/app/src/main/assets/register.mp3",
+    "bytes": 122507,
+    "sha256": "b7805adef0377a693539d2ba53d8f52bcb54bd358cce1c9ff527c8abc49822f2"
+  },
+  {
+    "path": "android-project/app/src/main/assets/successful.mp3",
+    "bytes": 140818,
+    "sha256": "00343eb4311ad5fd10011aae0dc79d2b447306a9d57380d4d6ece1f035335d22"
+  }
+]

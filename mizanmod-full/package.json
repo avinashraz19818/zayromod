@@ -1,0 +1,31 @@
+{
+  "name": "mizanmod-full-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Independent MizanMod full-platform staging port",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "test": "node --test tests/*.test.js",
+    "setup:private": "node scripts/setup-private.js",
+    "doctor": "node scripts/doctor.js",
+    "doctor:live": "node scripts/doctor.js --live"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "archiver": "6.0.1",
+    "bcryptjs": "2.4.3",
+    "better-sqlite3": "^12.11.1",
+    "dotenv": "16.4.5",
+    "express": "^4.22.1",
+    "express-rate-limit": "^8.7.0",
+    "express-session": "^1.18.2",
+    "multer": "^2.0.2",
+    "node-telegram-bot-api": "2.1.0",
+    "sharp": "0.35.4",
+    "unzipper": "^0.12.3",
+    "uuid": "11.1.1"
+  }
+}
