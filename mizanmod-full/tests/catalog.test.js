@@ -31,14 +31,14 @@ test('catalog publication is additive, priced, transactional and idempotent',()=
   assert.equal(db.prepare('SELECT count(*) AS n FROM designs').get().n,count);
   db.close();
 });
-test('redesigned panels retain executable inline scripts and MizanMod landmarks',()=>{
+test('restored panels retain scripts, branding and Telegram deep-link navigation',()=>{
   for(const name of ['public/index.html','public/admin/index.html']){
     const html=fs.readFileSync(path.join(root,name),'utf8');
-    assert.match(html,/mizan-theme.css\?v=studio-2/);
+    assert.match(html,/mizan-theme.css\?v=classic-3/);
     for(const script of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Script(script[1],{filename:name});
     assert.doesNotMatch(html,/<div class="brand-mark">Z<\/div>/);
   }
   const client=fs.readFileSync(path.join(root,'public/index.html'),'utf8');
-  assert.match(client,/id="catalogSearch"/);assert.match(client,/class="mizan-rail"/);
+  assert.doesNotMatch(client,/id="catalogSearch"|class="mizan-rail"/);assert.match(client,/location.hash.slice\(1\)/);
   assert.match(fs.readFileSync(path.join(root,'public/mizan-theme.css'),'utf8'),/prefers-reduced-motion/);
 });

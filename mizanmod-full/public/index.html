@@ -483,8 +483,8 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
 .pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--magenta);box-shadow:0 0 8px var(--magenta);animation:pulse-anim 1.5s infinite}
 @keyframes pulse-anim{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.4);opacity:.6}}
 </style>
-<link rel="icon" href="/mark.svg"><link rel="stylesheet" href="/mizan-theme.css?v=studio-2"><script defer src="/js/mizan-workspace.js?v=studio-2"></script></head>
-<body class="mizan-client">
+<link rel="icon" href="/mark.png"><link rel="stylesheet" href="/mizan-theme.css?v=classic-3"></head>
+<body>
 
 <svg style="display:none">
   <defs>
@@ -523,11 +523,10 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
 </svg>
 
 <!-- ══ TOP BAR ══ -->
-<aside class="mizan-rail" aria-label="Workspace navigation"><div class="brand"><span class="brand-mark"><img src="/mark.svg" alt=""></span><span class="brand-text">MizanMod<small>STUDIO</small></span></div><span class="nav-label">YOUR WORKSPACE</span><button class="nav-item active" data-page="home" onclick="showPage('home')"><svg><use href="#ic-home"/></svg>Design library</button><button class="nav-item " data-page="orders" onclick="showPage('orders')"><svg><use href="#ic-box"/></svg>My builds</button><button class="nav-item " data-page="wallet" onclick="showPage('wallet')"><svg><use href="#ic-wallet"/></svg>Credits</button><button class="nav-item " data-page="profile" onclick="showPage('profile')"><svg><use href="#ic-user"/></svg>Account</button><footer>Ideas, made installable.<br>MizanMod Studio</footer></aside>
 <header class="topbar">
   <div class="brand">
-    <span class="brand-mark"><img src="/mark.svg" alt=""></span>
-    <span class="brand-text">MizanMod<small>YOUR APP WORKSPACE</small></span>
+    <span class="brand-mark"><svg class="i"><use href="#ic-bolt"/></svg></span>
+    <span class="brand-text">MizanMod<small>MOD BUILDER</small></span>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <button class="coin-chip" id="topCoins" style="display:none" onclick="showPage('wallet')">
@@ -540,23 +539,31 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
 <!-- ══ HOME ══ -->
 <main id="page-home" class="page active">
   <section class="hero">
-    <div><span class="mizan-tag">MizanMod Studio</span>
-      <h1>Your next idea.<br><span>Your own app.</span></h1>
-      <p>A quieter place to create. Choose a design, make it yours, and follow your signed Android build from one workspace.</p>
-      <div class="hero-cta"><button class="btn btn-primary" onclick="scrollToDesigns()">Explore designs <span aria-hidden="true">↗</span></button><button class="btn btn-outline" onclick="showPage('orders')">View my builds</button></div>
-      <div class="mizan-workflow"><span><b>01</b> Choose</span><span><b>02</b> Customize</span><span><b>03</b> Build</span></div>
-    </div><img class="mizan-hero-art" src="/studio-art.svg" alt="Illustration of an app being assembled" width="380" height="330">
+    <span class="hero-pill"><svg class="i sm"><use href="#ic-shield"/></svg>SIGNED &amp; READY TO INSTALL</span>
+    <h1>Build your <span>own APK</span> in minutes.</h1>
+    <p>Pick a template, set name/icon/site URL — we compile &amp; sign. No coding needed.</p>
+    <div class="hero-cta">
+      <button class="btn btn-primary" onclick="scrollToDesigns()"><svg class="i sm"><use href="#ic-rocket"/></svg>Start Building</button>
+      <button class="btn btn-outline" onclick="showPage('wallet')"><svg class="i sm"><use href="#ic-wallet"/></svg>Add Coins</button>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><b>~60s</b><span>BUILD</span></div>
+      <div class="stat"><b>100%</b><span>SIGNED</span></div>
+      <div class="stat"><b>24/7</b><span>ONLINE</span></div>
+      <div class="stat"><b>Live Link</b><span>DOMAIN/INVITE</span></div>
+      <div class="stat"><b>Telegram</b><span>APK ALERT</span></div>
+      <div class="stat"><b>Backup</b><span>SAFE DATA</span></div>
+    </div>
   </section>
 
   <div class="sec-head" id="designsHead">
-    <h2 class="sec-title"><svg class="i"><use href="#ic-layers"/></svg>Design library</h2>
+    <h2 class="sec-title"><svg class="i"><use href="#ic-layers"/></svg>Templates</h2>
     <div class="sec-sub" id="designCount"></div>
   </div>
-  <div class="mizan-catalog-tools"><label for="catalogSearch"><span>FIND YOUR STARTING POINT</span><input id="catalogSearch" type="search" placeholder="Search designs…" autocomplete="off"></label><small id="catalogSearchStatus" role="status" aria-live="polite"></small></div>
   <div class="designs-grid" id="designsGrid">
     <div style="grid-column:1/-1"><div class="empty-state"><span class="loader"></span></div></div>
   </div>
-  <footer>MizanMod Studio · Made for your next idea.</footer>
+  <footer>© MizanMod Builder</footer>
 </main>
 
 <!-- ══ ORDERS ══ -->
@@ -642,7 +649,7 @@ footer{padding:22px 16px;text-align:center;font-size:11.5px;color:var(--dim)}
   <div id="profileBody"></div>
 </main>
 
-<div class="modal-overlay" id="authModal"><div class="modal"><button class="close-modal" onclick="closeModal('authModal')">×</button><h2>Open MizanMod in Telegram</h2><p>Only approved Telegram accounts can access this workspace.</p><a class="btn btn-primary" href="https://t.me/MizanModBuilder_bot">Open Telegram bot</a></div></div>
+<div class="modal-overlay" id="authModal"><div class="modal"><button class="close-modal" onclick="closeModal('authModal')">×</button><h2>Open MizanMod in Telegram</h2><p>Open this workspace from the Telegram bot.</p><a class="btn btn-primary" href="https://t.me/MizanModBuilder_bot">Open Telegram bot</a></div></div>
 <!-- ══ DESIGN DETAILS MODAL ══ -->
 <div class="modal-overlay" id="designPreviewModal">
   <div class="modal design-preview-modal">
@@ -1000,7 +1007,7 @@ async function loadDesigns(){
     const cover=d.preview_image||fallbackImage;
     const media=cover
       ?`<img class="preview" src="${esc(mediaSrc(cover))}" alt="${esc(d.name)} cover" loading="lazy" onerror="mediaFallback(this)">`
-      :`<div class="no-preview">${icon('ic-layers','i lg')}MizanMod Studio<small>No preview supplied</small></div>`;
+      :`<div class="no-preview">${icon('ic-image','i lg')}No Preview</div>`;
     return `<article class="design-card" role="button" tabindex="0" onclick="openDesignPreview(${d.id})" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openDesignPreview(${d.id})}">
       ${disc>0?`<div class="disc-badge">${disc}% OFF</div>`:''}
       <div class="media">${media}<span class="zoom-hint">${icon('ic-chev','i sm')}</span></div>

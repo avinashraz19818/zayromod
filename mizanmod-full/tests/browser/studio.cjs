@@ -28,8 +28,8 @@ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_EXECUTA
   return route.fulfill({status:200,contentType:types[path.extname(file)]||'application/octet-stream',body:fs.readFileSync(file)});
  });
  await page.goto('http://studio.test'+(admin?'/admin/':'/'));await page.waitForLoadState('networkidle');
- if(!admin){await page.waitForSelector('.design-card');await page.fill('#catalogSearch','Forest');assert.equal(await page.locator('.design-card:visible').count(),1);await page.fill('#catalogSearch','');assert.equal(await page.locator('.design-card:visible').count(),3);await page.evaluate(()=>showPage('orders'));assert(await page.locator('#page-orders').isVisible());await page.evaluate(()=>showPage('home'));}
- else{await page.waitForFunction(()=>document.querySelector('#loginOverlay').style.display==='none');await page.locator('.mizan-admin-banner button').first().click();assert(await page.locator('#sec-designs').isVisible());await page.evaluate(()=>showSec('dashboard'));}
+ if(!admin){await page.waitForSelector('.design-card');assert.equal(await page.locator('.design-card:visible').count(),3);await page.evaluate(()=>showPage('orders'));assert(await page.locator('#page-orders').isVisible());await page.evaluate(()=>showPage('home'));}
+ else{await page.waitForFunction(()=>document.querySelector('#loginOverlay').style.display==='none');await page.evaluate(()=>showSec('designs'));assert(await page.locator('#sec-designs').isVisible());await page.evaluate(()=>showSec('dashboard'));}
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),name+' overflow');
  await page.screenshot({path:path.join(process.env.SCREENSHOT_DIR || require('os').tmpdir(),'mizan-'+name+'.png'),fullPage:true});
  assert.deepEqual(errors,[],name+' page errors');console.log('PASS',name,'navigation/search/overflow and no page errors');await page.close();await browser.close();

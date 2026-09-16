@@ -1,5 +1,7 @@
 # MizanMod — full platform staging port
 
+**Latest UI choice:** the requester reverted the Studio panel redesign. Admin/client markup and theme now follow the pre-Studio layout with MizanMod branding. Working bot code/access settings remain unchanged. Use the separate Classic Reset package for the requested live catalog/HTML deletion; do not restore a whole historical database over current orders. See docs/CLASSIC-RESET.md.
+
 This directory ports the complete reference platform's server, administrative workflows, client catalog, orders, credits, announcements, HTML upload, runtime content, Firebase controls and Java Android build/template architecture. It is **not the previous minimal offline studio** and it does **not share its database schema**.
 
 **Status: staging source, not approved for a live cutover.** Twelve automated tests pass (including many API/auth/CRUD assertions) and npm audit reports zero vulnerabilities. The user has verified Firebase read/write/cleanup, bot /start, admin login and Telegram panel access on the VPS. The full Android template's signed APK build/device launch and complete UI regression remain unverified. The Studio refresh has only local mocked-browser checks so far. A successful APK from the earlier minimal shell does not validate this platform.

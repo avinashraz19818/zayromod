@@ -1,0 +1,13 @@
+# Classic panel reset and live design removal
+
+The requester explicitly reversed the Studio panel redesign and confirmed permanent removal of the live design catalog and its HTML files. The three panel files are restored from the pre-Studio revision with MizanMod branding, a fresh CSS cache version and the working Telegram hash-navigation fix retained. Studio bot behavior, bot profile and allowlist/polling policy are not rolled back.
+
+Use the dedicated MizanMod-Classic-Reset.zip bundle. It contains only three public panel files, checksums and `classic-reset.py`. On the existing VPS, run as root with the explicit `--delete-designs` flag. Finish active/pending builds and stop accepting new orders first.
+
+The script creates a private consistent database/file backup and stops only mizanmod-full. It restores the old panel layout. If ANY orders exist, it retains all design records/files and reports `DESIGNS NOT DELETED` rather than destroying order history. If no orders exist, it removes the design-preview associations, all design catalog entries and root-level template HTML/HTM files except protected loaders. It preserves the default loader, the selected loader in settings, catalog-designated loading files, templates/assets, users, env/Firebase/signing credentials and bot code/settings. It does not delete shared uploads or arbitrary paths referenced by a design. Unexpected paths stop the reset safely.
+
+Failures trigger restoration of the backed-up UI, affected HTML and pre-reset database while the service is stopped. The backup remains private for recovery; permanent here means removed from the LIVE catalog/templates, not erasure of all historical backups. Do not manually restore the database later without checking for newer user activity.
+
+After deletion, the panel intentionally has an empty catalog. Upload new designs as desired. Do not run the old catalog importer: it requires the now-deleted bundled files. Full-template source-fixture tests on a mutated live templates directory will no longer pass; run those tests from a clean source extraction instead. The source repository retains template fixtures; this package removes the selected live deployment's designs, not original reference files or old project data.
+
+Validation for this reset: both restored panels' inline JavaScript parses; three isolated SQLite/filesystem tests with mocked service operations pass (successful deletion preserves protected data; existing orders block deletion but permit UI reset; simulated health failure restores the prior state). Real VPS execution and post-reset browser/Telegram checks remain pending.
