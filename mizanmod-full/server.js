@@ -10,6 +10,8 @@ const crypto = require('crypto');
 const https = require('https');
 
 const db = require('./database/db');
+const packagePool = require('./utils/package-pool').createPool(db);
+const {notifyEmpty: notifyPackageEmpty} = require('./utils/package-pool-bot');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
 const { initBot, sendCoinRequest, sendApkReady, broadcastAnnouncement, sendLogEvent } = require('./utils/telegram');
 const { injectParams: injectHtmlParams } = require('./utils/htmlprocessor');
@@ -192,6 +194,14 @@ app.use((req,res,next) => {
 app.get('/healthz', (req,res) => res.json({service:'MizanMod',status:'ok'}));
 app.use('/api/admin', (req,res,next) => req.path === '/login' ? next() : requireAdmin(req,res,next));
 app.use('/api/designs', requireAuth);
+require('./utils/package-pool-http')(app, db, requireAdmin);
+app.get(['/admin', '/admin/', '/admin/index.html'], (req,res,next) => {
+  fs.readFile(path.join(__dirname,'public/admin/index.html'),'utf8',(error,html)=>{
+    if(error)return next(error);
+    const addon='<link rel="stylesheet" href="/admin/package-pool.css?v=1"><script defer src="/admin/package-pool.js?v=1"></script>';
+    res.type('html').send(html.replace(/<\/head>/i,addon+'</head>'));
+  });
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── SECURE FILE SERVING ──
@@ -298,6 +308,8 @@ const tgSettings = db.prepare('SELECT value FROM settings WHERE key=?');
 const tgToken = tgSettings.get('telegram_bot_token')?.value || process.env.TELEGRAM_BOT_TOKEN;
 if (tgToken && process.env.BOT_POLLING_ENABLED === 'true') initBot(tgToken, db);
 else initBot(null, db); // pass db even when no token so callbacks work once token added later
+const packageAlertTimer = setInterval(() => { notifyPackageEmpty(db).catch(()=>{}); }, 30000);
+packageAlertTimer.unref?.();
 
 // ── Auth middleware ──
 function requireAuth(req, res, next) {
@@ -828,15 +840,36 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
   const domain = extractDomain(cleanRegisterUrl);
 
   _pkgCounter++;
-  const packageName = makePackageName(app_name, _pkgCounter);
+  let packageName = makePackageName(app_name, _pkgCounter);
   const iconFile = req.file ? path.basename(req.file.path) : null;
 
   const tempPath = `mizanmod${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
+  let orderId;
+  try {
+    const allocation = packagePool.createOrder({
+      needsPackage: !isOnlyFake,
+      fallbackName: packageName,
+      charge: () => {
+        const charged = db.prepare('UPDATE users SET coins=coins-? WHERE id=? AND coins>=?').run(totalCoins,user.id,totalCoins);
+        if(charged.changes!==1)throw new Error('Insufficient coins. No package was allocated.');
+        if(couponResult.code && couponResult.discount>0)db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=?').run(couponResult.coupon.id);
+      },
+      insert: allocatedName => {
+        packageName = allocatedName;
   const orderResult = db.prepare(`
     INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,app_name_style,status,coins_spent,design_variant,coupon_code,discount_coins)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'building',?,?,?,?)
   `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, tempPath, parseInt(min_deposit)||300, brand_title?.trim()||app_name.trim(), iconFile, isBoth ? cleanFakeRegisterUrl : (isOnlyFake ? cleanRegisterUrl : null), null, appNameStyle, totalCoins, effectiveBuildMode, couponResult.code, couponResult.discount);
-  const orderId = orderResult.lastInsertRowid;
+  return orderResult.lastInsertRowid;
+      }
+    });
+    orderId = allocation.orderId;
+    if (!isOnlyFake && allocation.remaining===0) notifyPackageEmpty(db).catch(()=>{});
+  } catch(error) {
+    if(req.file)try{fs.unlinkSync(req.file.path);}catch(_){}
+    if(error.code==='PACKAGE_POOL_EMPTY')notifyPackageEmpty(db).catch(()=>{});
+    return res.status(error.code==='PACKAGE_POOL_EMPTY'?409:400).json({error:error.message,code:error.code||'ORDER_CREATE_FAILED'});
+  }
 
   const firebasePath = `mizanmod${domain.replace(/[^a-z0-9]/gi, '').substring(0, 8)}${orderId}`;
   let fakeFirebasePath = null;
@@ -865,10 +898,7 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
     console.error('[order-create] Firebase initial link sync warning:', error.message);
   }
 
-  db.prepare('UPDATE users SET coins = coins - ? WHERE id=?').run(totalCoins, user.id);
-  if (couponResult.code && couponResult.discount > 0) {
-    db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=?').run(couponResult.coupon.id);
-  }
+  // Credits/coupon use committed atomically with package allocation and order creation.
 
   const buildId = `build_${orderId}_${Date.now()}`;
 
@@ -2500,18 +2530,34 @@ app.post('/api/admin/orders/create', requireAdmin, iconUpload.single('icon'), as
   const domain = extractDomain(cleanRegisterUrl);
 
   _pkgCounter++;
-  const packageName = makePackageName(app_name, _pkgCounter);
+  let packageName = makePackageName(app_name, _pkgCounter);
   const iconFile = req.file ? path.basename(req.file.path) : null;
 
   // FREE order — coins_spent = 0, koi deduction nahi. Temp path ke saath
   // INSERT, phir orderId wala UNIQUE path set hota hai.
   const tempPath = `mizanmod${domain.replace(/[^a-z0-9]/gi, '').substring(0, 10)}`;
+  let orderId;
+  try {
+    const allocation = packagePool.createOrder({
+      needsPackage: true,
+      fallbackName: packageName,
+      insert: allocatedName => {
+        packageName = allocatedName;
   const orderResult = db.prepare(`
     INSERT INTO orders(user_id,design_id,app_name,package_name,register_url,deposit_url,wingo_url,domain,firebase_path,min_deposit,brand_title,icon_file,fake_register_url,fake_firebase_path,live_link_enabled,app_name_style,status,coins_spent,design_variant,coupon_code,discount_coins)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'building',0,'real','',0)
   `).run(user.id, design_id, app_name.trim(), packageName, cleanRegisterUrl, depositUrl, wingoUrl, domain, tempPath, parseInt(min_deposit) || 300, brand_title?.trim() || app_name.trim(), iconFile, fakeAddonEnabled ? cleanFakeRegisterUrl : null, null, appNameStyle);
 
-  const orderId = orderResult.lastInsertRowid;
+  return orderResult.lastInsertRowid;
+      }
+    });
+    orderId = allocation.orderId;
+    if (true && allocation.remaining===0) notifyPackageEmpty(db).catch(()=>{});
+  } catch(error) {
+    if(req.file)try{fs.unlinkSync(req.file.path);}catch(_){}
+    if(error.code==='PACKAGE_POOL_EMPTY')notifyPackageEmpty(db).catch(()=>{});
+    return res.status(error.code==='PACKAGE_POOL_EMPTY'?409:400).json({error:error.message,code:error.code||'ORDER_CREATE_FAILED'});
+  }
 
   // UNIQUE paths (order id ke saath) — same domain ke do orders clash
   // nahi karenge, har app ko apna content milega

@@ -11,7 +11,7 @@ test('Classic premium welcome escapes identity and omits unconfigured support li
   const mod={exports:{}};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../utils/telegram.js'),'utf8'),{
     module:mod,process:{env:{BASE_URL:'https://app.example.test'}},console,
-    require:n=>n==='./telegram-adapter'?FakeBot:n==='./telegram-access'?{telegramAllowed:()=>true}:n==='bcryptjs'?{hash:async()=> 'mock-hash'}:require(n)
+    require:n=>n==='./package-pool-bot'?{registerPackageCommands(){}}:n==='./telegram-adapter'?FakeBot:n==='./telegram-access'?{telegramAllowed:()=>true}:n==='bcryptjs'?{hash:async()=> 'mock-hash'}:require(n)
   });
   mod.exports.initBot('12345:synthetic',null);
   const bot=clients[0];

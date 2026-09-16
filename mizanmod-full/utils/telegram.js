@@ -107,6 +107,8 @@ function initBot(token, db) {
       request: { agent: deliveryAgent, timeout: 10 * 60_000 }
     });
 
+    require('./package-pool-bot').registerPackageCommands(bot, db);
+
     // ── /start Handler — MizanMod Builder workspace hub ──
     bot.onText(/\/start/, async (msg) => {
       const chatId    = String(msg.chat.id);

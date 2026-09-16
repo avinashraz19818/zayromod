@@ -751,8 +751,8 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     if (fs.existsSync(keystorePath)) {
       log('Signing with keystore...');
       const alignedApk = path.join(buildDir, `${buildId}_aligned.apk`);
-      execFileSync('zipalign', ['-f', '4', builtApk, alignedApk], { stdio: 'pipe' });
-      execFileSync('apksigner', [
+      execFileSync(path.join(ANDROID_HOME, 'build-tools', '35.0.0', 'zipalign'), ['-f', '4', builtApk, alignedApk], { stdio: 'pipe', env: buildEnv });
+      execFileSync(path.join(ANDROID_HOME, 'build-tools', '35.0.0', 'apksigner'), [
         'sign',
         '--ks', keystorePath,
         '--ks-key-alias', KEYSTORE_ALIAS,
@@ -764,7 +764,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
         '--v4-signing-enabled', 'false',
         '--out', signedApk,
         alignedApk
-      ], { stdio: 'pipe' });
+      ], { stdio: 'pipe', env: buildEnv });
       fs.unlinkSync(alignedApk);
       log('APK signed successfully.');
     } else {
