@@ -8,11 +8,11 @@ require('dotenv').config({path:require('node:path').join(__dirname,'../.env')});
   const url=process.env.BASE_URL;
   if(!token||!/^https:\/\//.test(url||''))throw Error('Missing bot or HTTPS configuration');
   const settings=[
-    ['setMyName',{name:'MizanMod Studio'}],
-    ['setMyShortDescription',{short_description:'Your ideas. Your apps. One workspace. Build and manage Android apps with MizanMod Studio.'}],
-    ['setMyDescription',{description:'Welcome to MizanMod Studio. Explore designs, customize your app, manage credits and follow your builds. Tap Open Studio to begin. Only install apps you trust.'}],
+    ['setMyName',{name:'MizanMod Builder'}],
+    ['setMyShortDescription',{short_description:'Build and manage your Android apps with MizanMod. Designs, orders, credits and APK downloads.'}],
+    ['setMyDescription',{description:'Welcome to MizanMod Builder. Explore designs, customize your app, manage credits and follow your builds. Tap Open Builder to begin. Only install apps you trust.'}],
     ['setMyCommands',{commands:[{command:'start',description:'Open your MizanMod workspace'},{command:'orders',description:'View recent builds'},{command:'wallet',description:'View credits and top up'},{command:'help',description:'Build and installation help'}]}],
-    ['setChatMenuButton',{menu_button:{type:'web_app',text:'Open Studio',web_app:{url}}}]
+    ['setChatMenuButton',{menu_button:{type:'web_app',text:'Open Builder',web_app:{url}}}]
   ];
   for(const [method,body] of settings){
     const r=await fetch(`https://api.telegram.org/bot${token}/${method}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});

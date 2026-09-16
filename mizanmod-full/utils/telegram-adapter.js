@@ -52,6 +52,20 @@ class TelegramAdapter extends EventEmitter {
   async call(method, args) {
     try { return await this.client.api[method](args); }
     catch (e) {
+      // Retry only an explicit custom-emoji rejection, not a timeout or ambiguous delivery.
+      const customError = (e.errorCode || e.error_code) === 400 && /custom.?emoji|emoji.?id/i.test(String(e.description || ''));
+      const plain = {...args}; let changed = false;
+      if (customError && args.parse_mode === 'HTML') {
+        for (const key of ['text', 'caption']) {
+          if (typeof plain[key] !== 'string') continue;
+          const value = plain[key].replace(/<tg-emoji\b[^>]*>([\s\S]*?)<\/tg-emoji>/g, '$1');
+          if (value !== plain[key]) { plain[key] = value; changed = true; }
+        }
+      }
+      if (changed) {
+        console.warn('[Telegram] Custom emoji rejected; retrying with ordinary emoji. Check bot eligibility.');
+        try { return await this.client.api[method](plain); } catch (retryError) { e = retryError; }
+      }
       const safe = new Error(`Telegram ${method} failed (${errorLabel(e)})`);
       safe.response = { statusCode: e.errorCode || e.error_code || e.status, body: { parameters: e.parameters } };
       throw safe;

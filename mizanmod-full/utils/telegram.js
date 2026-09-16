@@ -14,35 +14,39 @@ let _db  = null;
 
 // ── Telegram Premium Custom Emojis ──
 const PE = {
-  wave: '👋',
-  gift: '🎁',
-  star: '⭐️',
-  fire: '🔥',
-  crown: '👑',
-  diamond: '💎',
-  money: '💰',
-  check: '✅',
-  alert: '‼️',
-  lock: '🔒',
-  sparkles: '✨',
-  rocket: '🚀',
-  bell: '🔔',
-  dot: '🔘',
-  down: '🔽',
-  party: '🥳',
-  bot: '🤖',
-  stats: '📊',
-  phone: '📞',
-  arrow: '👉',
-  verified: '✔️',
-  card: '📇',
-  telegram: '✈️',
-  mobile: '📱',
-  trophy: '🏆',
-  user: '👤',
-  gear: '⚙️',
-  broadcast: '📡'
+  wave: '<tg-emoji emoji-id="5413694143601842851">👋</tg-emoji>',
+  gift: '<tg-emoji emoji-id="5449800250032143374">🎁</tg-emoji>',
+  star: '<tg-emoji emoji-id="5924870095925942277">⭐️</tg-emoji>',
+  fire: '<tg-emoji emoji-id="5402406965252989103">🔥</tg-emoji>',
+  crown: '<tg-emoji emoji-id="5431505596316665041">👑</tg-emoji>',
+  diamond: '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>',
+  money: '<tg-emoji emoji-id="5224257782013769471">💰</tg-emoji>',
+  check: '<tg-emoji emoji-id="5336985409220001678">✅</tg-emoji>',
+  alert: '<tg-emoji emoji-id="5440660757194744323">‼️</tg-emoji>',
+  lock: '<tg-emoji emoji-id="5296369303661067030">🔒</tg-emoji>',
+  sparkles: '<tg-emoji emoji-id="5463297803235113601">✨</tg-emoji>',
+  rocket: '<tg-emoji emoji-id="5406966974980828470">🚀</tg-emoji>',
+  bell: '<tg-emoji emoji-id="5458603043203327669">🔔</tg-emoji>',
+  dot: '<tg-emoji emoji-id="5210708311246126137">🔘</tg-emoji>',
+  down: '<tg-emoji emoji-id="5192680362114830442">🔽</tg-emoji>',
+  party: '<tg-emoji emoji-id="5355129313878353723">🥳</tg-emoji>',
+  bot: '<tg-emoji emoji-id="5287684458881756303">🤖</tg-emoji>',
+  stats: '<tg-emoji emoji-id="5231200819986047254">📊</tg-emoji>',
+  phone: '<tg-emoji emoji-id="5201990176175299013">📞</tg-emoji>',
+  arrow: '<tg-emoji emoji-id="5397582299640375552">👉</tg-emoji>',
+  verified: '<tg-emoji emoji-id="5206607081334906820">✔️</tg-emoji>',
+  card: '<tg-emoji emoji-id="5332724926216428039">📇</tg-emoji>',
+  telegram: '<tg-emoji emoji-id="5364125616801073577">✈️</tg-emoji>',
+  mobile: '<tg-emoji emoji-id="5407025283456835913">📱</tg-emoji>',
+  trophy: '<tg-emoji emoji-id="5188344996356448758">🏆</tg-emoji>',
+  user: '<tg-emoji emoji-id="6165860934242798778">👤</tg-emoji>',
+  gear: '<tg-emoji emoji-id="5339068773301240682">⚙️</tg-emoji>',
+  broadcast: '<tg-emoji emoji-id="5256134032852278918">📡</tg-emoji>'
 };
+// Disable custom rendering without changing message layout if needed.
+if (process.env.TELEGRAM_CUSTOM_EMOJI_ENABLED === 'false') {
+  for (const key of Object.keys(PE)) PE[key] = PE[key].replace(/<tg-emoji\b[^>]*>([\s\S]*?)<\/tg-emoji>/g, '$1');
+}
 
 function getSiteUrl() { return String(process.env.BASE_URL || ''); }
 
@@ -103,7 +107,7 @@ function initBot(token, db) {
       request: { agent: deliveryAgent, timeout: 10 * 60_000 }
     });
 
-    // ── /start Handler — MizanMod Studio workspace hub ──
+    // ── /start Handler — MizanMod Builder workspace hub ──
     bot.onText(/\/start/, async (msg) => {
       const chatId    = String(msg.chat.id);
       if (msg.chat.type !== 'private' || !require('./telegram-access').telegramAllowed(msg.from?.id)) return;
@@ -158,31 +162,36 @@ function initBot(token, db) {
       }
 
       const welcomeMsg =
-`<b>MizanMod Studio</b>
-<i>Your ideas. Your apps. One workspace.</i>
+`╔══════════════════════════╗
+${PE.diamond} <b>MIZANMOD MOD BUILDER</b> ${PE.diamond}
+╚══════════════════════════╝
 
-Hi ${firstName} 👋
-Your workspace is ready.
+${PE.wave} <b>Welcome, ${firstName}!</b>
+${PE.bot} <b>Builder panel:</b> Ready to open
+${PE.money} <b>Your balance:</b> <code>${userCoins} Coins</code>
+${PE.trophy} <b>Total orders:</b> <code>${userOrders}</code>
 
-<b>${userCoins} credits</b> available · <b>${userOrders} orders</b>
-
-Choose a design, customize your app, and follow its build from Studio. Your order status and downloads stay together.
-
-<b>Where would you like to go?</b>`;
+━━━━━━━━━━━━━━━━━━━━━━
+${PE.rocket} <b>Your APK workspace</b>
+• Choose a design and customize your app
+• Follow build progress and download signed APKs
+• Manage your orders and credits in one place
+━━━━━━━━━━━━━━━━━━━━━━
+${PE.down} <b>Choose an option below:</b>`;
 
       // ── Bot API 9.4+ Colored Inline Buttons (Attached directly to message) ──
       const reply_markup = {
         inline_keyboard: [
           [
-            { text: 'Open Studio ↗', web_app: { url: siteUrl }, style: 'success' }
+            { text: '🚀 ᴏᴘᴇɴ ʙᴜɪʟᴅᴇʀ ᴘᴀɴᴇʟ', web_app: { url: siteUrl }, style: 'success' }
           ],
           [
-            { text: 'My builds', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
-            { text: 'Credits', web_app: { url: `${siteUrl}#wallet` }, style: 'success' }
+            { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
+            { text: '🪙 ᴀᴅᴅ ᴄᴏɪɴꜱ', web_app: { url: `${siteUrl}#wallet` }, style: 'success' }
           ],
           ...(supportUrl || channelUrl ? [[
-            ...(supportUrl ? [{text:'Contact support',url:supportUrl}] : []),
-            ...(channelUrl ? [{text:'Studio updates',url:channelUrl}] : [])
+            ...(supportUrl ? [{text:'👨‍💻 ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ',url:supportUrl}] : []),
+            ...(channelUrl ? [{text:'📢 ᴏꜰꜰɪᴄɪᴀʟ ᴄʜᴀɴɴᴇʟ',url:channelUrl}] : [])
           ]] : [])
         ]
       };
@@ -233,7 +242,7 @@ Choose a design, customize your app, and follow its build from Studio. Your orde
           parse_mode: 'HTML',
           reply_markup: {
             inline_keyboard: [
-              [{ text: 'View builds in Studio', web_app: { url: `${siteUrl}#orders` } }]
+              [{ text: 'View builds in the builder panel', web_app: { url: `${siteUrl}#orders` } }]
             ]
           }
         });
@@ -254,7 +263,7 @@ Choose a design, customize your app, and follow its build from Studio. Your orde
         const upiId = _db.prepare("SELECT value FROM settings WHERE key='upi_id'").get()?.value || '';
 
         const txt =
-`<b>MizanMod · Your credits</b>
+`${PE.money} <b>MIZANMOD WALLET &amp; BALANCE</b>
 
 <b>${coins} coins</b> available for your next build.
 ${upiId ? `\nPayment ID: <code>${escapeHtml(upiId)}</code>\n` : ''}
@@ -296,7 +305,7 @@ Install only builds and designs you trust. Signing is not a malware safety guara
         parse_mode: 'HTML',
         reply_markup: {
           inline_keyboard: [[
-            { text: 'Open Studio', web_app: {url: getSiteUrl()} }
+            { text: 'Open Builder Panel', web_app: {url: getSiteUrl()} }
           ]]
         }
       });
@@ -368,8 +377,8 @@ ${PE.rocket} <i>Aapka balance update ho chuka hai. Ab aap instant APK build kar 
                 parse_mode: 'HTML',
                 reply_markup: {
                   inline_keyboard: [
-                    [{ text: '🟢 Open Studio ↗', web_app: { url: getSiteUrl() } }],
-                    [{ text: 'My builds', web_app: { url: `${getSiteUrl()}#orders` } }]
+                    [{ text: '🟢 Open Builder Panel ↗', web_app: { url: getSiteUrl() } }],
+                    [{ text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${getSiteUrl()}#orders` } }]
                   ]
                 }
               }).catch(() => {});
@@ -404,7 +413,7 @@ Agar aapne payment ki hai to please payment screenshot ke saath <b>Admin Support
               bot.sendMessage(targetUser.telegram_id, userNotice, {
                 parse_mode: 'HTML',
                 reply_markup: {
-                  inline_keyboard: [[{ text: 'Open Studio', web_app: {url: getSiteUrl()} }]]
+                  inline_keyboard: [[{ text: 'Open Builder Panel', web_app: {url: getSiteUrl()} }]]
                 }
               }).catch(() => {});
             }
@@ -566,8 +575,8 @@ ${PE.down} <i>Uploading your APK files now… Please wait.</i>
           { text: 'Create another app', web_app: { url: siteUrl }, style: 'success' }
         ],
         [
-          { text: 'My builds', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
-          ...(supportUrl ? [{ text: 'Contact support', url: supportUrl }] : [])
+          { text: '📦 ᴍʏ ᴏʀᴅᴇʀꜱ', web_app: { url: `${siteUrl}#orders` }, style: 'primary' },
+          ...(supportUrl ? [{ text: '👨‍💻 ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl }] : [])
         ]
       ]
     };
@@ -637,8 +646,8 @@ ${PE.rocket} <b>Official Portal:</b> <a href="${siteUrl}">${siteUrl}</a>`;
     inlineKeyboard.push([{ text: `✨ ${button_text}`, url: button_url.startsWith('http') ? button_url : `https://${button_url}`, style: 'success' }]);
   }
   inlineKeyboard.push([
-    { text: 'Open Studio', web_app: { url: siteUrl }, style: 'success' },
-    ...(supportUrl ? [{ text: 'Contact support', url: supportUrl }] : [])
+    { text: 'Open Builder Panel', web_app: { url: siteUrl }, style: 'success' },
+    ...(supportUrl ? [{ text: '👨‍💻 ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ', url: supportUrl }] : [])
   ]);
 
   const reply_markup = { inline_keyboard: inlineKeyboard };
