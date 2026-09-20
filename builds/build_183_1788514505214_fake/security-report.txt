@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗥𝗔𝗠𝗔𝗬𝗔𝗡 𝟵𝗫 𝗣𝗥𝗢 Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "df212f7d3c65e5ba7de5f2a9312e37484cbdf253cf46cda07fa341ce36374caa",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

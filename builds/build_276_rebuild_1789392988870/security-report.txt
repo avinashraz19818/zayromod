@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "YASH_ADMIN_PANNEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "06d23dd98aa97f4b9db045ff0913abf18752334e1356575d49660c2b2bbee174",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

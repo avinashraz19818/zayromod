@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "Veer_Game_Ai_9X_Panel",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "9ae2f656073ee4e818b56b78e2d7dfcdb8b225992a539f1057ee10496c716820",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

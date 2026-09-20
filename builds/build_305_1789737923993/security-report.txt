@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "MAGIC TOOL 2.0",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "d76018caa95409606a6bdc064a26d13d1077dc8d74acd02c808956e90967a1f6",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

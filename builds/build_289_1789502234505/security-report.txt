@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗔𝗜 𝗣𝗔𝗡𝗡𝗘𝗟 𝗕𝗬 𝗥𝗘𝗘",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "bd25bc26b4e0c9218127379928b524a47458e9777def24f2a1cb96ce52ae6f99",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "RAJPUT 9X PROFIT",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "8117b9ef9dfecde9df479476c1a5f6610b00ffad5a9a99cd506484cfcb16a355",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

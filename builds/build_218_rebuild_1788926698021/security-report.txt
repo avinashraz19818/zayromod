@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "AI NUMBER TOOL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "99ff785471b533b0fcbe277640d3b36e9e8a79b4b8776ec0525f57271c4d0f78",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

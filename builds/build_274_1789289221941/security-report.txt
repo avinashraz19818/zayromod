@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "FAKE APK",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "af76c0e67e56be2b435425bb05b703ab25200332d752989ba4cf58a6b19eb300",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

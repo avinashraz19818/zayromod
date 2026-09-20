@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "MAXXX PNEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "3e884054b4ad043c4f8b3b808a65a2d3d2d411b8acc6cc3968adfed702b5fb08",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

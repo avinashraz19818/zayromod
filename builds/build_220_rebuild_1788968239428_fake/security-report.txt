@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗚𝗢𝗗𝗭𝗜𝗟𝗔 9𝗫 𝗣𝗥𝗢𝗙𝗜𝗧 Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "1fcd5486a48f85305338c6f8c1853235be2a184036ea9c3a54d61b12819e0841",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

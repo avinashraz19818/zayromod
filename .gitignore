@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+
+firebase-service-account.json
+*.keystore
+*.jks
+
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc

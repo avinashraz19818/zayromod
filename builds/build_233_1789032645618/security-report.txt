@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "SAHIL 9X PANNEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "9830d1857b9f3ce2346944f13e35c7e990e937959d096358566285295dc938eb",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

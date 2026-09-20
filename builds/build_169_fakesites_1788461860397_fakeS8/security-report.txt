@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "RAVENx VIP PANEL Fake 2",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "1faf91d4235dad8c2bb9e271d1823fa663e2d7ab3534fbea2a533a90fc8a53e4",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

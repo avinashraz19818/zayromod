@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "TEACHER PANNEL Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "faee874f8f9bfea671bb14c6bdc1e2d0b4a7ddf9f7e83d404dab80bd8e0a2193",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

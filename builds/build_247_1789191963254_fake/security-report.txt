@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "VEERGAME 9X PANNEL Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "3e40dda7671b2d06d2914e16173f07768bb5afc428985fbd4ba303b4a5f08c3e",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

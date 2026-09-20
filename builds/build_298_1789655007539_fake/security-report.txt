@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝘼𝙉𝙐𝙎𝙃𝙆𝘼 𝙋𝙍𝙄𝙑𝘼𝙏𝙀 𝙋𝘼𝙉𝙀𝙇 Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "fb0007071df79445f4fc4aaa24c8bbd4cdd9eb51110403ea3b7a0e84adcab58b",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "SHADOW SIGNAL RED Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "12e31b46a743b55923726e4a40ce2060d0b04dd067bf0dde7d9b8a0eb6bb7ad8",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "ROCKY Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "fea2596e83139147955315c3237c9dc3433e7986fb1ebbd4b5be583bfe21d190",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

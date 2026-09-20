@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "BDG WIN MOOD APK",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "e231693f1553ee519a046cb1b758c4aed4d89422cd32683a8f9edba2235f4381",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

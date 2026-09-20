@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "RAFSA NUMBER PANEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "0d2d45f90f79c7817fa6480353710ea282973e88b07d3b41f54dcc330b38a8f8",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

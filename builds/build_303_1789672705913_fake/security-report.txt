@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "VEERGAME ADMIN PANEL Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "75831d5909d57acaed9cd0e360c868c4d5437330bd3599ef584caf2907802db3",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

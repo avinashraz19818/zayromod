@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝐀𝐢 𝐀𝐝𝐦𝐢𝐧 𝐏𝐚𝐧𝐞𝐥 𝟗𝐱",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "52f4379eccca90a77d4954faf88a6ba76fb199854c793ba2a61612b57e19e0b8",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

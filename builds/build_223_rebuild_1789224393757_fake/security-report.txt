@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "AADI NUMBER HACK Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "1dcc707364410b3090a1074863f20b55dedbb1a3c0969cbb2117073679d8068f",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

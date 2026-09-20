@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝐕𝐞𝐞𝐫 𝐆𝐚𝐦𝐞 𝐍𝐮𝐦𝐛𝐞𝐫 𝐇𝐚𝐜𝐤 Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "403751214ac3a9876c605a7ca8f45f17185774c1298073e3bb43d580d8b64187",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

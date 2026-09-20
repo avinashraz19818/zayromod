@@ -1,0 +1,35 @@
+{
+  "variant": "release",
+  "appName": "𝗦𝗨𝗝𝗘𝗘𝗧 𝗡𝗨𝗠𝗕𝗘𝗥  SHOT",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "188a37aa884a0b61d081e30d7367e1f0bf91ab93e3f7a7dc1b09b27294e7ef85",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "popupSource": "native-first",
+  "nativePayloadGenerated": true,
+  "nativeCompileOn": true,
+  "native": {
+    "checked": true,
+    "plainPopupHtmlInAssets": false,
+    "popupBinsInAssets": [],
+    "loadingBinsInAssets": [
+      "assets/loading.bin"
+    ],
+    "webviewAssetsIntact": true,
+    "nativeSoPresent": true,
+    "nativeSoEntries": [
+      "lib/x86_64/libnativesecurity.so",
+      "lib/arm64-v8a/libnativesecurity.so",
+      "lib/armeabi-v7a/libnativesecurity.so"
+    ],
+    "payloadMagicInSo": true,
+    "notes": []
+  },
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

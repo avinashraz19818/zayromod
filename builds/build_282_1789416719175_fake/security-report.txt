@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "MIZO NUMBER HACK Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "5724a111116c46b5b60d84e3625b72614551e8fa269b8909b8a47fa964279be7",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

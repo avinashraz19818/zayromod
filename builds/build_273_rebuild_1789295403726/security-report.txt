@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "VEERGAME REAL NUMBER PANNEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "deb8121f00d019ee46b6a561fe0cfd6a90c8f3d4334f41e1d56a7079bdd95b2a",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

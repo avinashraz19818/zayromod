@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "RAJPUT 9X PROFIT Fake 2",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "4eabbd5ff45c2b7f8dec36c6a63e85fc2307246611c304235d2c6b9d01fdc0f7",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

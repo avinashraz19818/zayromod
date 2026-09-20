@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "VEER GAME REAL PANEL Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "7eddaecff19f921734fbb7f53134dcfe6de3f7a77cd1ce52147ac74ea1a1b628",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

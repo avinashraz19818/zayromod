@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "~🎀♡ Áϻ𝕚𝐫𝕓𝑜𝑜§ ♡🎀~ Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "f47318cc364769f1e7f1f11a782c58330181ffb3a5278e0fe48ec55861a6139c",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

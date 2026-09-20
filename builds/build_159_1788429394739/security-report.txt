@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗦𝗛𝗥𝗘𝗘𝗪𝗜𝗡 𝟵𝗫 𝗣𝗔𝗡𝗡𝗘𝗟",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "e8298846d5938d2684249422a3e35282229694501268739604953cbf56847c00",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

@@ -1,0 +1,35 @@
+{
+  "variant": "release",
+  "appName": "9X JACKPOT PANEL Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "008fbe9a177a81aa6be7a7cdfed6748c945a30e5fb6cb7412bed47f7d0f51baa",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "popupSource": "native-first",
+  "nativePayloadGenerated": true,
+  "nativeCompileOn": true,
+  "native": {
+    "checked": true,
+    "plainPopupHtmlInAssets": false,
+    "popupBinsInAssets": [],
+    "loadingBinsInAssets": [
+      "assets/loading.bin"
+    ],
+    "webviewAssetsIntact": true,
+    "nativeSoPresent": true,
+    "nativeSoEntries": [
+      "lib/x86_64/libnativesecurity.so",
+      "lib/arm64-v8a/libnativesecurity.so",
+      "lib/armeabi-v7a/libnativesecurity.so"
+    ],
+    "payloadMagicInSo": true,
+    "notes": []
+  },
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

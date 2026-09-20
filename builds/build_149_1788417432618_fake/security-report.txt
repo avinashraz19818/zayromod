@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝐒𝐡𝐫𝐞𝐞 𝐖𝐢𝐧 𝐍𝐮𝐦𝐛𝐞𝐫 𝐇𝐚𝐜𝐤 Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "37d3ea6bf402f5154aa83a5a085d299072158428a4db5e381d71519bcadb9e63",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

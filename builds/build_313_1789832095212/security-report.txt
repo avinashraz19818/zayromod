@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "VIP PANEL SURE SHOT",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "4148d1c613922f2ee622d8cfbae54bddd5fb9be2d638a9ba0f48bc38e557e65e",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

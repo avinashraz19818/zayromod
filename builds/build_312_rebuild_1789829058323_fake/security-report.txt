@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝐕𝐄𝐄𝐑 𝐆𝐀𝐌𝐄 𝐕𝐈𝐏 𝐏𝐀𝐍𝐄𝐋 Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "dd0432b6c8128ca105ef7fd348a3916a72a4d344890a9df5f3654d457b4649d5",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

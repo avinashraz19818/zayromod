@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "KLAUS HACK Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "3cfca5ca0f2ad1cd896a95b94f02af76935e19c575bbc84fca161f2de235e69e",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}
