@@ -55,7 +55,14 @@ async function main() {
   console.log(RUN ? ' CLEANUP (LIVE RUN — files delete honge)' : ' CLEANUP (DRY-RUN — kuch delete nahi hoga)');
   console.log('═'.repeat(64));
 
-  const scan = scanStorage(db, { apkRetentionDays: APK_DAYS, minOrphanAgeHours: MIN_AGE_HOURS });
+  // NOTE: includeOrphanTemplates yahan bhi pass karna zaroori hai — warna
+  // "Reclaimable" total me templates count nahi hote, jabki cleanup unhe delete
+  // kar deta hai (0 MB dikhta tha aur 4.7 MB free hota tha).
+  const scan = scanStorage(db, {
+    apkRetentionDays: APK_DAYS,
+    minOrphanAgeHours: MIN_AGE_HOURS,
+    includeOrphanTemplates: INCLUDE_TEMPLATES
+  });
   console.log(`\nDisk: builds=${scan.totals.buildsSizeMb}MB uploads=${scan.totals.uploadsSizeMb}MB templates=${scan.totals.templatesSizeMb}MB`);
   console.log(`Reclaimable (is run me): ${scan.totals.reclaimableMb} MB | files=${scan.totals.planFiles} dirs=${scan.totals.planDirs}`);
   console.log(`  orphan build dirs : ${scan.buildDirs.orphans.length}`);
