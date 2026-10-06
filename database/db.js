@@ -140,6 +140,8 @@ db.exec(`
   try { db.exec("ALTER TABLE designs ADD COLUMN fake_popup_html_file TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE designs ADD COLUMN original_price_coins INTEGER DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE designs ADD COLUMN fake_price_coins INTEGER DEFAULT 5"); } catch(e) {}
+  // Design maintenance mode: 1 = users ko dikhega lekin order nahi kar sakte
+  try { db.exec("ALTER TABLE designs ADD COLUMN maintenance INTEGER NOT NULL DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE orders ADD COLUMN domain_change_count INTEGER DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE orders ADD COLUMN invite_code_change_count INTEGER DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE orders ADD COLUMN live_link_enabled INTEGER NOT NULL DEFAULT 0"); } catch(e) {}

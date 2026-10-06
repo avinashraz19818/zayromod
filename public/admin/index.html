@@ -1022,6 +1022,54 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
       </div>
       <button class="btn btn-primary" onclick="saveSettings()"><svg><use href="#i-check"/></svg> Save Settings</button>
     </div>
+
+    <!-- STORAGE / MAINTENANCE -->
+    <div class="card" style="max-width:640px">
+      <div class="card-hd"><span class="accent"></span><h3>Storage &amp; Firebase Cleanup</h3></div>
+      <p style="font-size:12.5px;color:var(--dim);margin-bottom:14px;line-height:1.5">
+        Purane data ko safely delete karo — pehle <b>Dry-Run</b> chalao (kuch delete nahi hoga, sirf list dikhegi),
+        phir <b>Run</b> karo. Har Firebase delete se pehle uska JSON backup
+        <code>backups/firebase/</code> me save hota hai (wahan se restore ho sakta hai).
+      </p>
+      <div class="grid2">
+        <div class="form-group"><label>Firebase auto cleanup</label>
+          <select id="sFbEnabled"><option value="1">Enabled (roz scheduler)</option><option value="0">Disabled</option></select></div>
+        <div class="form-group"><label>Users data retention <small>(din)</small></label><input type="number" id="sFbUsersDays" min="1" value="30"></div>
+      </div>
+      <div class="grid2">
+        <div class="form-group"><label>Purane paths retention <small>(din)</small></label><input type="number" id="sFbPathDays" min="1" value="45"></div>
+        <div class="form-group"><label>Local APK retention <small>(din, 0 = off)</small></label><input type="number" id="sStorageApkDays" min="0" value="0"></div>
+      </div>
+      <div class="grid2">
+        <div class="form-group"><label>Orphan paths saaf karo</label>
+          <select id="sFbCleanOrphans"><option value="1">Yes</option><option value="0">No</option></select></div>
+        <div class="form-group"><label>Live-link orders protect</label>
+          <select id="sFbProtectLive"><option value="1">Yes (recommended)</option><option value="0">No</option></select></div>
+      </div>
+      <div class="grid2">
+        <div class="form-group"><label>Local disk cleanup (scheduler)</label>
+          <select id="sStorageEnabled"><option value="0">Disabled</option><option value="1">Enabled</option></select></div>
+        <div class="form-group"><label>Purane paths auto-delete</label>
+          <select id="sFbAutoPaths"><option value="0">No (sirf manual)</option><option value="1">Yes</option></select></div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="sTplCleanup" style="width:auto;margin:0">
+          <span>Unused HTML templates bhi delete karo <small>(templates/ me jo .html kisi design ya loading setting me nahi hai — active/hidden dono designs check hote hain)</small></span>
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+        <button class="btn btn-sm" onclick="saveRetentionSettings()"><svg><use href="#i-check"/></svg> Save retention</button>
+        <button class="btn btn-sm" onclick="scanStorageUsage()"><svg><use href="#i-file"/></svg> Disk scan</button>
+        <button class="btn btn-sm" onclick="runStorageCleanup('dry')"><svg><use href="#i-x"/></svg> Cleanup dry-run</button>
+        <button class="btn btn-sm btn-ok" onclick="runStorageCleanup('run')"><svg><use href="#i-check"/></svg> Cleanup now</button>
+        <button class="btn btn-sm" onclick="scanFirebaseUsage()"><svg><use href="#i-cloud"/></svg> Firebase scan</button>
+        <button class="btn btn-sm" onclick="runFirebaseCleanup('dry')"><svg><use href="#i-x"/></svg> Firebase dry-run</button>
+        <button class="btn btn-sm btn-ok" onclick="runFirebaseCleanup('run')"><svg><use href="#i-check"/></svg> Firebase cleanup</button>
+        <button class="btn btn-sm btn-danger" onclick="runMaintenanceNow()"><svg><use href="#i-gear"/></svg> Run daily maintenance</button>
+      </div>
+      <pre id="maintenanceOut" style="display:none;max-height:320px;overflow:auto;font-size:11.5px;background:var(--bg-soft,#0b0f1a);border:1px solid var(--border);border-radius:10px;padding:12px;white-space:pre-wrap"></pre>
+    </div>
   </div>
 
   <!-- ANDROID PROJECT -->
@@ -1243,7 +1291,7 @@ function loadSection(name) {
   else if (name==='content-links') loadContentLinks();
   else if (name==='coin-requests') loadCoinReqs();
   else if (name==='users') loadUsers();
-  else if (name==='settings') loadSettings();
+  else if (name==='settings') { loadSettings(); loadRetentionSettings(); }
   else if (name==='base-apk') loadBaseApkStatus();
   else if (name==='coupons') loadCoupons();
   else if (name==='announcements') loadAnnouncements();
@@ -1499,9 +1547,15 @@ async function loadDesigns() {
       <td><span class="coin-chip">${d.price_coins}</span></td>
       <td>${d.original_price_coins>0?'<span style="color:var(--dim);text-decoration:'+(d.original_price_coins>d.price_coins?'line-through':'none')+'">'+d.original_price_coins+'c</span>':'—'}</td>
       <td><span style="color:var(--cyan);font-weight:700">+${d.fake_price_coins||5}c</span></td>
-      <td><span class="badge ${d.active?'badge-ok':'badge-danger'}">${d.active?'Active':'Hidden'}</span></td>
+      <td>
+        <span class="badge ${d.active?'badge-ok':'badge-danger'}">${d.active?'Active':'Hidden'}</span>
+        ${Number(d.maintenance)===1?'<span class="badge" style="background:rgba(255,176,32,.18);color:#ffb020;border:1px solid rgba(255,176,32,.4);margin-left:4px">🔧 Maintenance</span>':''}
+      </td>
       <td><div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-sm ${d.active?'btn-outline':'btn-ok'}" onclick="toggleDesign(${d.id},${d.active})">${d.active?'Hide':'Show'}</button>
+        ${Number(d.maintenance)===1
+          ? `<button class="btn btn-sm" style="background:rgba(46,204,113,.16);color:#2ecc71;border:1px solid rgba(46,204,113,.4)" onclick="setDesignMaintenance(${d.id},0)" title="Maintenance se hatao — users phir se order kar payenge">✓ Remove Maintenance</button>`
+          : `<button class="btn btn-sm" style="background:rgba(255,176,32,.16);color:#ffb020;border:1px solid rgba(255,176,32,.4)" onclick="setDesignMaintenance(${d.id},1)" title="Design ko maintenance me daalo — users dekh sakte hain lekin order nahi kar payenge">🔧 Maintenance</button>`}
         <button class="btn btn-sm" style="background:rgba(42,123,255,.18);color:var(--cyan);border:1px solid rgba(94,200,255,.3)" onclick="editDesign(${d.id})"><svg><use href="#i-settings"/></svg> Edit</button>
         <button class="btn btn-sm btn-danger" onclick="deleteDesign(${d.id},'${d.name.replace(/'/g,"\\'")}')">Delete</button>
       </div></td>
@@ -1553,6 +1607,21 @@ async function addDesign() {
 
 async function toggleDesign(id, active) {
   await api('/api/admin/designs/' + id, 'PATCH', { active: active?0:1 });
+  loadDesigns();
+}
+
+// Design ko maintenance me daalo / hatao.
+// maintenance = 1  → users ko design dikhta rahega lekin order nahi kar payenge
+//                    (server-side guard bhi hai, sirf UI block nahi).
+// maintenance = 0  → normal, users phir se order kar sakte hain.
+async function setDesignMaintenance(id, on) {
+  const d = _editDesigns.find(x => x.id === id);
+  const name = d ? d.name : ('#' + id);
+  if (on && !confirm(`"${name}" ko MAINTENANCE me daalein?\n\nUsers design dekh payenge lekin order/build nahi kar payenge.`)) return;
+  if (!on && !confirm(`"${name}" ko maintenance se HATA dein?\n\nUsers phir se order kar payenge.`)) return;
+  const r = await api('/api/admin/designs/' + id, 'PATCH', { maintenance: on ? 1 : 0 });
+  if (r && r.error) return toast(r.error, true);
+  toast(on ? `🔧 "${name}" maintenance me daal diya` : `✓ "${name}" maintenance se hata diya`);
   loadDesigns();
 }
 
@@ -2286,6 +2355,8 @@ async function loadUserOrders(userId) {
           ${o.fake_apk_file ? `<a href="/api/orders/${o.id}/download-fake" class="btn btn-sm btn-gold" target="_blank" title="Download Fake 1 APK"><svg><use href="#i-download"/></svg> Fake 1</a>` : ''}
           <button class="btn btn-sm" style="background:rgba(255,193,7,.15);color:var(--gold);border:1px solid rgba(255,193,7,.4)" onclick="openFakeSites(${o.id})" title="Manage fake sites (multiple)"><svg><use href="#i-layers"/></svg> Fake Sites${o.fake_sites_count ? ' (' + o.fake_sites_count + ')' : ''}</button>
           <button class="btn btn-sm btn-ok" onclick="openFirebaseManager(${o.id})" title="Manage Firebase"><svg><use href="#i-settings"/></svg> Firebase</button>
+          <button class="btn btn-sm" style="background:rgba(0,229,255,.14);color:var(--cyan);border:1px solid rgba(0,229,255,.35)" onclick="verifyOrderContent(${o.id})" title="Check: jo APK server pe hai wo abhi ke design/template se bana hai ya purana"><svg><use href="#i-check"/></svg> Verify</button>
+          <button class="btn btn-sm" style="background:rgba(0,229,255,.14);color:var(--cyan);border:1px solid rgba(0,229,255,.35)" onclick="resyncOrderLinks(${o.id})" title="DB ke links Firebase me force-sync karo"><svg><use href="#i-cloud"/></svg> Link Sync</button>
           <button class="btn btn-sm btn-primary" onclick="rebuildOrder(${o.id})" title="One-click rebuild"><svg><use href="#i-settings"/></svg> Rebuild</button>
           <button class="btn btn-sm btn-danger" onclick="deleteOrder(${o.id})" title="Delete Order"><svg><use href="#i-x"/></svg></button>
         </div>
@@ -2775,6 +2846,116 @@ async function saveSettings() {
   setLoading(btn, false);
   if (d.error) return toast(d.error, true);
   toast('✓ Settings saved!');
+}
+
+// ── Storage / Firebase maintenance ──
+function maintenancePrint(title, obj) {
+  const el = document.getElementById('maintenanceOut');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = `── ${title} ──\n` + JSON.stringify(obj, null, 2);
+}
+
+async function loadRetentionSettings() {
+  const s = await api('/api/admin/firebase/retention');
+  if (!s || s.error) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = String(v); };
+  set('sFbEnabled', s.enabled); set('sFbUsersDays', s.users_retention_days);
+  set('sFbPathDays', s.path_retention_days); set('sFbCleanOrphans', s.clean_orphans);
+  set('sFbProtectLive', s.protect_live_link); set('sFbAutoPaths', s.auto_delete_paths);
+}
+
+async function saveRetentionSettings() {
+  const fd = new FormData();
+  fd.append('enabled', document.getElementById('sFbEnabled').value);
+  fd.append('users_retention_days', document.getElementById('sFbUsersDays').value);
+  fd.append('path_retention_days', document.getElementById('sFbPathDays').value);
+  fd.append('clean_orphans', document.getElementById('sFbCleanOrphans').value);
+  fd.append('protect_live_link', document.getElementById('sFbProtectLive').value);
+  fd.append('auto_delete_paths', document.getElementById('sFbAutoPaths').value);
+  const r = await api('/api/admin/firebase/retention', 'POST', fd, true);
+  if (r.error) return toast(r.error, true);
+  // local cleanup settings bhi wahi form se save karo
+  const fd2 = new FormData();
+  fd2.append('storage_cleanup_enabled', document.getElementById('sStorageEnabled').value);
+  fd2.append('storage_apk_retention_days', document.getElementById('sStorageApkDays').value);
+  const r2 = await api('/api/admin/settings', 'POST', fd2, true);
+  if (r2.error) return toast(r2.error, true);
+  toast('✓ Retention settings saved');
+  maintenancePrint('Retention settings', r);
+}
+
+async function scanStorageUsage() {
+  toast('Disk scan chal raha hai…');
+  const d = await api('/api/admin/storage/usage?force=1');
+  if (d.error) return toast(d.error, true);
+  maintenancePrint('Disk usage', d);
+}
+
+async function runStorageCleanup(mode) {
+  const tpl = document.getElementById('sTplCleanup');
+  const includeTemplates = !!(tpl && tpl.checked);
+  if (mode === 'run') {
+    const msg = includeTemplates
+      ? 'Cleanup RUN karein? Junk/orphan files + UNUSED HTML TEMPLATES delete ho jayengi.\n\nUnused = jo kisi design (active ya hidden) aur loading setting me nahi hai. Pehle dry-run list dekh li hai na?'
+      : 'Cleanup RUN karein? Junk/orphan files delete ho jayengi (dry-run list jaisi hi).';
+    if (!confirm(msg)) return;
+  }
+  const fd = new FormData();
+  fd.append('mode', mode);
+  fd.append('apkRetentionDays', document.getElementById('sStorageApkDays').value || '0');
+  fd.append('includeOrphanTemplates', includeTemplates ? '1' : '0');
+  toast(mode === 'run' ? 'Cleanup chal raha hai…' : 'Dry-run chal raha hai…');
+  const d = await api('/api/admin/storage/cleanup', 'POST', fd, true);
+  if (d.error) return toast(d.error, true);
+  maintenancePrint(`Disk cleanup (${mode})`, { totals: d.scanned, plannedMb: Math.round((d.plannedBytes || 0) / 1048576 * 10) / 10, freedMb: d.freedMb, actions: (d.actions || []).slice(0, 60), actionCount: (d.actions || []).length });
+}
+
+async function scanFirebaseUsage() {
+  toast('Firebase scan chal raha hai…');
+  const d = await api('/api/admin/firebase/usage?force=1');
+  if (d.error) return toast(d.error, true);
+  maintenancePrint('Firebase usage', d);
+}
+
+async function runFirebaseCleanup(mode) {
+  if (mode === 'run' && !confirm('Firebase cleanup RUN karein? Purane users entries delete honge (backup pehle banega).')) return;
+  const fd = new FormData();
+  fd.append('mode', mode);
+  fd.append('usersTtl', 'true');
+  fd.append('orphans', 'true');
+  fd.append('paths', 'false');
+  toast(mode === 'run' ? 'Firebase cleanup chal raha hai…' : 'Firebase dry-run chal raha hai…');
+  const d = await api('/api/admin/firebase/cleanup', 'POST', fd, true);
+  if (d.error) return toast(d.error, true);
+  maintenancePrint(`Firebase cleanup (${mode})`, d);
+}
+
+async function runMaintenanceNow() {
+  if (!confirm('Daily maintenance abhi chalao? (Firebase users TTL + local cleanup settings ke hisaab se)')) return;
+  toast('Maintenance chal rahi hai…');
+  const d = await api('/api/admin/maintenance/run-now', 'POST', {});
+  if (d.error) return toast(d.error, true);
+  maintenancePrint('Daily maintenance', d);
+}
+
+// Order ke liye: "jo APK pada hai wo abhi ke design se bana hai ya purana?"
+async function verifyOrderContent(id) {
+  toast('APK content verify ho raha hai…');
+  const d = await api('/api/admin/orders/' + id + '/verify-content');
+  if (d.error) return toast(d.error, true);
+  const ok = d.match === true;
+  const linkChanged = d.links && Array.isArray(d.links.changed) && d.links.changed.length
+    ? ` [links: ${d.links.changed.join(', ')}]` : '';
+  toast((ok ? '✓ ' : '⚠ ') + d.verdict + linkChanged + ' — ' + (d.message || ''), !ok);
+  maintenancePrint(`Order #${id} content verify`, d);
+}
+
+async function resyncOrderLinks(id) {
+  const d = await api('/api/admin/orders/' + id + '/link-resync', 'POST', {});
+  if (d.error) return toast(d.error, true);
+  toast('✓ Firebase links DB se sync kar diye');
+  maintenancePrint(`Order #${id} link resync`, d);
 }
 
 // ── Android Project ──

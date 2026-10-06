@@ -548,7 +548,7 @@ async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
 ╚══════════════════════════════════╝
 
 ${PE.crown} <b>App Name:</b>  <code>${escapeHtml(appNamePlain)}</code>
-${PE.card} <b>Package:</b>   <code>${escapeHtml(order.package_name || 'com.client.app')}</code>
+${PE.card} <b>Package:</b>   <code>${escapeHtml(order.package_name || 'zayro.app')}</code>
 ${PE.lock} <b>Protection:</b> <b>100% Clean • Dex Protect X Secured</b>
 ${PE.verified} <b>Status:</b>     <b>Ready to Install</b> ${PE.check}
 
@@ -789,6 +789,23 @@ ${PE.dot} <b>Request ID:</b> <code>#${data.id}</code>`;
       } else {
         await bot.sendMessage(targetChat, text, { parse_mode: 'HTML' });
       }
+    } else if (eventType === 'retention_report') {
+      // ── AUTO CLEANUP / STORAGE REPORT (scheduler roz bhejta hai) ──
+      const fbUsers = Number(data.firebase_users_deleted || 0);
+      const fbPaths = Number(data.firebase_paths_deleted || 0);
+      const localMb = Number(data.local_freed_mb || 0);
+      const errors = Number(data.errors || 0);
+      text =
+`╔══════════════════════════════════╗
+║  ${PE.gear} <b>𝐒𝐓𝐎𝐑𝐀𝐆𝐄 𝐂𝐋𝐄𝐀𝐍𝐔𝐏 𝐑𝐄𝐏𝐎𝐑𝐓</b> ${PE.gear}  ║
+╚══════════════════════════════════╝
+
+${PE.dot} <b>Firebase users entries deleted:</b> <code>${fbUsers}</code>
+${PE.dot} <b>Firebase paths deleted:</b> <code>${fbPaths}</code>
+${PE.dot} <b>Local disk freed:</b> <code>${localMb} MB</code>
+${PE.flag} <b>Errors:</b> <code>${errors}</code>
+${PE.card} <b>Timestamp:</b> <code>${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</code>`;
+      await bot.sendMessage(targetChat, text, { parse_mode: 'HTML', disable_web_page_preview: true });
     }
   } catch (err) {
     console.error('Telegram sendLogEvent error:', err.message);

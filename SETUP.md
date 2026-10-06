@@ -279,3 +279,43 @@ Enter a new token in Admin → Settings → Telegram Bot & Support. The existing
 token is never populated into the browser; leaving the field blank keeps the
 current server-side value. Revoke any token that was ever committed or placed
 in a database backup, then rotate it in BotFather and `.env`/the admin panel.
+
+---
+
+## Maintenance, Cleanup & APK Verify (naya)
+
+Rebuild/template, links, disk aur Firebase storage ke saare tools ek jagah
+document hain: **`CLEANUP-RETENTION.md`**.
+
+Short version (VPS, project folder se):
+
+```bash
+node scripts/cleanup-junk.js                 # disk dry-run (kuch delete nahi)
+node scripts/cleanup-junk.js --run           # orphan builds/uploads/junk saaf
+node scripts/verify-order.js <orderId>       # APK abhi ke template se bana hai?
+npm run cleanup:firebase                     # Firebase retention dry-run
+```
+
+Admin panel me: **Settings → Storage & Firebase Cleanup** (scan/DRY-RUN/RUN
+buttons + auto-run settings), aur **Orders → Verify / Link Sync** buttons.
+
+> Pehli baar: hamesha DRY-RUN dekho, phir RUN karo. Har delete se pehle backup
+> `backups/firebase/` me jata hai, aur cleanup report
+> `backups/cleanup-reports/` me.
+
+### Package name (`zayro.*`)
+
+Naye orders ka APK package name ab `zayro.<app-name><orderId>` hota hai
+(jaise `zayro.maanwin415`) — pehle `com.app / com.pro / ...` jaise prefix aate
+the. Fake APK ka package usi prefix ka hota hai (`zayro.maanwin415f1`) taaki
+dono side-by-side install ho sakein. Prefix `PACKAGE_PREFIX` env se badla ja
+sakta hai.
+
+Purane orders apna current package hi rakhte hain (warna installed app
+"update" ki tarah kaam nahi karti). Unhe bhi migrate karna ho to:
+
+```bash
+node scripts/migrate-package-names.js            # dry-run list
+node scripts/migrate-package-names.js --run      # DB me apply
+# phir us order ko REBUILD karo (applicationId APK ke andar baked hai)
+```

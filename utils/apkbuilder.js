@@ -2,10 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync, fork } = require('child_process');
 const sharp = require('sharp');
-const { encryptHtmlToBin, FIXED_PASSWORD, generateBuildPassword } = require('./encrypt');
+const { encryptHtmlToBin, decryptHtmlFromBin, FIXED_PASSWORD, generateBuildPassword } = require('./encrypt');
 const crypto = require('crypto');
 const { extractDomain, buildUrls, injectParams, isDhaniUrl } = require('./htmlprocessor');
 const { applyFontStyle } = require('./fontstyles');
+const { tagRenderedHtml, readBuildMeta, readApkAsset, sha256Hex } = require('./buildstore');
 
 const BUILDS_DIR        = path.join(__dirname, '..', 'builds');
 const TEMPLATE_PROJECT  = path.join(__dirname, '..', 'android-project');
@@ -16,11 +17,25 @@ const KEYSTORE_PASSWORD = String(process.env.KEYSTORE_PASSWORD || '');
 const KEYSTORE_ALIAS    = String(process.env.KEYSTORE_ALIAS || 'zayro');
 
 // ── Generate package name from app name ──
+// ── PACKAGE NAME ──
+// Ab har naye APK ka package name `zayro.<app-name><orderId>` hota hai, jaise
+// `zayro.maanwin415`. (Pehle `com.app/com.client/com.pro…` jaise random-ish
+// prefix lagte the.) Aakhir me counter (order id) isliye rehta hai ki do alag
+// apps ka applicationId kabhi clash na kare — Android ek device pe same
+// applicationId ki do apps allow nahi karta.
+//
+// Prefix env `PACKAGE_PREFIX` se badla ja sakta hai (default 'zayro').
+const PACKAGE_PREFIX = String(process.env.PACKAGE_PREFIX || 'zayro')
+  .trim().toLowerCase().replace(/[^a-z0-9_]/g, '') || 'zayro';
+
 function makePackageName(appName, counter = 1) {
-  const prefixes = ['com.app', 'com.client', 'com.service', 'com.pro', 'com.hub', 'com.portal', 'com.net', 'com.cloud'];
-  const pfx = prefixes[Math.abs(counter || 0) % prefixes.length];
-  let clean = String(appName || '').toLowerCase()
+  const pfx = PACKAGE_PREFIX;
+  // NFKD normalize: stylized/fancy Unicode naam (𝐌𝐀𝐀𝐍 𝐖𝐈𝐍, ᴀᴅᴍɪɴ) pehle
+  // normal letters me tootte hain — pehle aise naam poore strip ho kar 'client'
+  // ban jate the, ab sahi naam nikalta hai (maanwin…).
+  let clean = String(appName || '').normalize('NFKD').toLowerCase()
     .replace(/admin|panel|hack|mod|cheat|root|inject|trojan|fake/gi, '')
+    .replace(/[\u0300-\u036f]/g, '')            // combining marks hatao
     .replace(/[^a-z0-9]/g, '')
     .substring(0, 10) || 'client';
   if (/^[0-9]/.test(clean)) clean = 'app' + clean.substring(0, 7);
@@ -379,6 +394,21 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     const popupHtml   = fs.readFileSync(popupHtmlPath,   'utf8');
     const loadingHtml = fs.readFileSync(loadingHtmlPath, 'utf8');
 
+    // ── TEMPLATE FINGERPRINT (build log + APK ke andar verify ke liye) ──
+    // Admin ko hamesha pata chale ki is build me KAUNSA template file gaya.
+    // Marker ({t,h}) encrypted HTML ke andar jata hai — admin panel isse
+    // "APK purane template se bana hai ya abhi wale se" check kar sakta hai.
+    const popupTemplateHash = crypto.createHash('sha256').update(Buffer.from(popupHtml, 'utf8')).digest('hex');
+    const buildMeta = {
+      v: 1,
+      b: buildId,
+      o: order.id,
+      t: popupHtmlFileName,
+      h: popupTemplateHash,
+      ts: Date.now()
+    };
+    log(`Template: ${popupHtmlFileName} (sha256 ${popupTemplateHash.slice(0, 12)})`);
+
     // ── Prepare icon ──
     let appIconBase64 = null;
     let iconBuffer    = null;
@@ -420,7 +450,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
     }
 
     log('Injecting parameters into HTML...');
-    const processedPopup   = normalizeRegisterDelay(ensureAudioGate(injectParams(popupHtml, params)));
+    const processedPopup   = tagRenderedHtml(normalizeRegisterDelay(ensureAudioGate(injectParams(popupHtml, params))), buildMeta);
     const processedLoading = stripFirebaseLiveScript(stripIntroSnippet(injectParams(loadingHtml, params)));
 
     // ── PER-BUILD UNIQUE ENCRYPTION PASSWORD (Java engine) ──
@@ -663,7 +693,7 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
         const r = execFileSync('./gradlew', args, {
           stdio: ['ignore', 'pipe', 'pipe'],
           maxBuffer: 16 * 1024 * 1024,
-          cwd: projectDir, env: buildEnv, timeout: 480000
+          cwd: projectDir, env: buildEnv, timeout: GRADLE_TIMEOUT_MS
         });
         return { ok: true, out: String(r) };
       } catch (e) {
@@ -814,6 +844,38 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
       if (sensitivePlain && buildVariant === 'protectedRelease') fails.push('Sensitive plaintext (html/js) APK me hai');
       if (hasSourceMaps) fails.push('Source maps APK me hain');
 
+      // ── CONTENT VERIFICATION (sabse important check) ──
+      // APK ke andar se assets/zayro.bin wapas nikal kar decrypt karo aur
+      // dekho ki jo template is build me gaya tha WAHI andar hai. Isse
+      // "purana template APK me chala gaya" wali class ki koi bhi galti
+      // turant build log + security-report me dikh jati hai.
+      report.templateFile = popupHtmlFileName;
+      report.templateSha256 = popupTemplateHash;
+      report.apkAssetSha256 = null;
+      report.embeddedContentVerified = false;
+      try {
+        const insideBin = readApkAsset(signedApk, 'assets/zayro.bin');
+        if (insideBin) {
+          report.apkAssetSha256 = sha256Hex(insideBin);
+          const insideHtml = decryptHtmlFromBin(insideBin, contentPassword);
+          const insideMeta = readBuildMeta(insideHtml);
+          report.embeddedTemplateFile = insideMeta ? insideMeta.t : null;
+          report.embeddedTemplateSha256 = insideMeta ? insideMeta.h : null;
+          report.embeddedBuildId = insideMeta ? insideMeta.b : null;
+          report.embeddedContentVerified = !!(insideMeta && insideMeta.h === popupTemplateHash && insideMeta.t === popupHtmlFileName);
+          if (!report.embeddedContentVerified) {
+            warnings.push('APK ke andar ka template marker expected se match nahi kiya');
+            log('WARNING: APK content verify FAIL — embedded template marker expected se match nahi kiya!');
+          } else {
+            log('Content verified: APK ke andar wahi template hai (' + popupHtmlFileName + ').');
+          }
+        } else {
+          warnings.push('APK me assets/zayro.bin nahi mila — content verify skip');
+        }
+      } catch (e) {
+        warnings.push('content verify fail: ' + String(e.message || e).slice(0, 120));
+      }
+
       report.status = fails.length ? 'FAIL' : 'PASS';
       report.fails = fails; report.warnings = warnings;
       try {
@@ -845,9 +907,22 @@ async function buildApkInWorker(order, design, buildId, logCallback) {
 // difference is that the blocking work now happens in a child process while
 // the main Node.js event loop remains free to answer Telegram updates and HTTP.
 const BUILD_WORKER_PATH = path.join(__dirname, 'apkbuilder-worker.js');
-const BUILD_WORKER_TIMEOUT_MS = Math.max(
+
+// ── TIMEOUT FIX (build "stuck"/"fail" ki ek badi wajah) ──
+// Gradle ka apna timeout 8 min hai, aur protectedRelease fail hone par ek
+// release fallback aur chalta hai (total ~16 min tak ja sakta hai) + uske
+// baad zipalign/apksigner. Pehle worker ka default timeout 10 min tha — slow
+// VPS par worker beech me hi kill ho jata tha aur build "fail" dikhta tha,
+// jabki gradle abhi kaam kar raha hota.
+// Ab: worker timeout hamesha gradle ke worst case se bada rakha jata hai, aur
+// APK_BUILD_TIMEOUT_MS se admin use aur badha sakta hai (kam nahi kar sakta).
+const GRADLE_TIMEOUT_MS = Math.max(
   60_000,
-  parseInt(process.env.APK_BUILD_TIMEOUT_MS || '600000', 10) || 600_000
+  parseInt(process.env.GRADLE_BUILD_TIMEOUT_MS || '480000', 10) || 480_000
+);
+const BUILD_WORKER_TIMEOUT_MS = Math.max(
+  GRADLE_TIMEOUT_MS * 2 + 120_000,                                  // gradle + fallback + signing
+  parseInt(process.env.APK_BUILD_TIMEOUT_MS || '0', 10) || 0
 );
 const pendingBuilds = [];
 let buildRunning = false;
@@ -940,4 +1015,4 @@ function buildApk(order, design, buildId, logCallback) {
   });
 }
 
-module.exports = { buildApk, buildApkInWorker, makePackageName, ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet, stripFirebaseLiveScript };
+module.exports = { buildApk, buildApkInWorker, makePackageName, PACKAGE_PREFIX, ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet, stripFirebaseLiveScript };
