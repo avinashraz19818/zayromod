@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗡𝗨𝗠𝗕𝗘𝗥 𝗣𝗔𝗡𝗡𝗘𝗟 9𝗫 𝗣𝗥𝗢𝗙𝗜𝗧 Fake 2",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "9cdc056719d7ab113b9711dc9b740c76f459f42fd0b7921604e4359ac1fda74d",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

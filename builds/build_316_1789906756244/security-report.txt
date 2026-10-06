@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "9X PROFIT PANEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "4f27a288da14cb68e2735390b38d133507aeb7ab907b41248a1a9eea3e754859",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

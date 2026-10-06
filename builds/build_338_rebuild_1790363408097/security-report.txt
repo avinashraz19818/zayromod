@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "GPT AI HACK",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "45c411efc24cc8fc744430bff9b27fb0ec2b58c008ad99bf9b852286d89fef60",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

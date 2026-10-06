@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "DM FIRST PREMIUM HACK",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "fb8c1439f617eb6168f90bb00ce7166c4844d90f3c1edf534fc3b44bc3149a2e",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

@@ -1,0 +1,31 @@
+<manifest
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	package="com.zayro.wingsyttt">
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<application
+		android:allowBackup="false"
+		android:fullBackupContent="false"
+		android:icon="@mipmap/ic_launcher"
+		android:label="@string/app_name"
+		android:name=".SketchApplication"
+		android:usesCleartextTraffic="true"
+		android:theme="@style/AppTheme">
+		<activity
+			android:name=".MainActivity"
+			android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+			android:hardwareAccelerated="true"
+			android:supportsPictureInPicture="true"
+			android:theme="@style/NoActionBar"
+			android:screenOrientation="portrait"
+			android:exported="true">
+			<intent-filter>
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+			</intent-filter>
+		</activity>
+		<uses-library
+			android:name="org.apache.http.legacy"
+			android:required="false" />
+	</application>
+</manifest>

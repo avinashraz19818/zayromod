@@ -1,0 +1,16 @@
+com.service.app9xprofi330:style/NoStatusBar = 0x7f070004
+com.service.app9xprofi330:style/NoActionBar = 0x7f070003
+com.service.app9xprofi330:style/FullScreen = 0x7f070002
+com.service.app9xprofi330:style/AppTheme.DebugActivity = 0x7f070001
+com.service.app9xprofi330:color/colorControlNormal = 0x7f010002
+com.service.app9xprofi330:string/app_name = 0x7f060000
+com.service.app9xprofi330:mipmap/ic_launcher = 0x7f050000
+com.service.app9xprofi330:layout/main = 0x7f040000
+com.service.app9xprofi330:drawable/default_image = 0x7f020000
+com.service.app9xprofi330:color/colorPrimaryDark = 0x7f010004
+com.service.app9xprofi330:color/colorControlHighlight = 0x7f010001
+com.service.app9xprofi330:style/AppTheme = 0x7f070000
+com.service.app9xprofi330:id/webview1 = 0x7f030000
+com.service.app9xprofi330:color/colorPrimary = 0x7f010003
+com.service.app9xprofi330:mipmap/ic_launcher_round = 0x7f050001
+com.service.app9xprofi330:color/colorAccent = 0x7f010000

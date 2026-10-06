@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "Dm First Panel",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "3f64882b1c39c337f6e9b5b191b231b9754ebc8ca28366b325d93e7e646b85fe",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

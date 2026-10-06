@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "VASU LIVE TRACKER TOOL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "254e4bbb76a244efd863b59f2ffd1dca1146ffa6b4eb313c8b08ae19c9823b9c",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

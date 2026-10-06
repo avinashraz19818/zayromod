@@ -1,0 +1,8 @@
+com.zayro.wingsyttt.app-pngs-0 /root/apkbuilder/builds/build_330_1790187151196/project/app/build/generated/res/pngs/release
+com.zayro.wingsyttt.app-resValues-1 /root/apkbuilder/builds/build_330_1790187151196/project/app/build/generated/res/resValues/release
+com.zayro.wingsyttt.app-packageReleaseResources-2 /root/apkbuilder/builds/build_330_1790187151196/project/app/build/intermediates/incremental/release/packageReleaseResources/merged.dir
+com.zayro.wingsyttt.app-packageReleaseResources-3 /root/apkbuilder/builds/build_330_1790187151196/project/app/build/intermediates/incremental/release/packageReleaseResources/stripped.dir
+com.zayro.wingsyttt.app-merged-not-compiled-resources-4 /root/apkbuilder/builds/build_330_1790187151196/project/app/build/intermediates/merged-not-compiled-resources/release
+com.zayro.wingsyttt.app-release-5 /root/apkbuilder/builds/build_330_1790187151196/project/app/build/intermediates/merged_res/release/mergeReleaseResources
+com.zayro.wingsyttt.app-main-6 /root/apkbuilder/builds/build_330_1790187151196/project/app/src/main/res
+com.zayro.wingsyttt.app-release-7 /root/apkbuilder/builds/build_330_1790187151196/project/app/src/release/res

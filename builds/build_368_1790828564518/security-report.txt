@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝐑𝐎𝐌𝐀𝐍 𝐕𝐈𝐏 𝐏𝐀𝐍𝐄𝐋",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "947f686e2d9d0f30386655c5039fddb4ea87e9cb4b8b5668f66ba53060192c8f",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

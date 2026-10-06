@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗪𝗜𝗡𝗚𝗢 𝗡𝗨𝗠𝗕𝗘𝗥 𝗣𝗔𝗡𝗘𝗟",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "62884cdf99d902ca99acaaaa5791f883a2edd5a6757a73af23d39011d965f23a",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

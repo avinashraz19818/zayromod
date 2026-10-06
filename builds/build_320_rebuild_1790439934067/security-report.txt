@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗩𝗲𝗲𝗿 𝗚𝗮𝗺𝗲 𝗔𝗱𝗺𝗶𝗻 𝗣𝗮𝗻𝗲𝗹",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "d9fffa2f03aa20ef0d40459a309c8fbd4d8753d1a8102828a3166250047e0036",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

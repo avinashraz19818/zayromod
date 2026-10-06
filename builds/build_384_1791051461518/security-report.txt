@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗥𝗔𝗫𝗜.𝗪𝗶𝗻 𝗔𝗜 𝗣𝗔𝗡𝗘𝗟 𝗧𝗢𝗢𝗟",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "efd6bbe28533d7ba879ccab966f1456f40eb96dc9774a2110f9ca1f79b236987",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

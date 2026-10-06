@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "Jitendra Raxi Support",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "5d145e46a6950e5e0c5d9db2c26964ad90bb55ca47d77985f5eadff10af4022b",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

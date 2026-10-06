@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "Dmfirst Panel Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "9d136b61e69bcb3054e3840663ce0e53aa3c1de38f9ef971e7e3719b030b0efd",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗚𝗢𝗗𝗭𝗜𝗟𝗔 9𝗫 𝗣𝗔𝗡𝗡𝗘𝗟",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "7253f909a3b3b6ff8dcab73ea1b3bd19789a8cdc68b50028512096bb7dcbe784",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

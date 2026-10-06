@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗭𝗢𝗥𝗢 𝗔𝗗𝗠𝗜𝗡 𝗣𝗔𝗡𝗡𝗘𝗟",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "af33dd28cbdd1f07145307a2a7dbdb1f38555dd2df941f29139266156d2074df",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

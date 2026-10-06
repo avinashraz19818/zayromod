@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "Maan Win Admin Panel",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "71fe793cdf7a7583e755a5094b22939fc3d8097883641c353bcf17a648c49757",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

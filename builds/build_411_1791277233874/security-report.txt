@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "9X~MANAGER HACK",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "ecf9c7f626c1b410326e8ad99bb70a6fcd68660b2d246174c217b961e97d983f",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

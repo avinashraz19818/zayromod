@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗪𝗜𝗡𝗚𝗢 𝗡𝗨𝗠𝗕𝗘𝗥 𝗛𝗔𝗖𝗞",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "47f573cfe24d1b9e5227ab9f3044ceabe2c9b1051226be72bab7a31db025aa08",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "10x NUMBER TOOL Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "e8a3351418418347419355c430ff8132f8649c7805c52c34b0171cf9a822b0cf",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

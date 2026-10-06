@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "CRONO CR7 9X",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "e2743f39b501b50e496aedce76d1fb27afad21ab8a1f6358b6427f93b1dd0a46",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

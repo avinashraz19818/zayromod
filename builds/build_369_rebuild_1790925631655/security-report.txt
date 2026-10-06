@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "new test",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "beab627f204618cc4854e43b7c1dc1c56fc9a013697d0a7fc5d1990ddadb881f",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

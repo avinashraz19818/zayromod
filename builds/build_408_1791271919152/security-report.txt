@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "MAAN WIN NUMBER HACK",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "88f98c792b093ed02a5821e0d3f58bad0842129482acac019c5ed7c2da0b934a",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

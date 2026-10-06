@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝟵𝗫 𝗡𝗨𝗠𝗕𝗘𝗥 𝗣𝗥𝗜𝗡𝗖𝗘 𝗣𝗔𝗡𝗘𝗟 Fake 2",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "ead92eb9ab78a9cef74ac4fbc90aed799c6059996e94a4615b828b7daf5c047d",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

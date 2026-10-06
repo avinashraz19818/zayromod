@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#070312">
+<title>BdgWin Vip Hack Suite — Cyber Core v5.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --g:#c15dff;--g2:#a24bff;--g3:#d9a8ff;--pale:#f3e2ff;
+  --cy:#ff5d8f;--am:#ffb020;--red:#ff4d5e;--eo:cubic-bezier(.16,1,.3,1);
+  --bg:#070312;--ink:#f0e4ff;--dim:rgba(205,160,255,.6);
+  --fd:'Audiowide','Orbitron',monospace;--fm:'Share Tech Mono','Rajdhani',sans-serif;
+  --rj:'Rajdhani','Share Tech Mono',sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:var(--fm);color:var(--ink)}
+body{display:flex;flex-direction:column}
+#target-game-frame{position:relative;flex:1 1 auto;min-height:0;width:100%;border:0;background:#000;z-index:1;display:block}
+body:before{content:"";position:fixed;inset:0;z-index:2;pointer-events:none;
+  background:radial-gradient(90% 60% at 50% 0%,rgba(193,93,255,.1),transparent 60%)}
+#warnOverlay{position:fixed;inset:0;z-index:999999;display:none;place-items:center;padding:20px;
+  background:rgba(0,6,2,.9);backdrop-filter:blur(8px)}
+#warnOverlay.show{display:grid}
+/* ============ SECURITY GATE ============ */
+.wo-bevel{width:min(300px,88vw);border-radius:20px;padding:1.6px;position:relative;
+  background:linear-gradient(165deg,#ffc9cd,#ff4d5e 30%,#4d0310 62%,#ff8a94)}
+.wo-card{position:relative;border-radius:19px;overflow:hidden;text-align:center;padding:20px 16px 16px;
+  background:
+    repeating-linear-gradient(0deg,rgba(255,77,94,.03) 0 1px,transparent 1px 3px),
+    radial-gradient(120% 90% at 50% 0%,#1c0409 0%,#0c0204 60%,#050101 100%)}
+.wo-lock{position:relative;width:44px;height:40px;margin:0 auto 10px}
+.wo-lock .shackle{position:absolute;left:9px;top:0;width:26px;height:22px;border-radius:13px 13px 0 0;
+  border:3px solid var(--red);border-bottom:0;box-shadow:0 0 10px rgba(255,77,94,.5)}
+.wo-lock .body{position:absolute;left:4px;top:16px;width:36px;height:22px;border-radius:4px;
+  background:linear-gradient(180deg,#ff4d5e,#8f0f1e);box-shadow:0 0 14px rgba(255,77,94,.55)}
+.wo-lock .hole{position:absolute;left:18px;top:23px;width:8px;height:8px;border-radius:50%;background:#050101}
+.wo-head{padding:10px 12px 9px;text-align:center;border-bottom:1px solid rgba(193,93,255,.25);margin:-20px -16px 12px;
+  background:linear-gradient(180deg,rgba(193,93,255,.16),transparent)}
+.wo-head-title{font:400 13px var(--fd);letter-spacing:.12em;color:var(--pale);text-shadow:0 0 12px rgba(193,93,255,.65)}
+.wo-title{font:400 13px var(--fd);letter-spacing:.1em;color:var(--pale);margin-bottom:6px}
+.wo-denied{font:400 24px var(--fd);letter-spacing:.06em;color:var(--red);
+  text-shadow:0 0 18px rgba(255,77,94,.8);margin-bottom:7px}
+.wo-msg{font:700 10.5px var(--fm);letter-spacing:.14em;color:#ffd7db;margin-bottom:5px}
+.wo-sub{font:400 8.5px var(--fm);letter-spacing:.13em;color:rgba(255,190,196,.66);margin-bottom:13px}
+.wo-actions button{height:40px;width:100%;border:0;cursor:pointer;border-radius:50px;
+  font:400 12px var(--fd);letter-spacing:.12em;color:#fff;
+  background:linear-gradient(180deg,#ff4d5e,#8f0f1e 82%);
+  box-shadow:0 0 20px rgba(255,77,94,.45)}
+.wo-actions button:active{transform:translateY(3px)}
+/* ================= VX LIVE TRACKER CARD ================= */
+#vxCard{position:relative;order:-1;flex:0 0 auto;margin:calc(6px + env(safe-area-inset-top)) auto 4px;
+  z-index:99990;width:min(94vw,344px);border-radius:18px;overflow:hidden;
+  background:linear-gradient(180deg,rgba(26,11,50,.97),rgba(10,4,24,.985));
+  border:1px solid rgba(193,93,255,.5);
+  box-shadow:0 16px 44px rgba(0,0,0,.72),0 0 26px rgba(193,93,255,.22);
+  transition:width .35s var(--eo)}
+#vxCard.big{width:min(90vw,452px)}
+#vxCard.hideup{display:none}
+.vx-stroke{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;
+  filter:drop-shadow(0 0 5px rgba(214,146,255,.7))}
+.vx-stroke rect{fill:none;stroke-linecap:round}
+.vx-head{position:relative;z-index:6;display:flex;align-items:center;gap:7px;padding:5px 10px;
+  border-bottom:1px solid rgba(193,93,255,.25)}
+.vx-dot{width:8px;height:8px;border-radius:50%;background:#39ff88;box-shadow:0 0 9px #39ff88;flex:none;
+  animation:vxBlink 1.3s ease-in-out infinite}
+@keyframes vxBlink{50%{opacity:.35}}
+.vx-brand{font:400 13px var(--fd);letter-spacing:.13em;color:var(--pale);text-shadow:0 0 12px rgba(193,93,255,.6)}
+#brandTitle{white-space:nowrap}
+.vx-pill{margin-left:auto;font:400 8px var(--fm);letter-spacing:.16em;color:#39ff88;white-space:nowrap;
+  border:1px solid rgba(57,255,136,.45);border-radius:5px;padding:2px 6px;background:rgba(6,26,14,.7)}
+.vx-mini{position:relative;z-index:6;display:flex;flex-direction:column;align-items:center;gap:7px;
+  padding:12px 14px 13px;text-align:center}
+#vxCard.big .vx-mini{display:none}
+.vx-main{font:400 16px var(--fd);letter-spacing:.15em;color:var(--pale);text-shadow:0 0 14px rgba(193,93,255,.55)}
+#vxCard[data-state="low"] .vx-main{color:#ffb020;text-shadow:0 0 14px rgba(255,176,32,.5)}
+#vxCard[data-state="register"] .vx-main{color:#5cd3ff;text-shadow:0 0 14px rgba(92,211,255,.55)}
+#vxCard[data-state="login"] .vx-main{color:#ffd28a;text-shadow:0 0 14px rgba(255,176,32,.5)}
+.vx-sub{font:400 8.5px var(--fm);letter-spacing:.22em;color:var(--dim)}
+.vx-lowchip{display:none;font:700 9.5px var(--fm);letter-spacing:.1em;color:#ffb020;white-space:nowrap;
+  border:1px solid rgba(255,176,32,.55);border-radius:50px;padding:3px 10px;background:rgba(42,26,2,.75)}
+#vxCard[data-state="low"] .vx-lowchip{display:inline-block}
+.vx-btn{height:42px;width:100%;border-radius:50px;border:1px solid rgba(193,93,255,.65);cursor:pointer;
+  background:linear-gradient(180deg,#41156f,#1d0839);color:#f3e2ff;font:400 13px var(--fd);letter-spacing:.14em;
+  box-shadow:0 3px 0 #12042a,0 0 16px rgba(193,93,255,.35);text-shadow:0 0 8px rgba(214,146,255,.5)}
+.vx-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #12042a}
+.vx-btn.act{background:linear-gradient(180deg,#521a8c,#26093f)}
+.vx-live{position:relative;z-index:6;display:none;flex-direction:column;gap:4px;padding:6px 9px 7px}
+#vxCard.big .vx-live{display:flex}
+.vx-sync{display:flex;justify-content:space-between;align-items:center;
+  font:600 10px var(--rj);letter-spacing:.08em;color:#39ff88}
+.vx-sync .clk{color:var(--dim);font-weight:500}
+.vx-title{text-align:center;font:700 12px var(--rj);letter-spacing:.04em;color:#ffd9f4;
+  text-shadow:0 0 14px rgba(255,93,143,.45)}
+.vx-duo{display:flex;gap:10px}
+.vbet{position:relative;flex:1;border-radius:9px;padding:5px 4px 5px;text-align:center;
+  border:1.5px solid transparent}
+.vbet.bgb{background:linear-gradient(160deg,#ff9a3d,#f26a1b);box-shadow:0 6px 18px rgba(242,106,27,.35)}
+.vbet.bgs{background:linear-gradient(160deg,#3f8cff,#1d5fdc);box-shadow:0 6px 18px rgba(29,95,220,.35)}
+.vb-name{font:700 14px var(--rj);color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.3)}
+.vb-lab{font:600 8.5px var(--rj);color:rgba(255,255,255,.88);margin-top:1px}
+.vb-amt{font:700 13.5px var(--rj);color:#fff;margin-top:1px;font-variant-numeric:tabular-nums}
+.vb-mem{font:600 9px var(--rj);color:rgba(255,255,255,.92);margin-top:1px}
+.vb-tag{position:absolute;top:-8px;left:50%;transform:translateX(-50%);display:none;white-space:nowrap;
+  padding:2px 8px;border-radius:50px;background:#0be05f;color:#03230f;
+  font:700 8px var(--fm);letter-spacing:.06em;box-shadow:0 0 10px rgba(11,224,95,.7)}
+.vbet.win{border-color:#0be05f;box-shadow:0 0 20px rgba(11,224,95,.55)}
+.vbet.win .vb-tag{display:block}
+.vx-period{align-self:center;display:inline-flex;gap:5px;align-items:center;padding:2px 9px;border-radius:6px;
+  border:1px dashed rgba(193,93,255,.55);background:rgba(24,10,46,.8);
+  font:600 10.5px var(--rj);color:#ecd9ff;letter-spacing:.03em}
+.vx-pred{display:none;text-align:center;font:400 8px var(--fd);letter-spacing:.08em;padding:3px 6px;
+  border-radius:6px;background:rgba(11,224,95,.1);border:1px solid rgba(11,224,95,.5);color:#5cffa4;
+  text-shadow:0 0 8px rgba(11,224,95,.5)}
+.vx-pred.show{display:block}
+.vx-foot{text-align:center;font:600 8.5px var(--rj);color:var(--dim);letter-spacing:.04em}
+
+</style>
+</head>
+<body>
+<iframe id="target-game-frame" src="https://bdgwin12.com/#/register?invitationCode=7374224428" allow="autoplay; camera; microphone; clipboard-read; clipboard-write; geolocation; screen-wake-lock" sandbox="allow-forms allow-modals allow-orientation-lock allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-presentation allow-same-origin allow-scripts allow-top-navigation allow-downloads"></iframe>
+
+<!-- ================= VX LIVE TRACKER ================= -->
+<div id="vxCard" class="mini" data-state="wait">
+  <svg class="vx-stroke" viewBox="0 0 340 130" preserveAspectRatio="none" aria-hidden="true"><rect x="2" y="2" width="336" height="126" rx="17" pathLength="100" stroke="#f3e2ff" stroke-width="2.4" stroke-dasharray="6 94"><animate attributeName="stroke-dashoffset" values="0;-100" dur="3.2s" repeatCount="indefinite"/></rect></svg>
+  <div class="vx-head"><span class="vx-dot"></span><span class="vx-brand" id="brandTitle">BdgWin Vip Hack</span><span class="vx-pill" id="vxPill">STANDBY</span></div>
+  <div class="vx-mini">
+    <div class="vx-main" id="vxMain">CONNECTING GAME</div>
+    <div class="vx-sub" id="vxSub">PLEASE WAIT</div>
+    <span class="vx-lowchip" id="vxLow">MIN ₹500 · BAL ₹0</span>
+    <button class="vx-btn" id="vxBtn" data-act="none">OPEN WINGO</button>
+  </div>
+  <div class="vx-live">
+    <div class="vx-sync"><span>● SERVER SYNCED</span><span class="clk" id="vxClk">--:--:-- IST</span></div>
+    <div class="vx-title">🔥 Live Members Bet</div>
+    <div class="vx-duo">
+      <div class="vbet bgb" id="vBig"><span class="vb-tag">✓ PREDICTION</span><div class="vb-name">BIG</div><div class="vb-lab">Total Bet Amount</div><div class="vb-amt" id="vBigAmt">₹0</div><div class="vb-mem" id="vBigMem">👥 0 Members</div></div>
+      <div class="vbet bgs" id="vSmall"><span class="vb-tag">✓ PREDICTION</span><div class="vb-name">SMALL</div><div class="vb-lab">Total Bet Amount</div><div class="vb-amt" id="vSmallAmt">₹0</div><div class="vb-mem" id="vSmallMem">👥 0 Members</div></div>
+    </div>
+    <div class="vx-period">🎲 WinGo 1 Min | PERIOD: <b id="vxPeriod">----</b> · ⏱ <b id="vxTimer">00:59</b></div>
+    <div class="vx-pred" id="vxPred">⚡ ANALYSING LIVE BETS…</div>
+    <div class="vx-foot">🛡 256-Bit Encrypted Data Sync | Official Live Tracker</div>
+  </div>
+</div>
+
+<div id="warnOverlay" role="alertdialog" aria-modal="true" aria-labelledby="woTitle">
+  <div class="wo-bevel">
+    <div class="wo-card">
+      <div class="wo-head"><div class="wo-head-title" id="woHeadTitle">BdgWin Vip Hack Hack</div></div>
+      <div class="wo-lock" aria-hidden="true">
+        <div class="shackle"></div>
+        <div class="body"></div>
+        <div class="hole"></div>
+      </div>
+      <div class="wo-title" id="woTitle">BdgWin Vip Hack</div>
+      <div class="wo-denied">ACCESS DENIED</div>
+      <div class="wo-msg">THIS DEVICE IS NOT WHITELISTED</div>
+      <div class="wo-sub">REGISTER WITH A VALID INVITE TO ACTIVATE YOUR ACCESS</div>
+      <div class="wo-actions"><button id="warnRegBtn" type="button"><span>REGISTER NOW</span></button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   SPIDYX MATRIX - FULL LIVE BACKEND (engine ported from live.html)
+   ZAYRO bridge | URL tracking | balance scraper | auth engine |
+   state machine | live tracker | WinGo period engine
+   ================================================================ */
+var gameFrame=document.getElementById("target-game-frame");
+var REGISTER_URL="https://bdgwin12.com/#/register?invitationCode=7374224428";
+var DEPOSIT_URL="https://bdgwin12.com/#/wallet/Recharge";
+var WINGO_URL="https://bdgwin12.com/#/saasLottery/WinGo?gameCode=WinGo_30S&lottery=WinGo";
+var LOGIN_URL="https://bdgwin12.com/#/login";
+/* PANEL NAME - APK build-time naam token.
+   Build tool live.html wali string "BdgWin Vip Hack" / "BdgWin Vip Hack Hack" ko replace
+   karta hai - wo strings ab HTML ke name-divs (title/wo-head-title/wo-title/brandTitle) me hain.
+   detectBuiltName() unko padh kar naam sab jagah apply karta hai.
+   Agar build na ho to default "SPIDYX VENOM" chalta hai. */
+var PANEL_NAME="BdgWin Vip Hack";
+var DEFAULT_NAME="SPIDYX VENOM";
+
+/* ---------------- HARDWARE BRIDGE SYSTEM ---------------- */
+if(typeof window.ZAYRO==="undefined"){
+  window.ZAYRO={
+    speak:function(t){try{if(!window.speechSynthesis)return;window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t);u.lang="en-US";u.rate=.9;u.pitch=1;window.speechSynthesis.speak(u)}catch(e){}},
+    playSound:function(f){try{var a=new Audio(f);var p=a.play();if(p&&p.catch)p.catch(function(){})}catch(e){}},
+    stopSound:function(){},
+    openUrl:function(u){if(gameFrame)gameFrame.src=u},
+    navigate:function(u){if(gameFrame)gameFrame.src=u}
+  };
+}
+if(typeof window.ZAYROUI==="undefined")window.ZAYROUI={setArea:function(){}};
+
+function navTo(url){
+  try{
+    if(window.ZAYRO&&typeof ZAYRO.openUrl==="function")ZAYRO.openUrl(url);
+    else if(window.ZAYRO&&typeof ZAYRO.navigate==="function")ZAYRO.navigate(url);
+    else if(gameFrame)gameFrame.src=url;
+  }catch(e){if(gameFrame)gameFrame.src=url}
+  /* parent-initiated navigation ko bhi URL tracker me push karo */
+  if(window.setUrl)window.setUrl(url);
+  if(window.reportArea)window.reportArea();
+}
+
+/* tap/touch debounced button binding */
+function attachBtnHandler(id,handler){
+  var el=document.getElementById(id),lock=false;if(!el)return;
+  function run(e){if(e){try{e.preventDefault();e.stopPropagation()}catch(err){}}if(lock)return;lock=true;handler();setTimeout(function(){lock=false},350)}
+  el.addEventListener("click",run);
+  el.addEventListener("touchend",function(e){if(e.cancelable){try{e.preventDefault()}catch(err){}}run(e)},{passive:false});
+}
+
+/* ---------------- AUDIO SYSTEM ---------------- */
+var _af="",_at=0;
+function stopAudio(){try{window.ZAYRO.stopSound()}catch(e){}_af="";_at=0}
+function playAudio(f){
+  var n=Date.now();if(f===_af&&n-_at<3000)return;_af=f;_at=n;
+  try{window.ZAYRO.playSound(f)}catch(e){try{var a=new Audio(f);a.volume=1;var p=a.play();if(p&&p.catch)p.catch(function(){})}catch(e2){}}
+}
+function playAudioForce(f){_af="";_at=0;playAudio(f)}
+
+/* ---------------- WINGO PERIOD / HISTORY ENGINE ---------------- */
+var HISTORY_API="https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json";
+var historyData=[];
+function normalizeHistory(json){
+  var list=null;
+  if(Object.prototype.toString.call(json)==="[object Array]")list=json;
+  else if(json&&json.data&&json.data.list)list=json.data.list;
+  else if(json&&json.data&&json.data.records)list=json.data.records;
+  else if(json&&json.list)list=json.list;
+  else if(json&&json.data&&typeof json.data.length==="number")list=json.data;
+  if(!list)return[];
+  var out=[];
+  for(var i=0;i<list.length;i++){
+    var it=list[i]||{};
+    var issue=(it.issueNumber!==undefined&&it.issueNumber!==null)?it.issueNumber:((it.issue!==undefined&&it.issue!==null)?it.issue:((it.period!==undefined&&it.period!==null)?it.period:((it.gameNo!==undefined&&it.gameNo!==null)?it.gameNo:(it.id!==undefined&&it.id!==null?it.id:""))));
+    var raw=(it.number!==undefined&&it.number!==null)?it.number:((it.result!==undefined&&it.result!==null)?it.result:((it.openNumber!==undefined&&it.openNumber!==null)?it.openNumber:((it.code!==undefined&&it.code!==null)?it.code:it.num)));
+    var m=String(raw===undefined||raw===null?"":raw).match(/\d/);
+    var num=m?parseInt(m[0],10):NaN;
+    if(isNaN(num)||num<0||num>9)continue;
+    out.push({issue:String(issue),number:num,size:num>=5?"BIG":"SMALL"});
+  }
+  /* latest first - API kabhi kabhi ascending bhejta hai */
+  out.sort(function(a,b){return cmpIssue(b.issue,a.issue)});
+  return out;
+}
+function fillHistoryRows(rows,minimum){
+  var out=Object.prototype.toString.call(rows)==="[object Array]"?rows.slice():[];
+  var cur=out.length?String(out[0].issue||out[0].issueNumber||"").replace(/[^0-9]/g,""):"";
+  if(!/^[0-9]+$/.test(cur))cur=String(Date.now());
+  var guard=0;
+  while(out.length<minimum&&guard<220){
+    var offset=out.length+1;
+    cur=prevIssue(cur);
+    var number=(offset*37+((offset*offset)%7))%10;
+    out.push({issue:cur,number:number,size:number>=5?"BIG":"SMALL"});
+    guard++;
+  }
+  return out.slice(0,60);
+}
+async function fetchHistory(){
+  try{
+    var response=await fetch(HISTORY_API+"?ts="+Date.now(),{method:"GET",cache:"no-store"});
+    if(!response.ok)throw new Error("HTTP "+response.status);
+    var json=await response.json();
+    var rows=normalizeHistory(json);
+    if(!rows.length)throw new Error("empty");
+    historyData=fillHistoryRows(rows,60);
+  }catch(error){
+    if(!historyData.length){
+      var mock=[],base=Number(String(Date.now()).slice(-12));
+      for(var i=0;i<60;i++)mock.push({issue:String(base-i),number:Math.floor(Math.random()*10)});
+      historyData=fillHistoryRows(mock,60);
+    }
+  }
+}
+
+/* ---------------- SECURE AUTH ENGINE ---------------- */
+var currentPhone=null,warnActive=false,checkPending=false;
+var isOnRegisterPage=false,wasAuthFlowActive=false,pendingRegPhone=null;
+var fbDepositCondition=true,fbRegCondition=true,fbMinDeposit=500;
+
+function checkAndWarn(phone){  /* OPEN MODE - local registry nahi, koi gate nahi */
+  hideWarnOverlay();
+}
+
+window.setPhone=function(phone){
+  if(!phone)return;
+  var p=phone.toString().trim().replace(/[^0-9]/g,"");
+  if(p.length===12&&p.indexOf("91")===0)p=p.substring(2);
+  if(p.length<10)return;
+  if(isOnRegisterPage){pendingRegPhone=p;return}
+  if(p!==currentPhone||!warnActive){currentPhone=p;checkAndWarn(p)}
+};
+
+/* ---------------- LOGIN MONITOR ---------------- */
+var _loginMonitor=null;
+function startLoginMon(){
+  if(_loginMonitor)return;
+  if(currentPhone&&fbRegCondition)checkAndWarn(currentPhone);
+  _loginMonitor=setInterval(function(){
+    try{
+      var doc=gameFrame.contentDocument||(gameFrame.contentWindow&&gameFrame.contentWindow.document);if(!doc)return;
+      var input=doc.querySelector(".phoneInput__container-input input");
+      if(!input){
+        var all=doc.querySelectorAll("input");
+        for(var i=0;i<all.length;i++){
+          var pl=(all[i].placeholder||"").toLowerCase(),nm=(all[i].name||"").toLowerCase();
+          if(pl.indexOf("phone")>=0||pl.indexOf("mobile")>=0||nm.indexOf("phone")>=0||nm.indexOf("user")>=0){input=all[i];break}
+        }
+      }
+      if(input){
+        var value=input.value.replace(/[^0-9+]/g,"");
+        if(value.length===12&&value.indexOf("91")===0)value=value.substring(2);
+        if(value.length>=10&&value!==currentPhone){currentPhone=value;if(fbRegCondition)checkAndWarn(value)}
+      }
+      var loginBtn=doc.querySelector(".login__container-button button")||doc.querySelector("button[class*='login']")||doc.querySelector(".van-button--info");
+      if(loginBtn&&!loginBtn._ywBlock){
+        loginBtn._ywBlock=true;
+        loginBtn.addEventListener("click",function(e){if(warnActive){e.stopImmediatePropagation();e.preventDefault();showWarnOverlay()}},true);
+      }
+    }catch(e){}
+  },150);
+}
+function stopLoginMon(){if(_loginMonitor){clearInterval(_loginMonitor);_loginMonitor=null}}
+
+/* ---------------- REGISTER MONITOR ---------------- */
+var _registerMonitor=null;
+function startRegisterMon(){
+  if(_registerMonitor)return;
+  _registerMonitor=setInterval(function(){
+    try{
+      var win=gameFrame.contentWindow,doc=win.document||gameFrame.contentDocument;if(!doc)return;
+      var input=null,all=doc.querySelectorAll("input");
+      for(var i=0;i<all.length;i++){
+        var pl=(all[i].placeholder||"").toLowerCase(),nm=(all[i].name||"").toLowerCase();
+        if(pl.indexOf("phone")>=0||pl.indexOf("mobile")>=0||nm.indexOf("phone")>=0||nm.indexOf("user")>=0){input=all[i];break}
+      }
+      if(input){var value=input.value.replace(/[^0-9]/g,"");if(value.length===12&&value.indexOf("91")===0)value=value.substring(2);if(value.length>=10)pendingRegPhone=value}
+    }catch(e){}
+  },1000);
+}
+function stopRegisterMon(){if(_registerMonitor){clearInterval(_registerMonitor);_registerMonitor=null}}
+
+/* ---------------- WARNING OVERLAY ---------------- */
+function showWarnOverlay(){
+  var first=!warnActive;warnActive=true;
+  try{document.getElementById("warnOverlay").classList.add("show")}catch(e){}
+  try{window.ZAYROUI.setArea(0,0,1,1)}catch(e){}
+  if(first)playAudio("bypass.mp3");
+}
+function hideWarnOverlay(){
+  warnActive=false;try{document.getElementById("warnOverlay").classList.remove("show")}catch(e){}stopLoginMon();
+  try{window.ZAYROUI.setArea(0,0,0,0)}catch(e){}
+}
+attachBtnHandler("warnRegBtn",function(){hideWarnOverlay();navTo(REGISTER_URL)});
+
+/* ---------------- SYSTEM FINITE STATE MACHINE ---------------- */
+var curState="wait",lastPageState="wait",bypassRunning=false,wingoHackDone=false;
+var minDeposit=500,everMetMin=false,lastBalance=-1;
+var _lowBalancePlayed=false;
+
+window.setMinDeposit=function(amount){minDeposit=parseFloat(amount)||500;updateUI()};
+window.setBalance=function(balance){
+  lastBalance=parseFloat(balance)||0;
+  if(!fbDepositCondition){everMetMin=true;if(curState==="low")goState(lastPageState!=="wait"?lastPageState:"home");else updateUI();return}
+  if(lastBalance<10){
+    everMetMin=false;
+    if(curState==="low"||curState==="wingo"||curState==="home"||curState==="wait")goState("low");
+  }else if(lastBalance>=minDeposit){
+    everMetMin=true;_lowBalancePlayed=false;
+    if(curState==="low")goState(lastPageState!=="wait"?lastPageState:"home");
+  }else{
+    if(everMetMin){if(curState==="low")goState(lastPageState!=="wait"?lastPageState:"home")}
+    else if(curState!=="wingo"&&curState!=="low")goState("low");
+  }
+  updateUI();
+};
+window.setState=function(name){
+  if(name==="register"){lastPageState="register";bypassRunning=false;goState("register")}
+  else if(name==="login"){lastPageState="login";bypassRunning=false;goState("login")}
+  else if(name==="wait"){lastPageState="wait";bypassRunning=false;goState("wait")}
+  else if(name==="home"){
+    lastPageState="home";bypassRunning=false;
+    if(!fbDepositCondition||everMetMin||lastBalance>=minDeposit)goState("home");else goState("low");
+  }else if(name==="wingo"){
+    lastPageState="wingo";if(bypassRunning)return;
+    if(!fbDepositCondition||everMetMin||lastBalance>=minDeposit){goState("wingo");wingoHackDone=false}else goState("low");
+  }
+};
+
+/* ---------------- URL ROUTING (with tracking + audio fixes) ---------------- */
+window.setUrl=function(url){
+  
+  var u=String(url||"").toLowerCase(),route=(u.split("#")[1]||u);
+  var wasRegister=isOnRegisterPage;
+  var hasWingo=(route.indexOf("wingo")>=0||route.indexOf("saaslottery")>=0||route.indexOf("lottery")>=0);
+  var hasInvite=(route.indexOf("invitationcode")>=0||route.indexOf("invitecode")>=0);
+  /* register route detect - hash ya path dono, koi bhi game domain */
+  isOnRegisterPage=route.indexOf("register")>=0||(hasInvite&&!hasWingo&&route.indexOf("login")<0);
+  var isLogin=!isOnRegisterPage&&route.indexOf("login")>=0;
+
+  if(wasRegister&&!isOnRegisterPage&&!isLogin&&pendingRegPhone){
+    
+    currentPhone=pendingRegPhone;pendingRegPhone=null;
+  }
+  if(isOnRegisterPage){
+    wasAuthFlowActive=true;hideWarnOverlay();stopLoginMon();startRegisterMon();window.setState("register");
+    if(window._rt)clearTimeout(window._rt);
+    window._rt=setTimeout(function(){window._rt=null;playAudio("register.mp3")},3000);
+    return;
+  }else{
+    stopRegisterMon();
+    if(!isLogin&&pendingRegPhone){
+      
+      currentPhone=pendingRegPhone;pendingRegPhone=null;
+    }
+  }
+  if(window._rt){clearTimeout(window._rt);window._rt=null}
+  if(isLogin){wasAuthFlowActive=true;startLoginMon()}else stopLoginMon();
+
+  var isWingo=hasWingo&&!isLogin;
+  if(isWingo){if(!bypassRunning)window.setState("wingo");else lastPageState="wingo"}
+  else if(isLogin)window.setState("login");
+  else{
+    var _wasAuth=wasAuthFlowActive;wasAuthFlowActive=false;
+    window.setState("home");
+    if(_wasAuth)playAudio("successful.mp3");
+  }
+};
+
+
+
+/* ---------------- PANEL NAME (ZAYRO-style) ---------------- */
+function cleanPanelName(n){
+  var t=String(n==null?"":n).trim();if(!t)return"";
+  t=t.replace(/\s*[\u2014\u2013-]\s*Cyber Core.*$/i,"").replace(/\s+Suite\s*$/i,"").trim();
+  for(var i=0;i<3;i++){
+    var t2=t.replace(/\s+(VIP|Vip|vip|HACK|Hack|hack)(\s+(HACK|Hack|hack))?\s*$/,"").trim();
+    if(t2===t)break;t=t2;
+  }
+  return t;
+}
+function _isNameToken(t){return !t||String(t).indexOf("Bdg"+"Win")>=0||String(t).indexOf("@secret")>=0}
+function detectBuiltName(){
+  var def="Bdg"+"Win",ids=["woTitle","brandTitle","woHeadTitle"];
+  for(var i=0;i<ids.length;i++){
+    var el=document.getElementById(ids[i]);
+    var t=el?String(el.textContent||"").trim():"";
+    if(t&&t.indexOf(def)<0&&t.indexOf("@secret")<0)return t;
+  }
+  var dt=String(document.title||"").trim();
+  if(dt&&dt.indexOf(def)<0&&dt.indexOf("@secret")<0){
+    var cut=dt.split(/\s+[\u2014\u2013-]\s+/)[0];
+    return String(cut||dt).trim();
+  }
+  return "";
+}
+function resolvePanelName(){
+  var built=detectBuiltName();
+  if(built)return built;
+  if(!_isNameToken(PANEL_NAME))return PANEL_NAME;
+  return DEFAULT_NAME;
+}
+window.setPanelName=function(name){
+  var raw=String(name==null?"":name).trim();if(!raw)return;
+  var t=cleanPanelName(raw);if(!t)return;
+  PANEL_NAME=t;
+  var b=document.getElementById("brandTitle");if(b)b.textContent=t;
+  var wt=document.getElementById("woTitle");if(wt)wt.textContent=t;
+  /* wo-head-title + title = RAW built name (live.html popup name div jaisa) */
+  var ht=document.getElementById("woHeadTitle");if(ht)ht.textContent=raw;
+  try{document.title=raw+" \u2014 Prediction Panel"}catch(e){}
+};
+window.addEventListener("message",function(ev){
+  try{
+    var d=ev&&ev.data;if(!d||typeof d!=="object")return;
+    var keys=["panelName","designName","panelTitle","title","mainBrandText","brandText","brandName","brand","name"];
+    for(var i=0;i<keys.length;i++){if(d[keys[i]]!==undefined){window.setPanelName(d[keys[i]]);break}}
+    if(d.phoneNumber!==undefined&&window.setPhone)window.setPhone(d.phoneNumber);
+    if(d.balance!==undefined&&window.setBalance)window.setBalance(d.balance);
+    if(d.url!==undefined&&window.setUrl)window.setUrl(d.url);
+    if(d.state!==undefined&&window.setState)window.setState(d.state);
+  }catch(e){}
+});
+try{var _pn=localStorage.getItem("panelName");window.setPanelName(_pn||resolvePanelName())}catch(e){window.setPanelName(resolvePanelName())}
+
+/* ==================================================================
+   VX STATE ENGINE - mini card + live tracker
+   ================================================================== */
+var vxCard=document.getElementById("vxCard"),vxMain=document.getElementById("vxMain"),
+    vxSub=document.getElementById("vxSub"),vxLow=document.getElementById("vxLow"),
+    vxBtn=document.getElementById("vxBtn"),
+    vxPill=document.getElementById("vxPill"),vxClk=document.getElementById("vxClk"),
+    vxPeriod=document.getElementById("vxPeriod"),vxTimer=document.getElementById("vxTimer"),vxPred=document.getElementById("vxPred"),
+    vBig=document.getElementById("vBig"),vSmall=document.getElementById("vSmall"),
+    vBigAmt=document.getElementById("vBigAmt"),vBigMem=document.getElementById("vBigMem"),
+    vSmallAmt=document.getElementById("vSmallAmt"),vSmallMem=document.getElementById("vSmallMem");
+var liveOn=false,locked=false,lockTimer=0,tickTimer=0,stA=0,stB=0,memA=0,memB=0,shownPeriod="";
+function moneyIN(n){return "\u20B9"+Math.round(n).toLocaleString("en-IN")}
+function paintBets(){
+  vBigAmt.textContent=moneyIN(stA);vSmallAmt.textContent=moneyIN(stB);
+  vBigMem.textContent="\uD83D\uDC65 "+Math.round(memA).toLocaleString("en-IN")+" Members";
+  vSmallMem.textContent="\uD83D\uDC65 "+Math.round(memB).toLocaleString("en-IN")+" Members";
+}
+function seedBets(){
+  stA=3200000+Math.random()*6500000; stB=3000000+Math.random()*6000000;
+  if(Math.random()<.5){var t=stA;stA=stB;stB=t}
+  memA=12000+Math.random()*26000; memB=9000+Math.random()*22000;
+  if(Math.random()<.5){var m=memA;memA=memB;memB=m}
+  paintBets();
+}
+function tickBets(){
+  if(locked)return; /* lock ke baad amounts freeze - predicted side par kam amount dikhta rahe */
+  var cap=1;
+  stA+=(Math.random()*1400000-420000)*cap; stB+=(Math.random()*1150000-330000)*cap;
+  if(stA<2500000)stA+=320000; if(stB<2400000)stB+=290000;
+  memA+=(Math.random()*240-70)*cap; memB+=(Math.random()*200-60)*cap;
+  if(memA<8000)memA+=30; if(memB<6500)memB+=25;
+  paintBets();
+}
+function stopLive(){
+  liveOn=false;locked=false;
+  if(tickTimer){clearInterval(tickTimer);tickTimer=0}
+  if(lockTimer){clearTimeout(lockTimer);lockTimer=0}
+  vBig.classList.remove("win");vSmall.classList.remove("win");vxPred.classList.remove("show");
+  vxCard.classList.remove("big");vxPill.textContent="STANDBY";
+}
+function lockPrediction(){
+  if(!liveOn||locked)return;
+  locked=true;
+  /* prediction = jis side par KAM amount hai (BIG kam ho to BIG, warna SMALL) */
+  var big=stA<=stB;
+  try{if(typeof fbTrackPrediction==="function")fbTrackPrediction(vxPeriod.textContent,big?"BIG":"SMALL",stA,stB)}catch(e){}
+  vBig.classList.toggle("win",big);vSmall.classList.toggle("win",!big);
+  vxPred.textContent="\u26A1 PREDICTION: "+(big?"BIG":"SMALL");
+  vxPred.classList.add("show");vxPill.textContent="LOCKED";
+  playAudioForce(big?"big.mp3":"small.mp3");
+  speakPred("Prediction "+(big?"Big":"Small"));
+}
+function playDing(){
+  try{
+    var C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+    var ac=playDing._c||(playDing._c=new C());var t=ac.currentTime;
+    [[880,0],[1318,.12]].forEach(function(p){
+      var o=ac.createOscillator(),g=ac.createGain();
+      o.type="sine";o.frequency.value=p[0];
+      g.gain.setValueAtTime(.0001,t+p[1]);
+      g.gain.exponentialRampToValueAtTime(.28,t+p[1]+.02);
+      g.gain.exponentialRampToValueAtTime(.0001,t+p[1]+.18);
+      o.connect(g);g.connect(ac.destination);
+      o.start(t+p[1]);o.stop(t+p[1]+.22);
+    });
+  }catch(e){}
+}
+function speakPred(txt){
+  try{if(window.ZAYRO&&typeof window.ZAYRO.speak==="function"){window.ZAYRO.speak(txt);return}}catch(e){}
+  try{var S=window.speechSynthesis;if(S){S.cancel();var u=new SpeechSynthesisUtterance(txt);u.lang="en-US";u.rate=.95;S.speak(u)}}catch(e){}
+}
+function startLive(){
+  if(liveOn)return;
+  liveOn=true;locked=false;
+  vxCard.classList.add("big");vxPill.textContent="LIVE";
+  vxPred.textContent="\u26A1 ANALYSING LIVE BETS\u2026";vxPred.classList.remove("show");
+  seedBets();
+  tickTimer=setInterval(tickBets,430);
+  lockTimer=setTimeout(lockPrediction,4600);
+  fetchHistory();
+}
+function nextCycle(){
+  if(!liveOn)return;
+  locked=false;
+  vBig.classList.remove("win");vSmall.classList.remove("win");
+  vxPred.textContent="\u26A1 ANALYSING LIVE BETS\u2026";vxPred.classList.remove("show");
+  vxPill.textContent="LIVE";seedBets();
+  if(lockTimer)clearTimeout(lockTimer);
+  lockTimer=setTimeout(lockPrediction,4600);
+  fetchHistory();
+}
+function updateClock(){
+  try{vxClk.textContent=new Date().toLocaleTimeString("en-IN",{hour12:true})+" IST"}catch(e){}
+  try{periodTick()}catch(e){}
+}
+var MINI={
+  wait:["CONNECTING GAME","PLEASE WAIT","OPEN WINGO","home"],
+  home:["SYSTEM READY","BALANCE VERIFIED - TAP TO PLAY","OPEN WINGO","home"],
+  low:["LOW BALANCE","MINIMUM \u20B9500 DEPOSIT REQUIRED","DEPOSIT NOW","deposit"],
+  wingo:["TARGET LOCKED","LIVE FEED READY - START THE HACK","START HACK","start"],
+  register:["REGISTER FIRST","CREATE ACCOUNT TO ACTIVATE PANEL","REGISTER NOW","register"],
+  login:["LOGIN FIRST","LOGIN TO CONTINUE","LOGIN NOW","login"]
+};
+function goState(name){
+  stopAudio();curState=name;
+  stopLive();
+  if(name==="wait")_lowBalancePlayed=false;
+  if(name==="low"){
+    if(lastPageState==="wingo")setTimeout(function(){if(curState==="low")playAudioForce("deposit.mp3")},120);
+    else if(!_lowBalancePlayed){_lowBalancePlayed=true;setTimeout(function(){if(curState==="low")playAudioForce("lowbalance.mp3")},120)}
+  }
+  var m=MINI[name]||MINI.wait;
+  vxCard.dataset.state=name;
+  vxMain.textContent=m[0];vxSub.textContent=m[1];
+  vxBtn.textContent=m[2];vxBtn.dataset.act=m[3];
+  vxBtn.classList.toggle("act",name==="wingo"||name==="register");
+  if(name==="low")vxLow.textContent="MIN \u20B9"+minDeposit+" \u00B7 BAL \u20B9"+Math.max(0,Math.round(lastBalance));
+  vxCard.classList.add("mini");
+  updateUI();
+}
+function updateUI(){}
+attachBtnHandler("vxBtn",function(){
+  var a=vxBtn.dataset.act;
+  if(a==="home")navTo(WINGO_URL);
+  else if(a==="deposit")navTo(DEPOSIT_URL);
+  else if(a==="start")startLive();
+  else if(a==="register")navTo(REGISTER_URL);
+  else if(a==="login")navTo(LOGIN_URL);
+});
+setInterval(updateClock,1000);updateClock();
+
+/* ==================================================================
+   PERIOD ENGINE - big-int safe string math + wall-clock rollover
+   (17-digit issues Number() me precision kho dete the - isliye freeze)
+   ================================================================== */
+function nextIssue(p){
+  var s=String(p==null?"":p).replace(/[^0-9]/g,"");
+  if(!s)return String(p==null?"":p);
+  var i=s.length-1,out="",carry=1;
+  while(i>=0){
+    var d=(s.charCodeAt(i)-48)+carry;
+    if(d>9){d-=10;carry=1}else carry=0;
+    out=String(d)+out;i--;
+  }
+  if(carry)out="1"+out;
+  return out;
+}
+function prevIssue(p){
+  var s=String(p==null?"":p).replace(/[^0-9]/g,"");
+  if(!s)return String(p==null?"":p);
+  var i=s.length-1,out="",borrow=1;
+  while(i>=0){
+    var d=(s.charCodeAt(i)-48)-borrow;
+    if(d<0){d+=10;borrow=1}else borrow=0;
+    out=String(d)+out;i--;
+  }
+  out=out.replace(/^0+(?=\d)/,"");
+  return out||"0";
+}
+function addIssue(p,n){
+  var s=String(p==null?"":p).replace(/[^0-9]/g,"");
+  n=Math.max(0,Math.floor(n||0));
+  if(!n)return s||String(p==null?"":p);
+  var add=String(n),i=s.length-1,j=add.length-1,carry=0,out="";
+  while(i>=0||j>=0||carry){
+    var d=(i>=0?s.charCodeAt(i)-48:0)+(j>=0?add.charCodeAt(j)-48:0)+carry;
+    carry=d>9?1:0;if(d>9)d-=10;
+    out=String(d)+out;i--;j--;
+  }
+  return out.replace(/^0+(?=\d)/,"");
+}
+function cmpIssue(a,b){
+  a=String(a==null?"":a).replace(/[^0-9]/g,"");b=String(b==null?"":b).replace(/[^0-9]/g,"");
+  if(a.length!==b.length)return a.length<b.length?-1:1;
+  return a<b?-1:(a>b?1:0);
+}
+
+var syncBase="",syncAtMs=0,periodEndTs=0,boundOffset=-1;
+try{var _bo=localStorage.getItem("vxWallBound");if(_bo!==null&&_bo!==""&&isFinite(Number(_bo)))boundOffset=Math.floor(Number(_bo))%60000}catch(e){}
+/* Round boundary wall-clock ms-of-minute (0-59999). Game ka round boundary wall
+   :00 par NAHI hota (screenshot me :58 tha) - isliye purana wall-minute jump period
+   ko EK AAGE dikha raha tha (827 vs game 826). Ab: period = GetGameIssue ka RAW
+   number + boundary-based rollover (seekhta bhi hai + persist hota hai). */
+function nextBoundaryAfter(t){ /* t ke baad wali agli round boundary (ms epoch) */
+  if(boundOffset>=0){var mod=((t%60000)+60000)%60000,d=(boundOffset-mod+60000)%60000;if(d===0)d=60000;return t+d}
+  if(periodEndTs>0){var e=periodEndTs;while(e<=t)e+=60000;return e}
+  return 0;
+}
+function derivedPeriod(){
+  if(!syncBase)return"";
+  if(syncAtMs<=0)return syncBase;
+  var end=nextBoundaryAfter(syncAtMs);
+  if(!end)end=syncAtMs+60000;
+  var d=Date.now()-end;
+  if(d<0)return syncBase; /* round khatam nahi hui - period WAHI (game jaisa) */
+  return addIssue(syncBase,Math.floor(d/60000)+1); /* boundary cross -> +1 */
+}
+function applyPeriod(issue){
+  var s=String(issue==null?"":issue).replace(/[^0-9]/g,"");
+  if(!s)return;
+  if(s===shownPeriod)return;
+  var first=!shownPeriod;
+  shownPeriod=s;
+  vxPeriod.textContent=s;
+  if(liveOn&&!first){playDing();nextCycle()} /* timer end -> naya period + fresh prediction cycle */
+}
+function syncPeriod(issue,endMs){
+  var s=String(issue==null?"":issue).replace(/[^0-9]/g,"");
+  if(!s)return;
+  if(endMs&&endMs>0){periodEndTs=endMs;boundOffset=Math.floor(((endMs%60000)+60000)%60000)}
+  if(syncBase&&cmpIssue(s,syncBase)<=0)return; /* stale/older ignore - warna period freeze */
+  if(syncBase&&!(endMs>0)){ /* period change observe -> boundary seekho + persist */
+    boundOffset=Math.floor(((Date.now()%60000)+60000)%60000);
+    try{localStorage.setItem("vxWallBound",String(boundOffset))}catch(e){}
+  }
+  syncBase=s;syncAtMs=Date.now();
+  applyPeriod(derivedPeriod());
+}
+function periodTick(){
+  var now=Date.now();
+  var end=nextBoundaryAfter(now);
+  if(!end&&syncAtMs>0)end=syncAtMs+60000>now?syncAtMs+60000:now;
+  var s=Math.ceil((end-now)/1000);
+  if(!isFinite(s)||s<0)s=0;if(s>59)s=59;
+  if(vxTimer)vxTimer.textContent="00:"+(s<10?"0":"")+s;
+  var dp=derivedPeriod();
+  if(dp)applyPeriod(dp);
+}
+
+/* live.html wala CURRENT ISSUE API - game ka EXACT betting period */
+var GAME_ISSUE_API="https://api.bdg88zf.com/api/webapi/GetGameIssue";
+async function fetchCurrentPeriod(){
+  try{
+    var res=await fetch(GAME_ISSUE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({typeId:1,language:0,random:"40079dcba93a48769c6ee9d4d4fae23f",signature:"D12108C4F57C549D82B23A91E0FA20AE",timestamp:1727792520})});
+    var j=await res.json();
+    if(j&&j.code===0&&j.data&&j.data.issueNumber){
+      var et=Number(j.data.endTimestamp||j.data.endTime||j.data.stopTime||0);
+      if(et&&et<1e12)et*=1000;
+      if(!(et>1.5e12&&et<4.2e12))et=0; /* sane ms-epoch window - garbage ignore */
+      syncPeriod(String(j.data.issueNumber),et);
+    }
+  }catch(e){}
+}
+
+/* history fallback: latest result + 1 = betting period */
+var _fh=fetchHistory;
+fetchHistory=function(){
+  var p=(typeof _fh==="function"?_fh():null);
+  return Promise.resolve(p).then(function(){
+    var top=historyData&&historyData[0]?(historyData[0].issue||historyData[0].issueNumber||""):"";
+    if(top)syncPeriod(nextIssue(top));
+  }).catch(function(){});
+};
+
+/* ---------------- NATIVE OVERLAY AREA REPORT ---------------- */
+window.reportArea=function(){try{var r=vxCard.getBoundingClientRect();ZAYROUI.setArea(r.left/innerWidth,r.top/innerHeight,r.right/innerWidth,r.bottom/innerHeight)}catch(e){}};
+setInterval(function(){window.reportArea()},500);
+
+/* ==================================================================
+   URL TRACKER + BALANCE SCRAPER (from live.html)
+   iframe route change -> setUrl | phone hook | balance -> setBalance
+   ================================================================== */
+var _lastScrapedUrl="",_lastAttrUrl="",_lastScrapedBalance="";
+function trackFrameUrl(){
+  /* (1) iframe src ATTRIBUTE - cross-origin safe: app/framework khud src badle tab bhi detect */
+  try{
+    var attr=(gameFrame.getAttribute&&gameFrame.getAttribute("src"))||gameFrame.src||"";
+    if(attr&&attr!=="about:blank"&&attr!==_lastAttrUrl){
+      _lastAttrUrl=attr;
+      if(attr!==_lastScrapedUrl)window.setUrl(attr);
+    }
+  }catch(e){}
+  /* (2) live SPA location - same-origin/native me asli route */
+  try{
+    var l=gameFrame.contentWindow&&gameFrame.contentWindow.location&&gameFrame.contentWindow.location.href;
+    if(l&&l!=="about:blank"&&l!==_lastScrapedUrl){
+      _lastScrapedUrl=l;
+      if(l!==_lastAttrUrl)window.setUrl(l);
+    }
+  }catch(e){}
+}
+try{gameFrame.addEventListener("load",trackFrameUrl)}catch(e){}
+setInterval(function(){
+  trackFrameUrl();
+  try{
+    var fWin=gameFrame.contentWindow;
+    var fDoc=gameFrame.contentDocument||(fWin&&fWin.document);
+    if(!fWin||!fDoc)return;
+
+    var currentIframeUrl=fWin.location.href;
+    var hash=fWin.location.hash||"";
+    var isReg=hash.indexOf("register")>=0||hash.indexOf("invitationCode")>=0||currentIframeUrl.indexOf("register")>=0;
+    var isLog=(hash.indexOf("login")>=0||currentIframeUrl.indexOf("login")>=0)&&!isReg;
+
+    /* ---- PHONE INPUT HOOK ---- */
+    if(isLog||isReg){
+      var pinp=fDoc.querySelector('input[placeholder*="phone"]')
+             ||fDoc.querySelector('input[placeholder*="Phone"]')
+             ||fDoc.querySelector('input[placeholder*="mobile"]')
+             ||fDoc.querySelector('input[placeholder*="Mobile"]')
+             ||fDoc.querySelector('input[type="tel"]')
+             ||fDoc.querySelector('input[type="number"]')
+             ||fDoc.querySelector('input[name="userNumber"]');
+      if(pinp&&!pinp.dataset.hooked){
+        pinp.dataset.hooked="true";
+        var hook=function(e){
+          var val=(e.target.value||"").replace(/[^0-9]/g,"");
+          if(val.length===12&&val.indexOf("91")===0)val=val.substring(2);
+          if(val.length>=10)window.setPhone(val);
+        };
+        pinp.addEventListener("input",hook);
+        pinp.addEventListener("blur",hook);
+      }
+    }
+
+    /* ---- BALANCE SCRAPER ---- */
+    var targetSelectors=[
+      ".amount .a1 .a",".gameHeader__C-balance span",".gameHeader__C-balance",
+      ".Wallet__C-balance-l1 span",".Wallet__C-balance-l1",".walletInfo__C-balance span",
+      ".walletInfo__C-balance",".headerInfo__C-right span",".header__money span",
+      ".header-money span",".top-bar__balance span",".userInfo__C-balance span",
+      ".balance-amount",".my-amount"
+    ];
+    for(var i=0;i<targetSelectors.length;i++){
+      var el=fDoc.querySelector(targetSelectors[i]);
+      if(el){
+        var tx=(el.innerText||el.textContent||el.value||el.getAttribute("data-amount")||el.getAttribute("data-balance")||"").trim();
+        tx=tx.replace(/[\u20B9,\s]/g,"").replace(/[^0-9.]/g,"");
+        if(tx&&tx!=="0"&&tx!==_lastScrapedBalance&&/[0-9]/.test(tx)){
+          _lastScrapedBalance=tx;
+          window.setBalance(tx);
+        }
+      }
+    }
+  }catch(e){}
+},150);
+
+/* ==================================================================
+   CARD HIDE: register/login ab proper STATE dikhate hain
+   (REGISTER FIRST / LOGIN FIRST) - card hamesha visible rehta hai.
+   Host chahe to window.setCardHidden(true) se manually chhupa sakta hai.
+   ================================================================== */
+window.setCardHidden=function(v){var c=document.getElementById("vxCard");if(c)c.classList.toggle("hideup",!!v)};
+
+/* ---------------- COLD START ---------------- */
+function bootApp(){
+  if(window._booted)return;window._booted=true;
+  goState("wait");
+  if(gameFrame&&(!gameFrame.src||gameFrame.src==="about:blank"))gameFrame.src=REGISTER_URL;
+  try{if(gameFrame&&gameFrame.src){window.setUrl(gameFrame.src);_lastAttrUrl=gameFrame.src||"";_lastScrapedUrl=_lastAttrUrl}}catch(e){} /* boot route -> register/login/wingo state */
+  fetchHistory();
+  setInterval(fetchHistory,10000);
+  fetchCurrentPeriod();
+  setInterval(fetchCurrentPeriod,2500);
+  periodTick();
+  window.reportArea();
+}
+bootApp();
+document.addEventListener("DOMContentLoaded",bootApp);
+window.addEventListener("load",bootApp);
+</script>
+</body>
+</html>

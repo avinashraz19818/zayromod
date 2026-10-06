@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "ALEX 9X PANNEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "ffd11d533c7d5a6f5b38d78af9793a84508fe08c889e2bdd3019a66cc0169e9d",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

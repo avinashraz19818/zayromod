@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "RAXI VIP PANEL Fake 1",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "6d1519adb2d354feb9f1d0a23485be74d015594baf0bfa85d0c24720914423da",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

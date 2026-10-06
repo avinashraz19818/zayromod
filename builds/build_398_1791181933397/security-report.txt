@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "RAXIWIN AI PANNEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "66af3db7475fcb0e29b0b404537d9af87c0731d4e653c6f1204c0aa68657e597",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

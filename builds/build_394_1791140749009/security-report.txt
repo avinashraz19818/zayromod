@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "𝗡𝗨𝗠𝗕𝗘𝗥 𝗣𝗔𝗡𝗘𝗟 𝗛𝗔𝗖𝗞",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "a947d67660a792f7dc9e19257d14f1819fcb7634be633a2a3189a160f5913aa9",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}

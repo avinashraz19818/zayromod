@@ -1,0 +1,15 @@
+{
+  "variant": "release",
+  "appName": "OG PANEL",
+  "versionCode": 1,
+  "versionName": "1.0",
+  "apkSha256": "79fefe9a12f5324083c71cf6f0aca3a1e4b71e5523c52de65bd8ec94faa76509",
+  "certSha256": "4b30fa9c9dc6b833eac73fa4cb046012a917cdbe50b519984d18ded86dbae477",
+  "signed": true,
+  "debuggable": false,
+  "sensitivePlaintextInApk": false,
+  "sourceMapsInApk": false,
+  "status": "PASS",
+  "fails": [],
+  "warnings": []
+}
