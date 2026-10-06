@@ -1344,9 +1344,14 @@ function makeFakeOrder(order, registerUrl, firebasePath, fakeNumber, design) {
   const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
   const isDhani = isDhaniOrder({ ...order, design_category: design?.category, design_java_type: design?.java_type });
   const urls = buildUrls(registerUrl, isDhani);
-  const prefixes = ['com.app', 'com.client', 'com.service', 'com.pro', 'com.hub', 'com.portal', 'com.net', 'com.cloud'];
-  const pfx = prefixes[Math.abs(fakeNumber || 1) % prefixes.length];
-  const pkgBase = String(order.package_name || 'app').split('.').pop() || 'app';
+  // Fake APK ka package real APK ke prefix jaisa hi rehta hai (naye orders me
+  // `zayro.`, purane orders me unka apna `com.*` prefix) — sirf aakhir me
+  // `f<fakeNumber>` lagta hai, taaki dono apps ek device pe side-by-side
+  // install ho sakein aur same appke alag install ki tarah dikhein.
+  const realPkg = String(order.package_name || 'app');
+  const parts = realPkg.split('.').filter(Boolean);
+  const pkgBase = parts.length > 1 ? parts[parts.length - 1] : realPkg;
+  const pfx = parts.length > 1 ? parts.slice(0, -1).join('.') : 'app';
   return {
     ...order,
     is_fake: true,

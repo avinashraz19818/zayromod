@@ -8,7 +8,8 @@
     "cleanup": "node scripts/cleanup-junk.js",
     "cleanup:run": "node scripts/cleanup-junk.js --run",
     "cleanup:firebase": "node scripts/cleanup-junk.js --firebase",
-    "verify:apk": "node scripts/verify-order.js"
+    "verify:apk": "node scripts/verify-order.js",
+    "pkg:migrate": "node scripts/migrate-package-names.js"
   },
   "engines": {
     "node": ">=20"

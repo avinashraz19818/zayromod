@@ -17,11 +17,25 @@ const KEYSTORE_PASSWORD = String(process.env.KEYSTORE_PASSWORD || '');
 const KEYSTORE_ALIAS    = String(process.env.KEYSTORE_ALIAS || 'zayro');
 
 // ── Generate package name from app name ──
+// ── PACKAGE NAME ──
+// Ab har naye APK ka package name `zayro.<app-name><orderId>` hota hai, jaise
+// `zayro.maanwin415`. (Pehle `com.app/com.client/com.pro…` jaise random-ish
+// prefix lagte the.) Aakhir me counter (order id) isliye rehta hai ki do alag
+// apps ka applicationId kabhi clash na kare — Android ek device pe same
+// applicationId ki do apps allow nahi karta.
+//
+// Prefix env `PACKAGE_PREFIX` se badla ja sakta hai (default 'zayro').
+const PACKAGE_PREFIX = String(process.env.PACKAGE_PREFIX || 'zayro')
+  .trim().toLowerCase().replace(/[^a-z0-9_]/g, '') || 'zayro';
+
 function makePackageName(appName, counter = 1) {
-  const prefixes = ['com.app', 'com.client', 'com.service', 'com.pro', 'com.hub', 'com.portal', 'com.net', 'com.cloud'];
-  const pfx = prefixes[Math.abs(counter || 0) % prefixes.length];
-  let clean = String(appName || '').toLowerCase()
+  const pfx = PACKAGE_PREFIX;
+  // NFKD normalize: stylized/fancy Unicode naam (𝐌𝐀𝐀𝐍 𝐖𝐈𝐍, ᴀᴅᴍɪɴ) pehle
+  // normal letters me tootte hain — pehle aise naam poore strip ho kar 'client'
+  // ban jate the, ab sahi naam nikalta hai (maanwin…).
+  let clean = String(appName || '').normalize('NFKD').toLowerCase()
     .replace(/admin|panel|hack|mod|cheat|root|inject|trojan|fake/gi, '')
+    .replace(/[\u0300-\u036f]/g, '')            // combining marks hatao
     .replace(/[^a-z0-9]/g, '')
     .substring(0, 10) || 'client';
   if (/^[0-9]/.test(clean)) clean = 'app' + clean.substring(0, 7);
@@ -1001,4 +1015,4 @@ function buildApk(order, design, buildId, logCallback) {
   });
 }
 
-module.exports = { buildApk, buildApkInWorker, makePackageName, ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet, stripFirebaseLiveScript };
+module.exports = { buildApk, buildApkInWorker, makePackageName, PACKAGE_PREFIX, ensureAudioGate, normalizeRegisterDelay, stripIntroSnippet, stripFirebaseLiveScript };

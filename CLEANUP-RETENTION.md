@@ -150,6 +150,21 @@ Scheduler ko on karne ke liye Settings → *Also auto-run daily* = `1` (ya
 
 ---
 
+## 3.5) Package name (`zayro.*`)
+
+- Naye APKs: `zayro.<app-name><orderId>` (jaise `zayro.maanwin415`); fake APKs:
+  `zayro.<app-name><orderId>f<1,2,…>`. Prefix `PACKAGE_PREFIX` env se badal sakte ho.
+- Purane orders rebuild pe bhi apna purana package rakhte hain — applicationId
+  badalne se purani installed app update nahi hoti (do icons ban jate hain).
+- Purane orders ko bhi naye format me laana ho:
+
+```bash
+node scripts/migrate-package-names.js                 # dry-run (kuch nahi badlega)
+node scripts/migrate-package-names.js --run            # sabhi purane orders
+node scripts/migrate-package-names.js --run --pending-only   # sirf jinke APK nahi bane
+# apply ke baad jis order ka chahiye usse REBUILD karo
+```
+
 ## 4) Recommended pehla din (VPS par)
 
 ```bash

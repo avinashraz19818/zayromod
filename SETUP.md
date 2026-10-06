@@ -302,3 +302,20 @@ buttons + auto-run settings), aur **Orders → Verify / Link Sync** buttons.
 > Pehli baar: hamesha DRY-RUN dekho, phir RUN karo. Har delete se pehle backup
 > `backups/firebase/` me jata hai, aur cleanup report
 > `backups/cleanup-reports/` me.
+
+### Package name (`zayro.*`)
+
+Naye orders ka APK package name ab `zayro.<app-name><orderId>` hota hai
+(jaise `zayro.maanwin415`) — pehle `com.app / com.pro / ...` jaise prefix aate
+the. Fake APK ka package usi prefix ka hota hai (`zayro.maanwin415f1`) taaki
+dono side-by-side install ho sakein. Prefix `PACKAGE_PREFIX` env se badla ja
+sakta hai.
+
+Purane orders apna current package hi rakhte hain (warna installed app
+"update" ki tarah kaam nahi karti). Unhe bhi migrate karna ho to:
+
+```bash
+node scripts/migrate-package-names.js            # dry-run list
+node scripts/migrate-package-names.js --run      # DB me apply
+# phir us order ko REBUILD karo (applicationId APK ke andar baked hai)
+```

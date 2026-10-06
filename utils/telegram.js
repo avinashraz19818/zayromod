@@ -548,7 +548,7 @@ async function deliverApkReady(sender, user, order, apkPaths, downloadUrls) {
 ╚══════════════════════════════════╝
 
 ${PE.crown} <b>App Name:</b>  <code>${escapeHtml(appNamePlain)}</code>
-${PE.card} <b>Package:</b>   <code>${escapeHtml(order.package_name || 'com.client.app')}</code>
+${PE.card} <b>Package:</b>   <code>${escapeHtml(order.package_name || 'zayro.app')}</code>
 ${PE.lock} <b>Protection:</b> <b>100% Clean • Dex Protect X Secured</b>
 ${PE.verified} <b>Status:</b>     <b>Ready to Install</b> ${PE.check}
 
