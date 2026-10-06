@@ -30,6 +30,8 @@ template + **links comparison** (register/deposit/wingo/firebase path).
 **CLI se (VPS):**
 
 ```bash
+node scripts/verify-order.js              # koi id na do → recent orders ki list
+node scripts/verify-order.js --last       # sabse naye order ko verify karo
 node scripts/verify-order.js 414          # real APK
 node scripts/verify-order.js 414 fake     # fake APK
 node scripts/verify-order.js 414 fs12     # extra fake site (#12)
@@ -67,6 +69,7 @@ Kya delete hota hai (aur kya **kabhi nahi**):
 | templates/ orphan | Kisi design/settings me nahi | Default OFF (`--templates` se on) |
 | Purane DB backups | Latest N (default 5) ke ilawa | `backup_keep_count` (max 50) |
 | Legacy junk | `*.before-*`, `*.backup.*`, orphan `.db-shm/-wal` | **Live DB ke wal/shm kabhi nahi** hattate |
+| Fresh files (< 24 h) | Kabhi nahi | Naya upload / chal raha build galti se na kate (`--min-age-hours=0` se off) |
 
 **Admin panel se:** Settings → *Storage & Firebase Cleanup* card →
 `Scan Disk` (dry-run) → `Cleanup DRY-RUN` → result dekh ke → `Cleanup RUN`.
@@ -78,7 +81,13 @@ node scripts/cleanup-junk.js                      # dry-run report
 node scripts/cleanup-junk.js --run                # actually clean
 node scripts/cleanup-junk.js --run --apk-days=60  # 60+ din purane delivered APK bhi
 node scripts/cleanup-junk.js --run --templates    # unreferenced templates bhi
+node scripts/cleanup-junk.js --min-age-hours=0    # 24h ki safety guard off (default 24)
 ```
+
+> **Fresh-file guard:** jo bhi file/folder 24 ghante se naya hai wo chhoda jata
+> hai (admin abhi upload kar raha ho ya build chal raha ho). Isliye pehli run
+> me kuch kam files dikh sakti hain — agli run me purani hone par chali jayengi.
+> Report me `fresh (chhode)` line se pata chalta hai kitni skip hui.
 
 Har run ki report `backups/cleanup-reports/cleanup-<timestamp>.json` me
 save hoti hai — baad me check kar sakte ho ki kya-kya gaya.

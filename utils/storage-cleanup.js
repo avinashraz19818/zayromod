@@ -101,6 +101,23 @@ function collectReferences(db) {
   try {
     for (const row of db.prepare("SELECT image_url FROM popup_announcements WHERE image_url IS NOT NULL AND image_url <> ''").all()) add(uploads, row.image_url);
   } catch (_) {}
+  // ── GENERIC SAFETY NET (kisi bhi settings value me file ka naam ho) ──
+  // Admin panel settings me kabhi-kabhi file ka naam pada hota hai (jaise
+  // upi_qr_image = 78f7a8cca8ef... ya loading_html_file = xyz.html). Upar
+  // specific keys covered hain, lekin FUTURE keys ke liye ye generic rule:
+  // jo bhi settings value ek "stored filename" jaisi dikhe use protect kar do.
+  // (URLs/emails/tokens/numbers sab explicitly skip hote hain.)
+  try {
+    for (const row of db.prepare("SELECT key,value FROM settings WHERE value IS NOT NULL AND value <> ''").all()) {
+      const v = String(row.value).trim();
+      if (!/[A-Za-z]/.test(v)) continue;                 // sirf digits/ids → file nahi
+      if (v.length < 8 || v.length > 80) continue;       // bahut chhota/lamba
+      if (!/^[A-Za-z0-9._-]+$/.test(v)) continue;        // slash, '@', ':', space → URL/email/token
+      if (/^https?:$/i.test(v)) continue;
+      if (/\.html?$/i.test(v)) { add(templates, v); add(uploads, v); continue; }
+      add(uploads, v);
+    }
+  } catch (_) {}
 
   // Order ka current APK artifacts (kis folder me kya referenced hai)
   const orderArtifacts = new Map(); // orderId -> Set(fileNames)
@@ -143,6 +160,9 @@ function scanStorage(db, opts = {}) {
   const refs = collectReferences(db);
   const apkRetentionDays = Math.max(0, parseInt(opts.apkRetentionDays || '0', 10) || 0);
   const keepRecentBackups = Math.max(1, parseInt(opts.keepRecentBackups || '5', 10) || 5);
+  // Orphan files jitni nayi hain unhe chhodo (admin abhi upload kar raha ho sakta hai)
+  const minOrphanAgeHours = opts.minOrphanAgeHours === undefined ? 24 : Math.max(0, parseFloat(opts.minOrphanAgeHours) || 0);
+  const minAgeMs = minOrphanAgeHours * 3600e3;
   const now = Date.now();
 
   const result = {
@@ -151,6 +171,7 @@ function scanStorage(db, opts = {}) {
     buildDirs: { orphans: [], leftoverProjects: [], idsig: [], staleDuplicates: [], oldApks: [] },
     uploads: { orphans: [] },
     templates: { orphans: [] },
+    recentSkips: { uploads: [], templates: [], builds: [], minAgeHours: 0 },
     backups: { old: [] },
     legacyJunk: [],
     plan: { files: 0, dirs: 0, bytes: 0 }
@@ -193,24 +214,49 @@ function scanStorage(db, opts = {}) {
     referencedFoldersByOrder.set(item.orderId, (referencedFoldersByOrder.get(item.orderId) || 0) + 1);
   }
 
+  // ── FRESH-BUILD GUARD ──
+  // Jo folder/file abhi-abhi bana hai (default 24 ghante ke andar) use chhodo —
+  // ho sakta hai build abhi chal raha ho (project/ copy, naya idsig) aur
+  // cleanup usse beech me kaat de. Purana junk agle run me chala jayega.
+  const isRecent = ms => minAgeMs > 0 && Number(ms) > now - minAgeMs;
+  const ageHours = ms => Math.round((now - Number(ms || now)) / 36e5);
+
   for (const item of inventory) {
     const isKnownOrder = item.orderId !== null && refs.orderIds.has(item.orderId);
 
     // 1) orphan folder — order DB me hi nahi
     if (!isKnownOrder) {
+      if (isRecent(item.mtime)) {
+        result.recentSkips.builds.push({ dir: item.dirName, what: 'orphan', ageHours: ageHours(item.mtime) });
+        continue;
+      }
       result.buildDirs.orphans.push({ dir: item.dirName, size: item.size, files: item.files.length });
       continue;
     }
 
-    // 2) leftover project dir (build fail/interrupt ke baad bacha gradle copy)
+    // 2) leftover project dir (build fail/interrupt ke baad bacha gradle copy).
+    //    Build abhi chal raha ho to project/ naya hoga → skip.
     if (item.hasProject) {
-      result.buildDirs.leftoverProjects.push({ dir: item.dirName, size: dirSize(path.join(BUILDS_DIR, item.dirName, 'project')) });
+      const projPath = path.join(BUILDS_DIR, item.dirName, 'project');
+      let projMtime = item.mtime;
+      try { projMtime = fs.statSync(projPath).mtimeMs; } catch (_) {}
+      if (isRecent(projMtime)) {
+        result.recentSkips.builds.push({ dir: item.dirName + '/project', what: 'project', ageHours: ageHours(projMtime) });
+      } else {
+        result.buildDirs.leftoverProjects.push({ dir: item.dirName, size: dirSize(projPath) });
+      }
     }
 
-    // 3) .idsig (v4 signing off — bekaar)
+    // 3) .idsig (v4 signing off — bekaar) — naya idsig = abhi ka build, chhodo
     for (const f of item.files) {
       if (f.toLowerCase().endsWith('.idsig')) {
-        result.buildDirs.idsig.push({ dir: item.dirName, file: f, size: (() => { try { return fs.statSync(path.join(BUILDS_DIR, item.dirName, f)).size; } catch (_) { return 0; } })() });
+        let st = null;
+        try { st = fs.statSync(path.join(BUILDS_DIR, item.dirName, f)); } catch (_) {}
+        if (st && isRecent(st.mtimeMs)) {
+          result.recentSkips.builds.push({ dir: item.dirName, file: f, what: 'idsig', ageHours: ageHours(st.mtimeMs) });
+          continue;
+        }
+        result.buildDirs.idsig.push({ dir: item.dirName, file: f, size: st ? st.size : 0 });
       }
     }
 
@@ -218,6 +264,10 @@ function scanStorage(db, opts = {}) {
     //    me nahi hai, AUR isi order ke kisi doosre folder me referenced APK
     //    maujood hai (warna ye hi active folder ho sakta tha — chhodo mat).
     if (item.apkFiles.length && !item.hasReferenced && (referencedFoldersByOrder.get(item.orderId) || 0) > 0) {
+      if (isRecent(item.mtime)) {
+        result.recentSkips.builds.push({ dir: item.dirName, what: 'stale-duplicate', ageHours: ageHours(item.mtime) });
+        continue;
+      }
       result.buildDirs.staleDuplicates.push({ dir: item.dirName, size: item.size, files: item.apkFiles });
       continue;
     }
@@ -232,7 +282,7 @@ function scanStorage(db, opts = {}) {
   }
 
   // ── uploads/ + templates/ orphans ──
-  const scanDir = (dir, refSet, bucket, skipDirs = []) => {
+  const scanDir = (dir, refSet, bucket, skipDirs = [], recentBucket = null) => {
     try {
       for (const name of fs.readdirSync(dir)) {
         const full = path.join(dir, name);
@@ -242,12 +292,21 @@ function scanStorage(db, opts = {}) {
           if (!skipDirs.includes(name)) bucket.push({ name, size: dirSize(full), dir: true });
           continue;
         }
-        if (!refSet.has(name)) bucket.push({ name, size: stat.size, dir: false });
+        if (refSet.has(name)) continue;
+        // ── FRESH-UPLOAD GUARD ──
+        // Admin ne abhi file upload ki ho aur DB row banna baaki ho — aisi
+        // nayi file ko orphan maan kar delete karna risk hai. Default 24 ghante
+        // se nayi files skip hoti hain (--min-age-hours=0 se off).
+        if (minAgeMs > 0 && stat.mtimeMs > now - minAgeMs) {
+          if (recentBucket) recentBucket.push({ name, ageHours: Math.round((now - stat.mtimeMs) / 36e5) });
+          continue;
+        }
+        bucket.push({ name, size: stat.size, dir: false });
       }
     } catch (_) {}
   };
-  scanDir(UPLOADS_DIR, refs.uploads, result.uploads.orphans);
-  scanDir(TEMPLATES_DIR, refs.templates, result.templates.orphans, ['assets']);
+  scanDir(UPLOADS_DIR, refs.uploads, result.uploads.orphans, [], result.recentSkips.uploads);
+  scanDir(TEMPLATES_DIR, refs.templates, result.templates.orphans, ['assets'], result.recentSkips.templates);
 
   // ── backups/ purane DB backups ──
   try {
@@ -302,8 +361,12 @@ function scanStorage(db, opts = {}) {
   for (const item of result.backups.old) add(item.size, 1, 0);
   for (const item of result.legacyJunk) add(item.size, 1, 0);
 
+  result.recentSkips.minAgeHours = minOrphanAgeHours;
   result.totals = {
     buildDirs: buildCount,
+    recentSkippedUploads: result.recentSkips.uploads.length,
+    recentSkippedTemplates: result.recentSkips.templates.length,
+    recentSkippedBuilds: result.recentSkips.builds.length,
     buildsSizeMb: mb(dirSize(BUILDS_DIR)),
     uploadsSizeMb: mb(dirSize(UPLOADS_DIR)),
     templatesSizeMb: mb(dirSize(TEMPLATES_DIR)),

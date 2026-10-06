@@ -13,6 +13,8 @@
  *   node scripts/cleanup-junk.js --run --templates   → unreferenced templates bhi delete
  *   node scripts/cleanup-junk.js --firebase          → Firebase users TTL dry-run
  *   node scripts/cleanup-junk.js --run --firebase    → Firebase cleanup bhi run
+ *   node scripts/cleanup-junk.js --min-age-hours=0   → nayi files ko bhi consider karo
+ *                                                       (default 24 = fresh uploads/builds safe)
  *
  * Kya saaf hota hai:
  *   builds/  → orphan folders (order DB me nahi), duplicate/stale rebuild folders,
@@ -42,6 +44,9 @@ const RUN = hasFlag('--run');
 const APK_DAYS = Math.max(0, parseInt(getArg('--apk-days', '0'), 10) || 0);
 const INCLUDE_TEMPLATES = hasFlag('--templates');
 const DO_FIREBASE = hasFlag('--firebase');
+// Default 24 ghante: itni nayi files/folders chhode jate hain (abhi ka upload
+// ya chal raha build galti se na kat jaye).
+const MIN_AGE_HOURS = Math.max(0, parseFloat(getArg('--min-age-hours', '24')) || 0);
 
 function mb(bytes) { return Math.round((bytes / 1048576) * 10) / 10; }
 
@@ -50,7 +55,7 @@ async function main() {
   console.log(RUN ? ' CLEANUP (LIVE RUN — files delete honge)' : ' CLEANUP (DRY-RUN — kuch delete nahi hoga)');
   console.log('═'.repeat(64));
 
-  const scan = scanStorage(db, { apkRetentionDays: APK_DAYS });
+  const scan = scanStorage(db, { apkRetentionDays: APK_DAYS, minOrphanAgeHours: MIN_AGE_HOURS });
   console.log(`\nDisk: builds=${scan.totals.buildsSizeMb}MB uploads=${scan.totals.uploadsSizeMb}MB templates=${scan.totals.templatesSizeMb}MB`);
   console.log(`Reclaimable (is run me): ${scan.totals.reclaimableMb} MB | files=${scan.totals.planFiles} dirs=${scan.totals.planDirs}`);
   console.log(`  orphan build dirs : ${scan.buildDirs.orphans.length}`);
@@ -62,12 +67,16 @@ async function main() {
   console.log(`  orphan templates  : ${scan.templates.orphans.length}${INCLUDE_TEMPLATES ? '' : ' (khud ko safe — --templates se delete honge)'}`);
   console.log(`  old DB backups    : ${scan.backups.old.length}`);
   console.log(`  legacy junk files : ${scan.legacyJunk.length}`);
+  const rs = scan.recentSkips || { uploads: [], templates: [], builds: [] };
+  const recentTotal = rs.uploads.length + rs.templates.length + rs.builds.length;
+  console.log(`  fresh (chhode)    : ${recentTotal}  [< ${MIN_AGE_HOURS}h — uploads ${rs.uploads.length}, templates ${rs.templates.length}, builds ${rs.builds.length}]`);
 
   const report = cleanupStorage(db, {
     mode: RUN ? 'run' : 'dry',
     apkRetentionDays: APK_DAYS,
     includeOrphanTemplates: INCLUDE_TEMPLATES,
-    keepRecentBackups: 5
+    keepRecentBackups: 5,
+    minOrphanAgeHours: MIN_AGE_HOURS
   });
 
   console.log(`\nActions: ${report.actions.length}${RUN ? ` | Freed: ${report.freedMb} MB` : ''}`);
@@ -96,6 +105,7 @@ async function main() {
 
   if (!RUN) {
     console.log('\nYe dry-run tha. Delete karne ke liye: node scripts/cleanup-junk.js --run');
+    if (MIN_AGE_HOURS > 0) console.log(`(Nayi files (<${MIN_AGE_HOURS}h) safe hain. Sab consider karna ho to --min-age-hours=0 do.)`);
   }
 }
 

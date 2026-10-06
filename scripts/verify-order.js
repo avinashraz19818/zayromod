@@ -32,11 +32,38 @@ function countApkNameOwners(fileName) {
   }
 }
 
+function listRecentOrders() {
+  const rows = db.prepare(`
+    SELECT id, app_name, status, apk_file, live_link_enabled, created_at
+    FROM orders ORDER BY id DESC LIMIT 12
+  `).all();
+  console.log('Kis order ko verify karna hai? Order ID ke saath chalao, jaise:\n');
+  console.log('  node scripts/verify-order.js <orderId> [real|fake|fs<id>]\n');
+  console.log('  node scripts/verify-order.js --last        # sabse naya order\n');
+  console.log('  node scripts/verify-order.js 414 fake      # fake APK\n');
+  console.log('  node scripts/verify-order.js 414 fs12      # extra fake site #12\n');
+  console.log('\nAbhi ke orders (naya pehle):');
+  console.log('  ID     STATUS      LIVE  APK                              APP');
+  for (const r of rows) {
+    console.log(`  ${String(r.id).padEnd(6)} ${String(r.status || '-').padEnd(11)} ${String(r.live_link_enabled ? 'yes' : '-').padEnd(5)} ${String(r.apk_file || '(no apk)').slice(0, 32).padEnd(32)} ${r.app_name || ''}`);
+  }
+}
+
 (async () => {
   const [orderIdArg, variantArg = 'real'] = process.argv.slice(2);
-  const orderId = parseInt(orderIdArg, 10);
+  if (!orderIdArg || orderIdArg === '--help' || orderIdArg === '-h') {
+    listRecentOrders();
+    process.exit(0);
+  }
+  if (orderIdArg === '--last' || orderIdArg === 'last') {
+    const last = db.prepare('SELECT id FROM orders ORDER BY id DESC LIMIT 1').get();
+    if (!last) { console.error('Koi order hi nahi mila'); process.exit(1); }
+    console.log(`Sabse naya order: #${last.id}\n`);
+    process.argv[2] = String(last.id);   // niche wahi id use hogi
+  }
+  const orderId = parseInt(process.argv[2], 10);
   if (!orderId) {
-    console.log('Usage: node scripts/verify-order.js <orderId> [real|fake|fs<id>]');
+    listRecentOrders();
     process.exit(1);
   }
   const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);

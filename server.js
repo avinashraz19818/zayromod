@@ -3504,6 +3504,7 @@ app.get('/api/admin/storage/usage', requireAdmin, (req, res) => {
       },
       // Jo is run me delete NAHI hoga (option off) — alag se dikhao taaki
       // "reclaimable" aur "plan" ka farq saaf rahe.
+      recentSkipped: scan.recentSkips,
       potential: {
         orphanTemplatesMb: Math.round((scan.plan.skippedTemplatesBytes || 0) / 1048576 * 10) / 10,
         orphanTemplates: scan.plan.skippedTemplates || 0,
@@ -3535,7 +3536,8 @@ app.post('/api/admin/storage/cleanup', requireAdmin, (req, res) => {
       mode,
       apkRetentionDays: Math.max(0, parseInt(req.body.apkRetentionDays || '0', 10) || 0),
       keepRecentBackups: Math.max(1, parseInt(req.body.keepRecentBackups || '5', 10) || 5),
-      includeOrphanTemplates: req.body.includeOrphanTemplates === true || req.body.includeOrphanTemplates === '1'
+      includeOrphanTemplates: req.body.includeOrphanTemplates === true || req.body.includeOrphanTemplates === '1',
+      minOrphanAgeHours: req.body.minAgeHours === undefined ? 24 : Math.max(0, parseFloat(req.body.minAgeHours) || 0)
     });
     maintenanceCache.storage = null;
     res.json(report);
