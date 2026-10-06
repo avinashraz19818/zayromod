@@ -226,6 +226,13 @@ header.topbar::after{content:'';position:absolute;left:0;right:0;bottom:-1px;hei
 .design-card:active{transform:perspective(900px) rotateX(3deg) scale(.985)}
 .disc-badge{position:absolute;top:12px;left:12px;z-index:3;padding:5px 10px;border-radius:999px;
   background:var(--grad-gold);color:#2a1c00;font-size:10.5px;font-weight:800;letter-spacing:.5px}
+.maint-badge{position:absolute;top:12px;right:12px;z-index:3;padding:5px 10px;border-radius:999px;
+  background:rgba(255,176,32,.92);color:#3a2600;font-size:10.5px;font-weight:800;letter-spacing:.4px;
+  box-shadow:0 6px 18px rgba(255,176,32,.28)}
+.design-card.is-maintenance .media .preview,.design-card.is-maintenance .no-preview{filter:grayscale(.75) brightness(.6)}
+.design-card.is-maintenance{cursor:default}
+.design-card.is-maintenance:hover{transform:none}
+@media (max-width:640px){.maint-badge{top:6px;right:6px;padding:3px 6px;font-size:8px}}
 .media{position:relative;aspect-ratio:4/3;background:#0b0618;overflow:hidden;cursor:zoom-in}
 .media .preview{width:100%;height:100%;object-fit:cover;display:block}
 .no-preview{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--dim);font-size:12px}
@@ -1142,8 +1149,10 @@ async function loadDesigns(){
     const media=cover
       ?`<img class="preview" src="${esc(mediaSrc(cover))}" alt="${esc(d.name)} cover" loading="lazy" onerror="mediaFallback(this)">`
       :`<div class="no-preview">${icon('ic-image','i lg')}No Preview</div>`;
-    return `<article class="design-card" role="button" tabindex="0" onclick="openDesignPreview(${d.id})" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openDesignPreview(${d.id})}">
+    const maint=Number(d.maintenance)===1;
+    return `<article class="design-card${maint?' is-maintenance':''}" role="button" tabindex="0" onclick="openDesignPreview(${d.id})" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openDesignPreview(${d.id})}">
       ${disc>0?`<div class="disc-badge">${disc}% OFF</div>`:''}
+      ${maint?`<div class="maint-badge">🔧 Maintenance</div>`:''}
       <div class="media">${media}<span class="zoom-hint">${icon('ic-chev','i sm')}</span></div>
       <div class="info">
         <div class="type-badge">${icon('ic-layers','i sm')}${designCategoryName(d)}</div>
@@ -1153,7 +1162,9 @@ async function loadDesigns(){
             ${disc>0?`<span class="original-price">${d.original_price_coins}</span>`:''}
             <span class="price-coins">${coin(15)}${d.price_coins}</span>
           </span>
-          <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openDesignPreview(${d.id})">${icon('ic-bolt')}Build</button>
+          ${maint
+            ?`<button class="btn btn-sm" disabled style="opacity:.65;cursor:not-allowed" onclick="event.stopPropagation();toast('Ye design abhi maintenance me hai',true)">🔧 Maintenance</button>`
+            :`<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openDesignPreview(${d.id})">${icon('ic-bolt')}Build</button>`}
         </div>
       </div>
     </article>`;
@@ -1202,9 +1213,12 @@ function renderDesignPreview(d){
       :`<div class="empty-state"><div class="ico">${icon('ic-image','i')}</div><h4>No preview uploaded</h4></div>`}
     <div class="dp-section-title"><span>Description</span></div>
     <div class="dp-description">${esc(d.description||'No description available.')}</div>
+    ${Number(d.maintenance)===1?`<div class="dp-description" style="margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(255,176,32,.12);border:1px solid rgba(255,176,32,.35);color:#ffb020;font-weight:700">🔧 Ye design abhi MAINTENANCE me hai — thodi der baad phir try karein.</div>`:''}
     <div class="dp-actions">
       <button class="btn btn-outline" onclick="closeModal('designPreviewModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="continueWithDesign()">Continue ${icon('ic-chev','i sm')}</button>
+      ${Number(d.maintenance)===1
+        ?`<button class="btn btn-primary" disabled style="opacity:.6;cursor:not-allowed">🔧 Under Maintenance</button>`
+        :`<button class="btn btn-primary" onclick="continueWithDesign()">Continue ${icon('ic-chev','i sm')}</button>`}
     </div>`;
 }
 
@@ -1266,6 +1280,10 @@ async function selectDesign(id,designData=null){
   if(!currentUser){openAuth();return;}
   const d=designData||await api('/api/designs/'+id);
   if(d.error)return toast(d.error,true);
+  if(Number(d.maintenance)===1){
+    closeModal('designPreviewModal');
+    return toast((d.name||'Ye design')+' abhi maintenance me hai — thodi der baad try karein.',true);
+  }
   currentDesign=d;
   $('orderDesignId').value=id;
   $('orderModalTitle').textContent='Build: '+d.name;

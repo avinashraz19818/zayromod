@@ -1547,9 +1547,15 @@ async function loadDesigns() {
       <td><span class="coin-chip">${d.price_coins}</span></td>
       <td>${d.original_price_coins>0?'<span style="color:var(--dim);text-decoration:'+(d.original_price_coins>d.price_coins?'line-through':'none')+'">'+d.original_price_coins+'c</span>':'—'}</td>
       <td><span style="color:var(--cyan);font-weight:700">+${d.fake_price_coins||5}c</span></td>
-      <td><span class="badge ${d.active?'badge-ok':'badge-danger'}">${d.active?'Active':'Hidden'}</span></td>
+      <td>
+        <span class="badge ${d.active?'badge-ok':'badge-danger'}">${d.active?'Active':'Hidden'}</span>
+        ${Number(d.maintenance)===1?'<span class="badge" style="background:rgba(255,176,32,.18);color:#ffb020;border:1px solid rgba(255,176,32,.4);margin-left:4px">🔧 Maintenance</span>':''}
+      </td>
       <td><div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-sm ${d.active?'btn-outline':'btn-ok'}" onclick="toggleDesign(${d.id},${d.active})">${d.active?'Hide':'Show'}</button>
+        ${Number(d.maintenance)===1
+          ? `<button class="btn btn-sm" style="background:rgba(46,204,113,.16);color:#2ecc71;border:1px solid rgba(46,204,113,.4)" onclick="setDesignMaintenance(${d.id},0)" title="Maintenance se hatao — users phir se order kar payenge">✓ Remove Maintenance</button>`
+          : `<button class="btn btn-sm" style="background:rgba(255,176,32,.16);color:#ffb020;border:1px solid rgba(255,176,32,.4)" onclick="setDesignMaintenance(${d.id},1)" title="Design ko maintenance me daalo — users dekh sakte hain lekin order nahi kar payenge">🔧 Maintenance</button>`}
         <button class="btn btn-sm" style="background:rgba(42,123,255,.18);color:var(--cyan);border:1px solid rgba(94,200,255,.3)" onclick="editDesign(${d.id})"><svg><use href="#i-settings"/></svg> Edit</button>
         <button class="btn btn-sm btn-danger" onclick="deleteDesign(${d.id},'${d.name.replace(/'/g,"\\'")}')">Delete</button>
       </div></td>
@@ -1601,6 +1607,21 @@ async function addDesign() {
 
 async function toggleDesign(id, active) {
   await api('/api/admin/designs/' + id, 'PATCH', { active: active?0:1 });
+  loadDesigns();
+}
+
+// Design ko maintenance me daalo / hatao.
+// maintenance = 1  → users ko design dikhta rahega lekin order nahi kar payenge
+//                    (server-side guard bhi hai, sirf UI block nahi).
+// maintenance = 0  → normal, users phir se order kar sakte hain.
+async function setDesignMaintenance(id, on) {
+  const d = _editDesigns.find(x => x.id === id);
+  const name = d ? d.name : ('#' + id);
+  if (on && !confirm(`"${name}" ko MAINTENANCE me daalein?\n\nUsers design dekh payenge lekin order/build nahi kar payenge.`)) return;
+  if (!on && !confirm(`"${name}" ko maintenance se HATA dein?\n\nUsers phir se order kar payenge.`)) return;
+  const r = await api('/api/admin/designs/' + id, 'PATCH', { maintenance: on ? 1 : 0 });
+  if (r && r.error) return toast(r.error, true);
+  toast(on ? `🔧 "${name}" maintenance me daal diya` : `✓ "${name}" maintenance se hata diya`);
   loadDesigns();
 }
 

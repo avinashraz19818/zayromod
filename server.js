@@ -1024,7 +1024,7 @@ for (const m of ['put', 'patch', 'delete']) {
 app.get('/api/designs', (req, res) => {
   const designs = db.prepare(`
     SELECT id,name,description,price_coins,original_price_coins,fake_price_coins,
-           category,preview_image,preview_video
+           category,preview_image,preview_video,maintenance
     FROM designs WHERE active=1 ORDER BY id DESC
   `).all().map(d => tokenizeDesignMedia(withPreviewImages(d)));
   res.json(designs);
@@ -1106,6 +1106,11 @@ app.post('/api/order', requireAuth, iconUpload.single('icon'), async (req, res) 
 
   const design = db.prepare('SELECT * FROM designs WHERE id=? AND active=1').get(design_id);
   if (!design) return res.json({ error: 'Design not found' });
+  // Maintenance mode: UI block ke saath server-side guard bhi (API direct
+  // call karne pe bhi order na bane).
+  if (Number(design.maintenance) === 1) {
+    return res.json({ error: `${design.name} abhi maintenance me hai — thodi der baad try karein.` });
+  }
 
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
   if (!user) return res.status(401).json({ error: 'User not found. Please login again.' });
@@ -1945,7 +1950,7 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
 ]), (req, res) => {
   const templatesDir = path.join(__dirname, 'templates');
   const uploadsDir = path.join(__dirname, 'uploads');
-  const { name, description, price_coins, original_price_coins, fake_price_coins, active, category } = req.body;
+  const { name, description, price_coins, original_price_coins, fake_price_coins, active, category, maintenance } = req.body;
 
   // Get current design to know old file names
   const currentDesign = db.prepare('SELECT * FROM designs WHERE id=?').get(req.params.id);
@@ -1962,6 +1967,7 @@ app.patch('/api/admin/designs/:id', requireAdmin, adminUpload.fields([
   if (original_price_coins !== undefined) { fields.push('original_price_coins=?'); vals.push(parseInt(original_price_coins) || 0); }
   if (fake_price_coins !== undefined) { fields.push('fake_price_coins=?');       vals.push(parseInt(fake_price_coins) || 5); }
   if (active           !== undefined) { fields.push('active=?');                 vals.push(active === '1' || active === 1 || active === true ? 1 : 0); }
+  if (maintenance      !== undefined) { fields.push('maintenance=?');            vals.push(maintenance === '1' || maintenance === 1 || maintenance === true ? 1 : 0); }
   if (category         !== undefined) {
     const normalizedCategory = normalizeDesignCategory(category, currentDesign);
     fields.push('category=?', 'type=?', 'java_type=?', 'variant=?');
