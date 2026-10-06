@@ -1052,6 +1052,12 @@ td code{background:rgba(94,232,210,.08);color:var(--mint);padding:2px 8px;border
         <div class="form-group"><label>Purane paths auto-delete</label>
           <select id="sFbAutoPaths"><option value="0">No (sirf manual)</option><option value="1">Yes</option></select></div>
       </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="sTplCleanup" style="width:auto;margin:0">
+          <span>Unused HTML templates bhi delete karo <small>(templates/ me jo .html kisi design ya loading setting me nahi hai — active/hidden dono designs check hote hain)</small></span>
+        </label>
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
         <button class="btn btn-sm" onclick="saveRetentionSettings()"><svg><use href="#i-check"/></svg> Save retention</button>
         <button class="btn btn-sm" onclick="scanStorageUsage()"><svg><use href="#i-file"/></svg> Disk scan</button>
@@ -2866,11 +2872,18 @@ async function scanStorageUsage() {
 }
 
 async function runStorageCleanup(mode) {
-  if (mode === 'run' && !confirm('Cleanup RUN karein? Junk/orphan files delete ho jayengi (dry-run list jaisi hi).')) return;
+  const tpl = document.getElementById('sTplCleanup');
+  const includeTemplates = !!(tpl && tpl.checked);
+  if (mode === 'run') {
+    const msg = includeTemplates
+      ? 'Cleanup RUN karein? Junk/orphan files + UNUSED HTML TEMPLATES delete ho jayengi.\n\nUnused = jo kisi design (active ya hidden) aur loading setting me nahi hai. Pehle dry-run list dekh li hai na?'
+      : 'Cleanup RUN karein? Junk/orphan files delete ho jayengi (dry-run list jaisi hi).';
+    if (!confirm(msg)) return;
+  }
   const fd = new FormData();
   fd.append('mode', mode);
   fd.append('apkRetentionDays', document.getElementById('sStorageApkDays').value || '0');
-  fd.append('includeOrphanTemplates', '0');
+  fd.append('includeOrphanTemplates', includeTemplates ? '1' : '0');
   toast(mode === 'run' ? 'Cleanup chal raha hai…' : 'Dry-run chal raha hai…');
   const d = await api('/api/admin/storage/cleanup', 'POST', fd, true);
   if (d.error) return toast(d.error, true);

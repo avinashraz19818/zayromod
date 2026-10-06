@@ -71,6 +71,35 @@ Kya delete hota hai (aur kya **kabhi nahi**):
 | Legacy junk | `*.before-*`, `*.backup.*`, orphan `.db-shm/-wal` | **Live DB ke wal/shm kabhi nahi** hattate |
 | Fresh files (< 24 h) | Kabhi nahi | Naya upload / chal raha build galti se na kate (`--min-age-hours=0` se off) |
 
+### Unused HTML templates (`templates/` me faltu .html)
+
+Panel me designs upload hone par har file ka naam `templates/<timestamp>_<name>.html`
+ke saath save hota hai — delete karne par file **disk pe padi reh jati hai**
+(orphan). Isliye `templates/` dheere-dheere bhar jata hai.
+
+**Unused = aisi `.html` file jo:**
+- kisi bhi design ke `popup_html_file` / `fake_popup_html_file` me nahi hai
+  (**hidden designs bhi count hote hain** — sirf inactive hone se file delete
+  nahi hoti), aur
+- `loading_html_file` (ya kisi bhi settings value me `.html`) me nahi hai.
+
+**Safety:**
+- Sirf `templates/` ke top-level **`.html`/`.htm`** files par lagta hai —
+  `templates/assets/` ya baaki koi file type kabhi delete nahi hoti.
+- 24 ghante se nayi files skip (fresh-upload guard) — `--min-age-hours=0` se off.
+- Delete se pehle poori list print hoti hai: **DELETE list** + **KEEP list
+  (kis design/setting se use ho rahi hai)** — dono apni aankhon se dekh lo.
+
+```bash
+node scripts/cleanup-junk.js --templates            # dry-run: DONO list dikhao
+node scripts/cleanup-junk.js --run --templates      # actually delete karo
+npm run cleanup:templates                           # (dry-run wala shortcut)
+```
+
+**Admin panel se:** Settings → *Storage & Firebase Cleanup* → checkbox
+**"Unused HTML templates bhi delete karo"** tick karo → `Cleanup dry-run` →
+list dekh ke → `Cleanup now`.
+
 **Admin panel se:** Settings → *Storage & Firebase Cleanup* card →
 `Scan Disk` (dry-run) → `Cleanup DRY-RUN` → result dekh ke → `Cleanup RUN`.
 

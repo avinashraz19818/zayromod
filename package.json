@@ -9,7 +9,8 @@
     "cleanup:run": "node scripts/cleanup-junk.js --run",
     "cleanup:firebase": "node scripts/cleanup-junk.js --firebase",
     "verify:apk": "node scripts/verify-order.js",
-    "pkg:migrate": "node scripts/migrate-package-names.js"
+    "pkg:migrate": "node scripts/migrate-package-names.js",
+    "cleanup:templates": "node scripts/cleanup-junk.js --templates"
   },
   "engines": {
     "node": ">=20"

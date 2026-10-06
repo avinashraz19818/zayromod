@@ -64,12 +64,22 @@ async function main() {
   console.log(`  .idsig files      : ${scan.buildDirs.idsig.length}`);
   console.log(`  old APK dirs      : ${scan.buildDirs.oldApks.length}${APK_DAYS ? '' : ' (--apk-days=0 → off)'}`);
   console.log(`  orphan uploads    : ${scan.uploads.orphans.length}`);
-  console.log(`  orphan templates  : ${scan.templates.orphans.length}${INCLUDE_TEMPLATES ? '' : ' (khud ko safe — --templates se delete honge)'}`);
+  console.log(`  orphan templates  : ${scan.templates.orphans.length} html${INCLUDE_TEMPLATES ? '' : ' (khud ko safe — --templates se delete honge)'}${scan.templates.kept ? ` | in-use (rakhi jayengi): ${scan.templates.kept.length}` : ''}`);
   console.log(`  old DB backups    : ${scan.backups.old.length}`);
   console.log(`  legacy junk files : ${scan.legacyJunk.length}`);
   const rs = scan.recentSkips || { uploads: [], templates: [], builds: [] };
   const recentTotal = rs.uploads.length + rs.templates.length + rs.builds.length;
   console.log(`  fresh (chhode)    : ${recentTotal}  [< ${MIN_AGE_HOURS}h — uploads ${rs.uploads.length}, templates ${rs.templates.length}, builds ${rs.builds.length}]`);
+
+  // Templates ki poori list (kaunsi ja rahi hai, kaunsi kyun ruk rahi hai)
+  if (INCLUDE_TEMPLATES && scan.templates.orphans.length) {
+    console.log('\nDELETE hone wali HTML files (kisi design/setting me nahi):');
+    for (const o of scan.templates.orphans) console.log(`  - ${o.name}  (${mb(o.size)} MB)`);
+  }
+  if (scan.templates.kept && scan.templates.kept.length) {
+    console.log(`\nKEEP (in-use HTML files): ${scan.templates.kept.length}`);
+    for (const k of scan.templates.kept) console.log(`  ✓ ${k.file}\n      ← ${k.used_by.join(', ')}`);
+  }
 
   const report = cleanupStorage(db, {
     mode: RUN ? 'run' : 'dry',

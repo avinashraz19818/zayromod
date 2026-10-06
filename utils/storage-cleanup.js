@@ -73,11 +73,24 @@ function mb(bytes) {
 function collectReferences(db) {
   const uploads = new Set();
   const templates = new Set();
+  // templateOwners: file → ['design#22 TEST EDIT (hidden)', 'setting loading_html_file']
+  // Isse admin ko dikh sakta hai ki kaunsi HTML file KYUN rakhi gayi hai.
+  const templateOwners = new Map();
   const add = (set, value) => { if (value && String(value).trim()) set.add(String(value).trim()); };
+  const addTemplate = (file, why) => {
+    const name = String(file || '').trim();
+    if (!name) return;
+    templates.add(name);
+    const arr = templateOwners.get(name) || [];
+    if (why && !arr.includes(why)) arr.push(why);
+    templateOwners.set(name, arr);
+  };
 
   try {
-    for (const row of db.prepare('SELECT popup_html_file a, fake_popup_html_file b, preview_image c, preview_video d FROM designs').all()) {
-      add(templates, row.a); add(templates, row.b);
+    for (const row of db.prepare('SELECT id, name, active, popup_html_file a, fake_popup_html_file b, preview_image c, preview_video d FROM designs').all()) {
+      const label = row.id ? `design#${row.id}${row.name ? ' ' + String(row.name).slice(0, 30) : ''} (${Number(row.active) === 1 ? 'active' : 'hidden'})` : null;
+      addTemplate(row.a, label ? label + ' real' : null);
+      addTemplate(row.b, label ? label + ' fake' : null);
       add(uploads, row.c); add(uploads, row.d);
     }
   } catch (_) {}
@@ -88,8 +101,9 @@ function collectReferences(db) {
     for (const row of db.prepare("SELECT icon_file FROM orders WHERE icon_file IS NOT NULL AND icon_file <> ''").all()) add(uploads, row.icon_file);
   } catch (_) {}
   try {
-    for (const row of db.prepare("SELECT value FROM settings WHERE key IN ('upi_qr_image','loading_html_file')").all()) {
-      add(uploads, row.value); add(templates, row.value);
+    for (const row of db.prepare("SELECT key,value FROM settings WHERE key IN ('upi_qr_image','loading_html_file')").all()) {
+      add(uploads, row.value);
+      addTemplate(row.value, `setting ${row.key}`);
     }
   } catch (_) {}
   try {
@@ -114,7 +128,7 @@ function collectReferences(db) {
       if (v.length < 8 || v.length > 80) continue;       // bahut chhota/lamba
       if (!/^[A-Za-z0-9._-]+$/.test(v)) continue;        // slash, '@', ':', space → URL/email/token
       if (/^https?:$/i.test(v)) continue;
-      if (/\.html?$/i.test(v)) { add(templates, v); add(uploads, v); continue; }
+      if (/\.html?$/i.test(v)) { addTemplate(v, `setting ${row.key}`); add(uploads, v); continue; }
       add(uploads, v);
     }
   } catch (_) {}
@@ -139,7 +153,7 @@ function collectReferences(db) {
     for (const row of db.prepare('SELECT order_id, apk_file FROM order_fake_sites').all()) addArtifact(row.order_id, row.apk_file);
   } catch (_) {}
 
-  return { uploads, templates, orderArtifacts, orderIds };
+  return { uploads, templates, templateOwners, orderArtifacts, orderIds };
 }
 
 function isLegacyJunkFile(fullPath) {
@@ -170,7 +184,7 @@ function scanStorage(db, opts = {}) {
     totals: {},
     buildDirs: { orphans: [], leftoverProjects: [], idsig: [], staleDuplicates: [], oldApks: [] },
     uploads: { orphans: [] },
-    templates: { orphans: [] },
+    templates: { orphans: [], kept: [] },
     recentSkips: { uploads: [], templates: [], builds: [], minAgeHours: 0 },
     backups: { old: [] },
     legacyJunk: [],
@@ -282,10 +296,13 @@ function scanStorage(db, opts = {}) {
   }
 
   // ── uploads/ + templates/ orphans ──
-  const scanDir = (dir, refSet, bucket, skipDirs = [], recentBucket = null) => {
+  const scanDir = (dir, refSet, bucket, skipDirs = [], recentBucket = null, keepExt = null) => {
     try {
       for (const name of fs.readdirSync(dir)) {
         const full = path.join(dir, name);
+        // keepExt: sirf yahi extension wali files orphan maani jayengi
+        // (templates me sirf .html/.htm — baaki koi file kabhi delete nahi hoti)
+        if (keepExt && !keepExt.test(name)) continue;
         let stat;
         try { stat = fs.statSync(full); } catch (_) { continue; }
         if (stat.isDirectory()) {
@@ -306,7 +323,16 @@ function scanStorage(db, opts = {}) {
     } catch (_) {}
   };
   scanDir(UPLOADS_DIR, refs.uploads, result.uploads.orphans, [], result.recentSkips.uploads);
-  scanDir(TEMPLATES_DIR, refs.templates, result.templates.orphans, ['assets'], result.recentSkips.templates);
+  scanDir(TEMPLATES_DIR, refs.templates, result.templates.orphans, ['assets'], result.recentSkips.templates, /\.html?$/i);
+
+  // Templates: kaunsi HTML files KEEP ho rahi hain aur kis wajah se (verification)
+  try {
+    for (const name of fs.readdirSync(TEMPLATES_DIR)) {
+      if (!/\.html?$/i.test(name)) continue;
+      const owners = refs.templateOwners.get(name);
+      if (owners && owners.length) result.templates.kept.push({ file: name, used_by: owners });
+    }
+  } catch (_) {}
 
   // ── backups/ purane DB backups ──
   try {
