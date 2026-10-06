@@ -13,7 +13,17 @@ const db = require('./database/db');
 const { buildApk, makePackageName } = require('./utils/apkbuilder');
 const { initBot, sendCoinRequest, sendApkReady, broadcastAnnouncement, sendLogEvent } = require('./utils/telegram');
 const { injectParams: injectHtmlParams } = require('./utils/htmlprocessor');
-const { buildAppContent, buildRuntimeConfig, readUsersNode, writeUsersNode } = require('./utils/appcontent');
+const { buildAppContent, renderContentHtml, buildRuntimeConfig, readUsersNode, writeUsersNode } = require('./utils/appcontent');
+const {
+  findOrderApk,
+  readApkPopupHtml,
+  buildVerifyReport,
+  fileSha256,
+  BUILD_MARKER_RE
+} = require('./utils/buildstore');
+const { scanStorage, cleanupStorage } = require('./utils/storage-cleanup');
+const firebaseRetention = require('./utils/firebase-retention');
+const { startRetentionScheduler, runDailyCleanup } = require('./utils/retention-scheduler');
 const { applyFontStyle, isValidStyle, FONT_STYLES } = require('./utils/fontstyles');
 const {
   normalizeHttpUrl,
@@ -67,7 +77,10 @@ function createDatabaseBackup(reason = 'manual') {
   const dest = path.join(backupDir, file);
   try { db.pragma('wal_checkpoint(FULL)'); } catch (_) {}
   fs.copyFileSync(path.join(__dirname, 'database', 'apkbuilder.db'), dest);
-  const keep = Math.max(1, parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('backup_keep_count')?.value || '10', 10) || 10);
+  // NOTE: backup_keep_count DB me galat (jaise 999993) pada ho to bhi disk
+  // nahi bhar sakta — hard clamp 50. Purane backups retention scheduler
+  // roz saaf karta hai.
+  const keep = Math.min(50, Math.max(1, parseInt(db.prepare('SELECT value FROM settings WHERE key=?').get('backup_keep_count')?.value || '10', 10) || 10));
   const files = fs.readdirSync(backupDir)
     .filter(f => /^apkbuilder_.*\.db$/.test(f))
     .map(f => ({ f, t: fs.statSync(path.join(backupDir, f)).mtimeMs }))
@@ -288,6 +301,16 @@ try {
   require('./utils/linkwatchdog').startWatchdog();
 } catch (e) {
   console.error('[watchdog] start failed:', e.message);
+}
+
+// ── AUTO RETENTION SCHEDULER (roz) ──
+// Firebase users TTL cleanup + (agar admin enable kare) local disk cleanup +
+// purane DB backups ki safai. Pehla run server start ke 15 min baad, phir
+// har 24 ghante. Report Telegram log channel me jati hai.
+try {
+  startRetentionScheduler(db, { notify: data => sendLogEvent('retention_report', data) });
+} catch (e) {
+  console.error('[retention] scheduler start failed:', e.message);
 }
 
 // ── Auth middleware ──
@@ -1248,30 +1271,39 @@ function getDownloadableOrder(req) {
   return db.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
 }
 
-function findBuiltApk(fileName) {
-  if (!fileName) return null;
-  const safeFileName = path.basename(fileName);
-  const buildsDir = path.join(__dirname, 'builds');
-  if (!fs.existsSync(buildsDir)) return null;
-
-  // Sabse NAYA build folder pehle check hota hai — same naam ki purani
-  // APKs (purane orders/rebuilds ki) galti se serve na ho jayein.
-  // Pehle readdir ke order pe bharosa tha — usme purana folder pehle aa
-  // jata tha to download/Telegram purani APK de deta tha.
-  const dirs = fs.readdirSync(buildsDir).filter(d => {
-    try { return fs.statSync(path.join(buildsDir, d)).isDirectory(); } catch (_) { return false; }
-  });
-  const dirTs = d => {
-    const m = String(d).match(/(\d{13})/g);
-    if (m && m.length) return parseInt(m[m.length - 1], 10);
-    try { return fs.statSync(path.join(buildsDir, d)).mtimeMs; } catch (_) { return 0; }
-  };
-  dirs.sort((a, b) => dirTs(b) - dirTs(a));
-  for (const dir of dirs) {
-    const apkPath = path.join(buildsDir, dir, safeFileName);
-    if (fs.existsSync(apkPath)) return apkPath;
+// ── APK lookup — ab ORDER-SCOPED (galat order ki APK serve nahi hogi) ──
+// Purana bug: app name se bane file naam do orders me same ho sakte the, aur
+// lookup poore builds/ me sirf NAAM se dhundta tha — isliye order A ka download
+// order B (ya usi order ke purane rebuild) ki APK de deta tha. Ab pehle SIRF
+// usi order ke build_<id>_* folders me dekhte hain; global fallback tabhi jab
+// wo file naam DB me kisi aur ka nahi hai (unique).
+function countApkNameOwners(fileName) {
+  const safe = path.basename(String(fileName || ''));
+  if (!safe) return 0;
+  try {
+    const row = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM orders WHERE apk_file = ? OR fake_apk_file = ?) +
+        (SELECT COUNT(*) FROM order_fake_sites WHERE apk_file = ?) AS c
+    `).get(safe, safe, safe);
+    return row ? row.c : 0;
+  } catch (_) {
+    return 1; // safe side — global fallback band
   }
-  return null;
+}
+
+function findBuiltApk(fileName, orderId = null) {
+  if (!fileName) return null;
+  const safeName = path.basename(String(fileName));
+  if (orderId) {
+    const unique = countApkNameOwners(safeName) <= 1;
+    const hit = findOrderApk(orderId, safeName, { allowGlobal: unique });
+    return hit ? hit.path : null;
+  }
+  // Legacy callers (order id ke bina) — sirf tab jab naam unique ho
+  if (countApkNameOwners(safeName) > 1) return null;
+  const hit = findOrderApk(null, safeName, { allowGlobal: true }) || null;
+  return hit ? hit.path : null;
 }
 
 app.get('/api/orders/:id/download', requireAuth, (req, res) => {
@@ -1279,16 +1311,18 @@ app.get('/api/orders/:id/download', requireAuth, (req, res) => {
   // If apk_file is already written, the real APK is ready even while an optional
   // Fake APK is still building. Do not block real downloads on status === 'done'.
   if (!o || !o.apk_file) return res.status(404).json({ error: 'APK not ready' });
-  const apkPath = findBuiltApk(o.apk_file);
-  if (!apkPath) return res.status(404).json({ error: 'File not found' });
+  const apkPath = findBuiltApk(o.apk_file, o.id);
+  if (!apkPath) return res.status(404).json({ error: 'APK file is server se clean ho chuki hai (purana order). Support se naya link lo.' });
+  res.set('Cache-Control', 'no-store');
   res.download(apkPath, path.basename(o.apk_file));
 });
 
 app.get('/api/orders/:id/download-fake', requireAuth, (req, res) => {
   const o = getDownloadableOrder(req);
   if (!o || !o.fake_apk_file) return res.status(404).json({ error: 'Fake APK not ready' });
-  const apkPath = findBuiltApk(o.fake_apk_file);
-  if (!apkPath) return res.status(404).json({ error: 'File not found' });
+  const apkPath = findBuiltApk(o.fake_apk_file, o.id);
+  if (!apkPath) return res.status(404).json({ error: 'APK file is server se clean ho chuki hai (purana order). Support se naya link lo.' });
+  res.set('Cache-Control', 'no-store');
   res.download(apkPath, path.basename(o.fake_apk_file));
 });
 
@@ -2349,10 +2383,12 @@ function deleteAllOrderBuildFolders(order, logFn, protectNames, exceptDir) {
   if (!fs.existsSync(buildsDir)) return 0;
   const prefix = `build_${order.id}_`;
   const protect = new Set((protectNames || []).filter(Boolean));
+  // exceptDir ek naam ya naam ka array — dono chalta hai (naye folders safe)
+  const keepDirs = new Set((Array.isArray(exceptDir) ? exceptDir : [exceptDir]).filter(Boolean));
   let removed = 0;
   for (const dir of fs.readdirSync(buildsDir)) {
     if (!dir.startsWith(prefix)) continue;
-    if (exceptDir && dir === exceptDir) continue;
+    if (keepDirs.has(dir)) continue;
     const dirPath = path.join(buildsDir, dir);
     if (protect.size) {
       try {
@@ -2548,15 +2584,18 @@ function rebuildOrderInBackground(orderId, rebuildFake = true) {
   const buildId = `build_${order.id}_rebuild_${Date.now()}`;
   const logs = ['Admin one-click rebuild started...'];
   const logPush = msg => { logs.push(msg); db.prepare('UPDATE orders SET build_log=? WHERE id=?').run(logs.join('\n'), order.id); };
-  db.prepare("UPDATE orders SET status='building',apk_file=NULL,fake_apk_file=CASE WHEN fake_register_url IS NOT NULL AND fake_register_url<>'' THEN NULL ELSE fake_apk_file END,build_log=? WHERE id=?")
-    .run(logs.join('\n'), order.id);
 
-  // Har rebuild se pehle is order ke PURANE build folders saaf karo —
-  // warna har rebuild naya folder banata hai aur purane pade rehte hain
-  // (build_<id>_rebuild_<ts> ka dher lag jata hai). Fake APK rebuild nahi
-  // ho raha ho to uske folder ko protect karte hain.
-  const fakeProtected = order.fake_apk_file && !(order.fake_register_url && String(order.fake_register_url) !== '');
-  deleteAllOrderBuildFolders(order, logPush, fakeProtected ? [order.fake_apk_file] : []);
+  // ── SAFE REBUILD ──
+  // Purana APK/file hamesha tab tak rakhte hain jab tak naya build SUCCESS
+  // na ho jaye. Pehle code rebuild ke shuru me hi apk_file=NULL + purane
+  // folders delete kar deta tha — build fail hone par user ke paas koi APK
+  // hi nahi bachta tha ("build nahi ho raha" jaisa lagta tha). Ab:
+  //   1) status 'building' (download old APK se chalta rahega)
+  //   2) build + verify
+  //   3) SUCCESS  → naye artifacts save, purane folders prune
+  //   4) FAILURE  → purana apk_file/status wapas, purane folders intact
+  db.prepare("UPDATE orders SET status='building',build_log=? WHERE id=?")
+    .run(logs.join('\n'), order.id);
 
   // ── PATH COLLISION FIX ──
   // Purane orders (domain se path bane the) me same domain ke do orders
@@ -2595,7 +2634,11 @@ function rebuildOrderInBackground(orderId, rebuildFake = true) {
     return buildApk(order, design, buildId, logPush);
   })().then(async result => {
     if (!result.success) {
-      db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('failed', logs.concat('Rebuild failed: ' + (result.error || 'Build failed')).join('\n'), order.id);
+      // FAILURE → purana APK wapas valid (agar pehle se tha to status 'done'
+      // hi rakho, warna 'failed'), purane build folders bhi intact rakho.
+      const fallbackStatus = order.apk_file ? 'done' : 'failed';
+      db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?')
+        .run(fallbackStatus, logs.concat('Rebuild failed: ' + (result.error || 'Build failed'), order.apk_file ? 'Purana APK abhi bhi available hai.' : '').filter(Boolean).join('\n'), order.id);
       return;
     }
     db.prepare('UPDATE orders SET apk_file=? WHERE id=?').run(result.apkFile, order.id);
@@ -2620,10 +2663,34 @@ function rebuildOrderInBackground(orderId, rebuildFake = true) {
       const fr = await buildFakeSiteApk(order, design, site, buildId + '_fakeS' + site.id, logPush);
       if (fr) apkPaths.push(fr.apkPath);
     }
+
+    // ── PURANE BUILD FOLDERS AB PRUNE KARO (build ke BAAD) ──
+    // Naya build + fake folders protect karke baaki dher hata do. Isse ek
+    // order ke 5-6 purane rebuild folders disk pe nahi padte, aur delete
+    // tabhi hota hai jab naya APK successfully ban chuka ho.
+    // NOTE: real APK ka file naam har rebuild me same hota hai (app name se
+    // banta hai) — isliye purane folders ko naam se protect nahi karte,
+    // sirf un folders ko chhodte hain jinme abhi valid fake APK pada hai.
+    try {
+      const keepDirs = [
+        buildId,
+        buildId + '_fake',
+        ...getOrderFakeSites(order.id).map(s => buildId + '_fakeS' + s.id)
+      ];
+      const protectFiles = [];
+      if (order.fake_apk_file && !(fakeResult && fakeResult.success)) protectFiles.push(order.fake_apk_file);
+      const removed = deleteAllOrderBuildFolders(order, logPush, protectFiles, keepDirs);
+      if (removed) logPush(`Purane build folders clean (${removed}).`);
+    } catch (e) {
+      logPush('Build folder prune skip: ' + e.message);
+    }
+
     db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('done', logs.concat('Admin rebuild complete!').join('\n'), order.id);
     sendApkReady(user, db.prepare('SELECT * FROM orders WHERE id=?').get(order.id), apkPaths, []).catch(() => {});
   }).catch(error => {
-    db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?').run('failed', logs.concat('Rebuild crashed: ' + error.message).join('\n'), order.id);
+    const fallbackStatus = order.apk_file ? 'done' : 'failed';
+    db.prepare('UPDATE orders SET status=?,build_log=? WHERE id=?')
+      .run(fallbackStatus, logs.concat('Rebuild crashed: ' + error.message, order.apk_file ? 'Purana APK abhi bhi available hai.' : '').filter(Boolean).join('\n'), order.id);
   });
   return { buildId };
 }
@@ -2731,8 +2798,9 @@ app.delete('/api/admin/orders/:id/fake-sites/:fsid', requireAdmin, (req, res) =>
 app.get('/api/admin/orders/:id/fake-sites/:fsid/download', requireAdmin, (req, res) => {
   const site = db.prepare('SELECT * FROM order_fake_sites WHERE id=? AND order_id=?').get(req.params.fsid, req.params.id);
   if (!site || !site.apk_file) return res.status(404).json({ error: 'Fake site APK not ready' });
-  const apkPath = findBuiltApk(site.apk_file);
-  if (!apkPath) return res.status(404).json({ error: 'File not found' });
+  const apkPath = findBuiltApk(site.apk_file, site.order_id);
+  if (!apkPath) return res.status(404).json({ error: 'APK file is server se clean ho chuki hai (purana order). Rebuild karke naya link lo.' });
+  res.set('Cache-Control', 'no-store');
   res.download(apkPath, path.basename(site.apk_file));
 });
 
@@ -3179,7 +3247,12 @@ app.get('/api/admin/settings', requireAdmin, (req, res) => {
     'telegram_admin_id','telegram_support_user','telegram_channel_url',
     'telegram_log_channel_id','telegram_log_enabled','addon_fake_price',
     'domain_change_price','invite_code_change_price','backup_keep_count',
-    'loading_html_file'
+    'loading_html_file',
+    // ── Storage cleanup + Firebase retention (maintenance UI) ──
+    'storage_cleanup_enabled','storage_apk_retention_days','storage_clean_orphan_templates',
+    'fb_retention_enabled','fb_retention_users_retention_days','fb_retention_path_retention_days',
+    'fb_retention_clean_orphans','fb_retention_protect_live_link','fb_retention_auto_delete_paths',
+    'fb_retention_last_run_at','fb_retention_last_run_summary'
   ]);
   const result = {};
   rows.forEach(r => {
@@ -3193,7 +3266,11 @@ app.post('/api/admin/settings', requireAdmin, adminUpload.fields([
   { name: 'upi_qr_image', maxCount: 1 },
   { name: 'loading_html', maxCount: 1 }
 ]), (req, res) => {
-  const allowed = ['upi_id','coin_rate','site_name','site_url','telegram_admin_id','telegram_support_user','telegram_channel_url','telegram_log_channel_id','telegram_log_enabled','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count'];
+  const allowed = ['upi_id','coin_rate','site_name','site_url','telegram_admin_id','telegram_support_user','telegram_channel_url','telegram_log_channel_id','telegram_log_enabled','addon_fake_price','domain_change_price','invite_code_change_price','backup_keep_count',
+    // Storage cleanup + Firebase retention
+    'storage_cleanup_enabled','storage_apk_retention_days','storage_clean_orphan_templates',
+    'fb_retention_enabled','fb_retention_users_retention_days','fb_retention_path_retention_days',
+    'fb_retention_clean_orphans','fb_retention_protect_live_link','fb_retention_auto_delete_paths'];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
       db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run(key, req.body[key]);
@@ -3269,6 +3346,297 @@ app.post('/api/admin/upload-android-project', requireAdmin, projectUpload.single
 app.get('/api/admin/android-project/status', requireAdmin, (req, res) => {
   const exists = fs.existsSync(path.join(__dirname, 'android-project', 'gradlew'));
   res.json({ uploaded: exists });
+});
+
+// ═══════════════════════════════════════════
+// MAINTENANCE / VERIFY / CLEANUP ROUTES
+//   - verify-content : APK ke andar ka template ABHI ke design se match karta
+//                      hai ya purana hai (rebuild ki zaroorat ka proof)
+//   - link-resync    : Firebase config ko DB ke links se force-sync karo
+//   - storage/*      : local disk (builds/uploads/templates/junk) cleanup
+//   - firebase/*     : RTDB users/paths retention + orphan cleanup
+// ═══════════════════════════════════════════
+
+// Heavy scans ko cache karo (admin button baar-baar dabaaye to server load na ho)
+const maintenanceCache = { storage: null, firebase: null };
+const CACHE_TTL_MS = 60 * 1000;
+
+function resolveOrderArtifact(order, variant = 'real') {
+  const v = String(variant || 'real');
+  if (v === 'fake') {
+    return { variant: 'fake', fileName: order.fake_apk_file, pathKey: order.fake_firebase_path };
+  }
+  if (/^fs\d+$/.test(v)) {
+    const site = db.prepare('SELECT * FROM order_fake_sites WHERE id=? AND order_id=?').get(parseInt(v.slice(2), 10), order.id);
+    if (!site) return null;
+    return { variant: v, fileName: site.apk_file, pathKey: site.firebase_path, site };
+  }
+  return { variant: 'real', fileName: order.apk_file, pathKey: order.firebase_path };
+}
+
+// GET /api/admin/orders/:id/verify-content?variant=real|fake|fs<id>
+app.get('/api/admin/orders/:id/verify-content', requireAdmin, (req, res) => {
+  try {
+    const order = db.prepare('SELECT * FROM orders WHERE id=?').get(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const target = resolveOrderArtifact(order, req.query.variant || 'real');
+    if (!target) return res.status(404).json({ error: 'Variant not found (fake site?)' });
+    if (!target.fileName) return res.json({ error: `${target.variant} APK abhi build nahi hua` });
+
+    const apkInfo = findOrderApk(order.id, target.fileName, { allowGlobal: countApkNameOwners(target.fileName) <= 1 });
+    let apkMeta = null;
+    let apkHtml = null;
+    if (apkInfo) {
+      const inside = readApkPopupHtml(apkInfo.path, db, order.id, target.pathKey);
+      if (inside) {
+        apkHtml = inside.html;
+        apkMeta = require('./utils/buildstore').readBuildMeta(inside.html);
+      }
+    }
+    let currentMeta = null;
+    let currentHtml = null;
+    let currentLinks = null;
+    let renderError = null;
+    if (target.pathKey) {
+      try {
+        const rendered = renderContentHtml(target.pathKey, 'popup');
+        if (rendered) {
+          currentMeta = rendered.meta;
+          currentHtml = rendered.html;
+          if (rendered.params) {
+            currentLinks = {
+              registerUrl: rendered.params.registerUrl || null,
+              depositUrl: rendered.params.depositUrl || null,
+              wingoUrl: rendered.params.wingoUrl || null,
+              firebasePath: rendered.params.firebasePath || target.pathKey || null
+            };
+          }
+        } else renderError = 'Design render fail (template file ya path missing)';
+      } catch (e) {
+        renderError = e.message;
+      }
+    }
+    // APK ke andar jo links pade hain (purane ya naye — proof ke saath)
+    let apkLinks = null;
+    try {
+      if (apkHtml) {
+        const { extractLinksFromHtml } = require('./utils/buildstore');
+        apkLinks = extractLinksFromHtml(apkHtml);
+      }
+    } catch (_) {}
+    const report = buildVerifyReport({
+      apkInfo,
+      apkMeta,
+      currentMeta,
+      apkHtml,
+      currentHtml,
+      apkLinks,
+      currentLinks,
+      liveLink: Number(order.live_link_enabled) === 1,
+      fields: {
+        orderId: order.id,
+        variant: target.variant,
+        status: order.status,
+        appName: order.app_name,
+        designId: order.design_id,
+        firebasePath: target.pathKey,
+        renderError
+      }
+    });
+    res.json(report);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/orders/:id/link-resync — DB ke links Firebase me force likho
+// (watchdog 45s cycle ka wait nahi karna padta; link change ke baad turant
+//  sync + verify karne ke liye)
+app.post('/api/admin/orders/:id/link-resync', requireAdmin, async (req, res) => {
+  try {
+    const order = db.prepare('SELECT * FROM orders WHERE id=?').get(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const { buildUrls, extractDomain } = require('./utils/htmlprocessor');
+    const results = [];
+
+    if (order.firebase_path && order.register_url) {
+      const deposit = order.deposit_url || buildUrls(order.register_url, isDhaniOrder(order)).deposit;
+      const wingo = order.wingo_url || buildUrls(order.register_url, isDhaniOrder(order)).wingo;
+      await updateFirebaseLinks(order.firebase_path, { registerUrl: order.register_url, depositUrl: deposit, wingoUrl: wingo });
+      results.push({ path: order.firebase_path, type: 'real', ok: true });
+    }
+    if (order.fake_firebase_path && order.fake_register_url) {
+      const urls = buildUrls(order.fake_register_url, isDhaniOrder(order));
+      await updateFirebaseLinks(order.fake_firebase_path, { registerUrl: order.fake_register_url, depositUrl: urls.deposit, wingoUrl: urls.wingo });
+      results.push({ path: order.fake_firebase_path, type: 'fake', ok: true });
+    }
+    for (const site of getOrderFakeSites(order.id)) {
+      if (!site.firebase_path || !site.register_url) continue;
+      const urls = buildUrls(site.register_url, isDhaniOrder(order));
+      await updateFirebaseLinks(site.firebase_path, { registerUrl: site.register_url, depositUrl: urls.deposit, wingoUrl: urls.wingo });
+      results.push({ path: site.firebase_path, type: 'fake-site#' + site.id, ok: true });
+    }
+    res.json({ success: true, synced: results });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
+// GET /api/admin/storage/usage — disk ka poora picture (junk + orphans)
+app.get('/api/admin/storage/usage', requireAdmin, (req, res) => {
+  try {
+    const force = String(req.query.force || '') === '1';
+    const cached = maintenanceCache.storage;
+    if (!force && cached && (Date.now() - cached.at) < CACHE_TTL_MS) return res.json(cached.data);
+    const scan = scanStorage(db, { apkRetentionDays: parseInt(req.query.apkRetentionDays || '0', 10) || 0 });
+    const data = {
+      totals: scan.totals,
+      counts: {
+        orphanBuildDirs: scan.buildDirs.orphans.length,
+        leftoverProjects: scan.buildDirs.leftoverProjects.length,
+        idsigFiles: scan.buildDirs.idsig.length,
+        staleDuplicates: scan.buildDirs.staleDuplicates.length,
+        oldApks: scan.buildDirs.oldApks.length,
+        orphanUploads: scan.uploads.orphans.length,
+        orphanTemplates: scan.templates.orphans.length,
+        oldBackups: scan.backups.old.length,
+        legacyJunk: scan.legacyJunk.length
+      },
+      // Jo is run me delete NAHI hoga (option off) — alag se dikhao taaki
+      // "reclaimable" aur "plan" ka farq saaf rahe.
+      potential: {
+        orphanTemplatesMb: Math.round((scan.plan.skippedTemplatesBytes || 0) / 1048576 * 10) / 10,
+        orphanTemplates: scan.plan.skippedTemplates || 0,
+        oldApkRetentionOff: scan.plan.oldApkRetentionOff === true,
+        note: scan.plan.oldApkRetentionOff
+          ? 'Purane delivered APKs delete nahi honge (apkRetentionDays=0). Chahiye to Storage card me days set karo.'
+          : null
+      },
+      top: {
+        orphanBuildDirs: scan.buildDirs.orphans.sort((a, b) => b.size - a.size).slice(0, 15),
+        staleDuplicates: scan.buildDirs.staleDuplicates.sort((a, b) => b.size - a.size).slice(0, 15),
+        orphanUploads: scan.uploads.orphans.sort((a, b) => b.size - a.size).slice(0, 15),
+        orphanTemplates: scan.templates.orphans.sort((a, b) => b.size - a.size).slice(0, 15),
+        legacyJunk: scan.legacyJunk.slice(0, 30)
+      }
+    };
+    maintenanceCache.storage = { at: Date.now(), data };
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/storage/cleanup  { mode:'dry'|'run', apkRetentionDays, includeOrphanTemplates }
+app.post('/api/admin/storage/cleanup', requireAdmin, (req, res) => {
+  try {
+    const mode = String(req.body.mode || 'dry') === 'run' ? 'run' : 'dry';
+    const report = cleanupStorage(db, {
+      mode,
+      apkRetentionDays: Math.max(0, parseInt(req.body.apkRetentionDays || '0', 10) || 0),
+      keepRecentBackups: Math.max(1, parseInt(req.body.keepRecentBackups || '5', 10) || 5),
+      includeOrphanTemplates: req.body.includeOrphanTemplates === true || req.body.includeOrphanTemplates === '1'
+    });
+    maintenanceCache.storage = null;
+    res.json(report);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/firebase/usage — RTDB paths/users ka scan (orphan + age)
+app.get('/api/admin/firebase/usage', requireAdmin, async (req, res) => {
+  try {
+    const force = String(req.query.force || '') === '1';
+    const cached = maintenanceCache.firebase;
+    if (!force && cached && (Date.now() - cached.at) < CACHE_TTL_MS) return res.json(cached.data);
+    const scan = await firebaseRetention.scan(db, { maxUsersCheck: parseInt(req.query.maxUsersCheck || '40', 10) || 40 });
+    const data = {
+      settings: scan.settings,
+      scannedAt: scan.scannedAt,
+      rootPathCount: scan.rootPathCount,
+      referencedCount: scan.referencedCount,
+      orphanCount: scan.orphanCount,
+      missingInFirebaseCount: scan.missingInFirebaseCount,
+      usersSampled: scan.usersSampled,
+      topOrphans: scan.orphans.slice(0, 50),
+      topUsers: scan.usersSample,
+      missingInFirebase: scan.missingInFirebase
+    };
+    maintenanceCache.firebase = { at: Date.now(), data };
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/firebase/cleanup { mode, usersTtl, paths, orphans, days, pathDays, force }
+app.post('/api/admin/firebase/cleanup', requireAdmin, async (req, res) => {
+  try {
+    // FormData se values string me aati hain ('true'/'1'/'false') — dono handle karo
+    const truthy = v => v === true || v === 1 || ['true', '1', 'on', 'yes'].includes(String(v).trim().toLowerCase());
+    const summary = await firebaseRetention.runRetention(db, {
+      mode: String(req.body.mode || 'dry') === 'run' ? 'run' : 'dry',
+      usersTtl: !(req.body.usersTtl === false || String(req.body.usersTtl).trim().toLowerCase() === 'false'),
+      paths: truthy(req.body.paths),
+      orphans: !(req.body.orphans === false || String(req.body.orphans).trim().toLowerCase() === 'false'),
+      days: req.body.days,
+      pathDays: req.body.pathDays,
+      force: truthy(req.body.force)
+    });
+    maintenanceCache.firebase = null;
+    res.json(summary);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET/POST /api/admin/firebase/retention — retention settings
+app.get('/api/admin/firebase/retention', requireAdmin, (req, res) => {
+  try { res.json(firebaseRetention.getSettings(db)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/firebase/retention', requireAdmin, (req, res) => {
+  try {
+    const allowed = ['enabled', 'users_retention_days', 'path_retention_days', 'clean_orphans', 'protect_live_link', 'auto_delete_paths'];
+    const values = {};
+    for (const key of allowed) if (req.body[key] !== undefined) values[key] = req.body[key];
+    res.json(firebaseRetention.saveSettings(db, values));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/firebase/backups + restore — delete se pehle liya gaya JSON
+app.get('/api/admin/firebase/backups', requireAdmin, (req, res) => {
+  try { res.json({ backups: firebaseRetention.listBackups().slice(0, 100) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/firebase/restore-backup', requireAdmin, async (req, res) => {
+  try {
+    const file = String(req.body.file || '').trim();
+    if (!/^[a-zA-Z0-9_.-]+\.json$/.test(file)) return res.json({ error: 'Invalid backup file' });
+    const full = path.join(__dirname, 'backups', 'firebase', file);
+    if (!fs.existsSync(full)) return res.status(404).json({ error: 'Backup file not found' });
+    const result = await firebaseRetention.restoreBackup(full);
+    res.json({ success: true, ...result });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
+// POST /api/admin/maintenance/run-now — daily cleanup abhi chalao
+app.post('/api/admin/maintenance/run-now', requireAdmin, async (req, res) => {
+  try {
+    const summary = await runDailyCleanup(db, { notify: data => sendLogEvent('retention_report', data) });
+    maintenanceCache.storage = null;
+    maintenanceCache.firebase = null;
+    res.json(summary);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Serve frontend pages ──

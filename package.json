@@ -4,7 +4,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "cleanup": "node scripts/cleanup-junk.js",
+    "cleanup:run": "node scripts/cleanup-junk.js --run",
+    "cleanup:firebase": "node scripts/cleanup-junk.js --firebase",
+    "verify:apk": "node scripts/verify-order.js"
   },
   "engines": {
     "node": ">=20"

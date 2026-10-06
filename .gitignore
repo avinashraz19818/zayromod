@@ -11,3 +11,12 @@ node_modules/
 venv/
 __pycache__/
 *.pyc
+
+# Runtime artifacts (VPS pe bante hain — repo me nahi jaane chahiye)
+builds/
+uploads/
+backups/
+database/*.db-shm
+database/*.db-wal
+database/*.bak*
+cleanup-reports/
